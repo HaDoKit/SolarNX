@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-        Title="Игра" Width="720" Height="640" MinWidth="560" MinHeight="480"
+        Title="{DynamicResource Edit.Game}" Width="720" Height="640" MinWidth="560" MinHeight="480"
         WindowStartupLocation="CenterOwner"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="None"
@@ -25,7 +25,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar x:Name="TitleBar" Title="Игра" Height="42" Background="Transparent" Foreground="White"
+        <ui:TitleBar x:Name="TitleBar" Title="{DynamicResource Edit.Game}" Height="42" Background="Transparent" Foreground="White"
                      ShowMinimize="False" ShowMaximize="False" />
 
         <ScrollViewer Grid.Row="1" Margin="20,8,20,0" VerticalScrollBarVisibility="Auto">
@@ -41,7 +41,7 @@
                             <ColumnDefinition Width="140" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Название" Style="{StaticResource FieldLabel}" />
+                        <TextBlock Text="{DynamicResource Edit.Name}" Style="{StaticResource FieldLabel}" />
                         <TextBox x:Name="NameBox" Grid.Column="1" Padding="6" />
                     </Grid>
 
@@ -50,7 +50,7 @@
                             <ColumnDefinition Width="140" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Способ запуска" Style="{StaticResource FieldLabel}" />
+                        <TextBlock Text="{DynamicResource Edit.LaunchType}" Style="{StaticResource FieldLabel}" />
                         <ComboBox x:Name="TypeCombo" Grid.Column="1" />
                     </Grid>
 
@@ -62,16 +62,16 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Файл игры (.exe)" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Edit.GameExe}" Style="{StaticResource FieldLabel}" />
                             <TextBox x:Name="ExePathBox" Grid.Column="1" Padding="6" Margin="0,0,8,0" />
-                            <ui:Button x:Name="BrowseExeButton" Grid.Column="2" Content="Обзор…" Appearance="Secondary" />
+                            <ui:Button x:Name="BrowseExeButton" Grid.Column="2" Content="{DynamicResource Common.Browse}" Appearance="Secondary" />
                         </Grid>
                         <Grid Style="{StaticResource Row}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="140" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Аргументы" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Edit.Arguments}" Style="{StaticResource FieldLabel}" />
                             <TextBox x:Name="ArgumentsBox" Grid.Column="1" Padding="6" />
                         </Grid>
                     </StackPanel>
@@ -83,7 +83,7 @@
                                 <ColumnDefinition Width="140" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Установленные" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Edit.Installed}" Style="{StaticResource FieldLabel}" />
                             <ComboBox x:Name="SteamGameCombo" Grid.Column="1" />
                         </Grid>
                         <Grid Style="{StaticResource Row}">
@@ -104,9 +104,9 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Эмулятор (.exe)" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Edit.EmulatorExe}" Style="{StaticResource FieldLabel}" />
                             <TextBox x:Name="EmulatorPathBox" Grid.Column="1" Padding="6" Margin="0,0,8,0" />
-                            <ui:Button x:Name="BrowseEmulatorButton" Grid.Column="2" Content="Обзор…" Appearance="Secondary" />
+                            <ui:Button x:Name="BrowseEmulatorButton" Grid.Column="2" Content="{DynamicResource Common.Browse}" Appearance="Secondary" />
                         </Grid>
                         <Grid Style="{StaticResource Row}">
                             <Grid.ColumnDefinitions>
@@ -114,19 +114,19 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Файл игры (ROM)" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Edit.Rom}" Style="{StaticResource FieldLabel}" />
                             <TextBox x:Name="RomPathBox" Grid.Column="1" Padding="6" Margin="0,0,8,0" />
-                            <ui:Button x:Name="BrowseRomButton" Grid.Column="2" Content="Обзор…" Appearance="Secondary" />
+                            <ui:Button x:Name="BrowseRomButton" Grid.Column="2" Content="{DynamicResource Common.Browse}" Appearance="Secondary" />
                         </Grid>
                         <Grid Style="{StaticResource Row}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="140" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Аргументы" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Edit.Arguments}" Style="{StaticResource FieldLabel}" />
                             <StackPanel Grid.Column="1">
                                 <TextBox x:Name="ArgumentTemplateBox" Padding="6" />
-                                <TextBlock Text="{}{rom} заменяется путём к файлу игры, например: -f -g &quot;{rom}&quot;"
+                                <TextBlock Text="{DynamicResource Edit.RomHint}"
                                            Foreground="#888888" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
                             </StackPanel>
                         </Grid>
@@ -134,7 +134,7 @@
 
                     <!-- Скрипт -->
                     <StackPanel x:Name="ScriptPanel">
-                        <TextBlock Text="Команды cmd (выполняются через cmd.exe, по одной на строку)" Style="{StaticResource FieldLabel}" Margin="0,0,0,6" />
+                        <TextBlock Text="{DynamicResource Edit.ScriptLabel}" Style="{StaticResource FieldLabel}" Margin="0,0,0,6" />
                         <TextBox x:Name="ScriptBox" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
                                  FontFamily="Consolas" MinHeight="140" Padding="6" Margin="0,0,0,10"
                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" />
@@ -147,9 +147,9 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Рабочая папка" Style="{StaticResource FieldLabel}" />
+                        <TextBlock Text="{DynamicResource Edit.WorkingDir}" Style="{StaticResource FieldLabel}" />
                         <TextBox x:Name="WorkingDirBox" Grid.Column="1" Padding="6" Margin="0,0,8,0" />
-                        <ui:Button x:Name="BrowseWorkingDirButton" Grid.Column="2" Content="Обзор…" Appearance="Secondary" />
+                        <ui:Button x:Name="BrowseWorkingDirButton" Grid.Column="2" Content="{DynamicResource Common.Browse}" Appearance="Secondary" />
                     </Grid>
 
                     <Grid Style="{StaticResource Row}">
@@ -157,7 +157,7 @@
                             <ColumnDefinition Width="140" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Геймпад" Style="{StaticResource FieldLabel}" />
+                        <TextBlock Text="{DynamicResource Settings.Gamepad}" Style="{StaticResource FieldLabel}" />
                         <ComboBox x:Name="ControllerCombo" Grid.Column="1" />
                     </Grid>
 
@@ -166,10 +166,10 @@
                             <ColumnDefinition Width="140" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Изображение" Style="{StaticResource FieldLabel}" />
+                        <TextBlock Text="{DynamicResource Edit.Picture}" Style="{StaticResource FieldLabel}" />
                         <CheckBox x:Name="CaptureWindowCheck" Grid.Column="1" Foreground="White"
-                                  ToolTip="Игра растягивается на экран Switch, даже если на PC она в окне. Снимите, если изображение чёрное — тогда будет показан весь монитор.">
-                            <TextBlock Text="Показывать на Switch только окно игры" TextWrapping="Wrap" />
+                                  ToolTip="{DynamicResource Edit.CaptureWindowTip}">
+                            <TextBlock Text="{DynamicResource Edit.CaptureWindow}" TextWrapping="Wrap" />
                         </CheckBox>
                     </Grid>
 
@@ -178,38 +178,38 @@
                             <ColumnDefinition Width="140" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Права" Style="{StaticResource FieldLabel}" />
+                        <TextBlock Text="{DynamicResource Edit.Rights}" Style="{StaticResource FieldLabel}" />
                         <CheckBox x:Name="RunAsAdminCheck" Grid.Column="1" Foreground="White"
-                                  ToolTip="Без галочки игра запускается как обычный пользователь — так же, как двойным щелчком в проводнике. Включите для игр и программ, которым нужны права администратора.">
-                            <TextBlock Text="Запускать от имени администратора" TextWrapping="Wrap" />
+                                  ToolTip="{DynamicResource Edit.RunAsAdminTip}">
+                            <TextBlock Text="{DynamicResource Edit.RunAsAdmin}" TextWrapping="Wrap" />
                         </CheckBox>
                     </Grid>
                 </StackPanel>
 
                 <!-- Обложка -->
                 <StackPanel Grid.Column="1" Width="160">
-                    <TextBlock Text="Обложка (2:3)" Style="{StaticResource FieldLabel}" Margin="0,0,0,6" />
+                    <TextBlock Text="{DynamicResource Edit.Cover}" Style="{StaticResource FieldLabel}" Margin="0,0,0,6" />
                     <Border Width="160" Height="240" CornerRadius="8" Background="#FF2A2A36" ClipToBounds="True">
                         <Grid>
-                            <TextBlock x:Name="NoCoverText" Text="Нет обложки" Foreground="#777777"
+                            <TextBlock x:Name="NoCoverText" Text="{DynamicResource Edit.NoCover}" Foreground="#777777"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                             <Image x:Name="CoverImage" Stretch="UniformToFill" />
                         </Grid>
                     </Border>
-                    <ui:Button x:Name="ChooseCoverButton" Content="Выбрать…" Appearance="Secondary"
+                    <ui:Button x:Name="ChooseCoverButton" Content="{DynamicResource Edit.ChooseCover}" Appearance="Secondary"
                                HorizontalAlignment="Stretch" Margin="0,8,0,0" />
-                    <ui:Button x:Name="CropCoverButton" Content="Кадр…" Appearance="Secondary"
+                    <ui:Button x:Name="CropCoverButton" Content="{DynamicResource Edit.CropCover}" Appearance="Secondary"
                                HorizontalAlignment="Stretch" Margin="0,6,0,0"
-                               ToolTip="Выбрать, какая часть картинки будет обложкой на Switch" />
-                    <ui:Button x:Name="ClearCoverButton" Content="Убрать" Appearance="Secondary"
+                               ToolTip="{DynamicResource Edit.CropCoverTip}" />
+                    <ui:Button x:Name="ClearCoverButton" Content="{DynamicResource Edit.ClearCover}" Appearance="Secondary"
                                HorizontalAlignment="Stretch" Margin="0,6,0,0" />
                 </StackPanel>
             </Grid>
         </ScrollViewer>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="20">
-            <ui:Button x:Name="CancelButton" Content="Отмена" Appearance="Secondary" Margin="0,0,8,0" MinWidth="100" />
-            <ui:Button x:Name="SaveButton" Content="Сохранить" Appearance="Primary" MinWidth="100" />
+            <ui:Button x:Name="CancelButton" Content="{DynamicResource Common.Cancel}" Appearance="Secondary" Margin="0,0,8,0" MinWidth="100" />
+            <ui:Button x:Name="SaveButton" Content="{DynamicResource Common.Save}" Appearance="Primary" MinWidth="100" />
         </StackPanel>
     </Grid>
 </ui:FluentWindow>

@@ -6,23 +6,23 @@ namespace SolarNX.UI.Library;
 
 /// <summary>
 /// Add/edit one library entry. Works on a copy and writes it back through GameLibrary only on
-/// "Сохранить", so cancelling leaves the library (and the Switch's copy) untouched. A newly chosen
+/// Save, so cancelling leaves the library (and the Switch's copy) untouched. A newly chosen
 /// cover is only copied into the library's covers folder on save.
 /// </summary>
 public partial class GameEditWindow : Wpf.Ui.Controls.FluentWindow
 {
-    private static readonly (GameEntryType Type, string Label)[] Types =
+    private static readonly (GameEntryType Type, string LabelKey)[] Types =
     {
-        (GameEntryType.Native, "Обычная игра (exe)"),
-        (GameEntryType.Steam, "Игра из Steam"),
-        (GameEntryType.Emulator, "Эмулятор"),
-        (GameEntryType.Script, "Свой скрипт (cmd)"),
+        (GameEntryType.Native, "Edit.TypeNative"),
+        (GameEntryType.Steam, "Edit.TypeSteam"),
+        (GameEntryType.Emulator, "Edit.TypeEmulator"),
+        (GameEntryType.Script, "Edit.TypeScript"),
     };
 
     private static readonly (ControllerMode Mode, string Label)[] Controllers =
     {
         (ControllerMode.Xbox360, "Xbox 360"),
-        (ControllerMode.DualShock4, "DualShock 4 (с гироскопом)"),
+        (ControllerMode.DualShock4, "Edit.Ds4"),
     };
 
     private readonly GameLibrary _library;
@@ -39,10 +39,10 @@ public partial class GameEditWindow : Wpf.Ui.Controls.FluentWindow
         InitializeComponent();
         _library = library;
         _entry = existing?.Clone() ?? new GameEntry();
-        Title = TitleBar.Title = existing is null ? "Новая игра" : "Изменить игру";
+        Title = TitleBar.Title = Loc.T(existing is null ? "Edit.NewGame" : "Edit.EditGame");
 
-        foreach (var t in Types) TypeCombo.Items.Add(t.Label);
-        foreach (var c in Controllers) ControllerCombo.Items.Add(c.Label);
+        foreach (var t in Types) TypeCombo.Items.Add(Loc.T(t.LabelKey));
+        foreach (var c in Controllers) ControllerCombo.Items.Add(Loc.T(c.Label));
 
         NameBox.Text = _entry.Name;
         TypeCombo.SelectedIndex = Array.FindIndex(Types, t => t.Type == _entry.Type);
@@ -64,9 +64,9 @@ public partial class GameEditWindow : Wpf.Ui.Controls.FluentWindow
         TypeCombo.SelectionChanged += (_, _) => UpdatePanels();
         UpdatePanels();
 
-        BrowseExeButton.Click += (_, _) => BrowseFile(ExePathBox, "Программы (*.exe)|*.exe|Все файлы (*.*)|*.*", fillName: true);
-        BrowseEmulatorButton.Click += (_, _) => BrowseFile(EmulatorPathBox, "Программы (*.exe)|*.exe|Все файлы (*.*)|*.*", fillName: false);
-        BrowseRomButton.Click += (_, _) => BrowseFile(RomPathBox, "Все файлы (*.*)|*.*", fillName: true);
+        BrowseExeButton.Click += (_, _) => BrowseFile(ExePathBox, Loc.T("Edit.ExeFilter"), fillName: true);
+        BrowseEmulatorButton.Click += (_, _) => BrowseFile(EmulatorPathBox, Loc.T("Edit.ExeFilter"), fillName: false);
+        BrowseRomButton.Click += (_, _) => BrowseFile(RomPathBox, Loc.T("Edit.AnyFilter"), fillName: true);
         BrowseWorkingDirButton.Click += (_, _) => BrowseFolder(WorkingDirBox);
         ChooseCoverButton.Click += (_, _) => ChooseCover();
         CropCoverButton.Click += (_, _) => CropCover();
@@ -143,8 +143,8 @@ public partial class GameEditWindow : Wpf.Ui.Controls.FluentWindow
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "Изображения (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif",
-            Title = "Обложка игры (лучше вертикальная, 2:3)",
+            Filter = Loc.T("Edit.ImageFilter"),
+            Title = Loc.T("Edit.CoverDialogTitle"),
         };
         if (dialog.ShowDialog(this) != true) return;
         _coverSourcePath = dialog.FileName;
@@ -181,14 +181,14 @@ public partial class GameEditWindow : Wpf.Ui.Controls.FluentWindow
         var type = SelectedType;
         var problem = type switch
         {
-            GameEntryType.Native when !File.Exists(ExePathBox.Text.Trim()) => "Укажите существующий файл игры (.exe).",
-            GameEntryType.Steam when !SteamAppIdBox.Text.Trim().All(char.IsDigit) || SteamAppIdBox.Text.Trim().Length == 0 => "Выберите игру Steam или укажите числовой AppID.",
-            GameEntryType.Emulator when !File.Exists(EmulatorPathBox.Text.Trim()) => "Укажите существующий файл эмулятора (.exe).",
-            GameEntryType.Emulator when RomPathBox.Text.Trim().Length == 0 => "Укажите файл игры для эмулятора.",
-            GameEntryType.Script when string.IsNullOrWhiteSpace(ScriptBox.Text) => "Скрипт запуска пуст.",
+            GameEntryType.Native when !File.Exists(ExePathBox.Text.Trim()) => Loc.T("Edit.ErrExe"),
+            GameEntryType.Steam when !SteamAppIdBox.Text.Trim().All(char.IsDigit) || SteamAppIdBox.Text.Trim().Length == 0 => Loc.T("Edit.ErrSteam"),
+            GameEntryType.Emulator when !File.Exists(EmulatorPathBox.Text.Trim()) => Loc.T("Edit.ErrEmulator"),
+            GameEntryType.Emulator when RomPathBox.Text.Trim().Length == 0 => Loc.T("Edit.ErrRom"),
+            GameEntryType.Script when string.IsNullOrWhiteSpace(ScriptBox.Text) => Loc.T("Edit.ErrScript"),
             _ => null,
         };
-        if (problem is null && string.IsNullOrWhiteSpace(NameBox.Text)) problem = "Укажите название.";
+        if (problem is null && string.IsNullOrWhiteSpace(NameBox.Text)) problem = Loc.T("Edit.ErrName");
         if (problem is not null)
         {
             System.Windows.MessageBox.Show(this, problem, "SolarNX", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -230,7 +230,7 @@ public partial class GameEditWindow : Wpf.Ui.Controls.FluentWindow
         catch (Exception ex)
         {
             Logger.Log("GameEditWindow", $"saving '{_entry.Name}' failed: {ex}");
-            System.Windows.MessageBox.Show(this, $"Не удалось сохранить: {ex.Message}", "SolarNX", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(this, Loc.F("Edit.SaveFailed", ex.Message), "SolarNX", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 }

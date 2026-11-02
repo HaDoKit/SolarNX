@@ -32,7 +32,7 @@
                        HorizontalAlignment="Center" Margin="0,-4,0,14"
                        RenderOptions.BitmapScalingMode="HighQuality" />
 
-                <TextBlock x:Name="IpLabel" Text="IP клиента" Foreground="#AAAAAA" FontSize="12" Margin="0,0,0,4" />
+                <TextBlock x:Name="IpLabel" Text="{DynamicResource Home.ClientIp}" Foreground="#AAAAAA" FontSize="12" Margin="0,0,0,4" />
                 <Grid Margin="0,0,0,16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -40,12 +40,12 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="IpBox" Grid.Column="0" Padding="8" FontSize="14" Margin="0,0,8,0" />
-                    <ui:Button x:Name="LibraryButton" Grid.Column="1" Appearance="Secondary" ToolTip="Библиотека игр" Margin="0,0,8,0">
+                    <ui:Button x:Name="LibraryButton" Grid.Column="1" Appearance="Secondary" ToolTip="{DynamicResource Home.Library}" Margin="0,0,8,0">
                         <ui:Button.Icon>
                             <ui:SymbolIcon Symbol="Games24" />
                         </ui:Button.Icon>
                     </ui:Button>
-                    <ui:Button x:Name="SettingsButton" Grid.Column="2" Appearance="Secondary" ToolTip="Настройки">
+                    <ui:Button x:Name="SettingsButton" Grid.Column="2" Appearance="Secondary" ToolTip="{DynamicResource Home.Settings}">
                         <ui:Button.Icon>
                             <ui:SymbolIcon Symbol="Settings24" />
                         </ui:Button.Icon>
@@ -55,12 +55,12 @@
                 <!-- Colours set per state in RefreshStatus (eclipse style: gold to start, dark with a
                      red rim to stop) - see the *Start/*Stop brushes in Resources. -->
                 <ui:Button x:Name="ToggleStreamingButton"
-                           Content="▶  Включить трансляцию"
+                           Content="{DynamicResource Home.Start}"
                            Appearance="Secondary" BorderThickness="1" FontWeight="SemiBold"
                            HorizontalAlignment="Stretch" Height="44" FontSize="14"
                            Margin="0,0,0,8" />
 
-                <TextBlock x:Name="StatusLabel" Text="Статус: выключено" Foreground="#AAAAAA"
+                <TextBlock x:Name="StatusLabel" Text="{DynamicResource Home.StatusOff}" Foreground="#AAAAAA"
                            FontSize="12" HorizontalAlignment="Center" Margin="0,0,0,16" />
 
                 <Grid>
@@ -68,7 +68,7 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="Показать экран" Foreground="White" VerticalAlignment="Center" />
+                    <TextBlock Text="{DynamicResource Home.ShowScreen}" Foreground="White" VerticalAlignment="Center" />
                     <ui:ToggleSwitch x:Name="ShowScreenToggle" Grid.Column="1" IsEnabled="False" />
                 </Grid>
             </StackPanel>

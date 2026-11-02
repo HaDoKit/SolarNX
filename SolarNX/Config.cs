@@ -141,6 +141,9 @@ public sealed class Config
     /// <summary>Wi-Fi (default): the PC dials the Switch at <see cref="ClientIp"/>. Internet
     /// (experimental): a paired Switch dials the PC on UDP <see cref="Session.InternetSession.Port"/>,
     /// encrypted (Session/PairedDevices, InternetCrypto). Applied the next time streaming is turned on.</summary>
+    /// <summary>Interface language of the PC app (Auto = Windows' display language).</summary>
+    public UiLanguage Language { get; set; } = UiLanguage.Auto;
+
     public Session.ConnectionMode ConnectionMode { get; set; } = Session.ConnectionMode.Wifi;
 
     /// <summary>This PC's id in Internet mode (8 characters, generated on first use) - a paired Switch

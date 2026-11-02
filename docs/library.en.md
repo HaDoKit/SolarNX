@@ -7,8 +7,7 @@ on the Switch, with covers, in the **My games** tile.
 
 ## Adding a game
 
-On the SolarNX main window, click the gamepad button (next to settings) → **«Добавить игру»**
-(Add game).
+On the SolarNX main window, click the gamepad button (next to settings) → **Add game**.
 
 ![Game library](images/app/library.png)
 
@@ -33,7 +32,7 @@ fine: SolarNX also tracks processes started by the launcher.
 
 ### Picture
 
-The **«Показывать на Switch только окно игры»** (Show only the game window on the Switch) checkbox is
+The **Show only the game window on the Switch** checkbox is
 on by default: only the game window is sent to the Switch, stretched to the whole console screen. The
 game fills the Switch screen even if it runs in a small window on the PC, and other windows don't
 cover it.
@@ -43,7 +42,7 @@ mode. The whole primary monitor is then sent instead.
 
 ### Rights
 
-The **«Запускать от имени администратора»** (Run as administrator) checkbox is off by default. Without it
+The **Run as administrator** checkbox is off by default. Without it
 the game starts as an ordinary user, the same as a double-click in Explorer, even though SolarNX itself
 runs as administrator. Turn it on for games and programs that need administrator rights. A game that
 itself requires administrator rights gets them either way. Steam games don't have the checkbox: Steam
@@ -54,12 +53,12 @@ the checkbox changes nothing.
 
 ## Covers
 
-Click **«Выбрать…»** (Choose…) under the cover and pick any image. On the Switch, covers are shown
+Click **Choose…** under the cover and pick any image. On the Switch, covers are shown
 in a 2:3 ratio (like Steam library covers). For Steam games the cover is filled in automatically.
 
-If the image has a different shape, the **«Кадр обложки»** (Cover framing) window opens: drag the
+If the image has a different shape, the **Cover framing** window opens: drag the
 frame with the mouse and change its size with the mouse wheel or the slider. The right side shows how
-the cover will look on the Switch. To return to the framing later, use the **«Кадр…»** (Frame…)
+the cover will look on the Switch. To return to the framing later, use the **Frame…**
 button.
 
 ![Cover framing](images/app/cover-crop.png)

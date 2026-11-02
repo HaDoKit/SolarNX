@@ -35,12 +35,12 @@ public partial class PairingWindow : Wpf.Ui.Controls.FluentWindow
             if (left <= TimeSpan.Zero)
             {
                 _done = true;
-                StatusText.Text = "Время вышло — привязка закрыта.";
-                HintText.Text = "Откройте окно ещё раз, чтобы попробовать снова.";
+                StatusText.Text = Loc.T("Pair.TimedOut");
+                HintText.Text = Loc.T("Pair.TryAgain");
                 _timer.Stop();
                 return;
             }
-            HintText.Text = $"На Switch: главное меню → X → Pair with this PC. Осталось {left:m\\:ss}.";
+            HintText.Text = Loc.F("Pair.HintLeft", left.ToString(@"m\:ss"));
         };
         _timer.Start();
         Closed += (_, _) =>
@@ -55,10 +55,10 @@ public partial class PairingWindow : Wpf.Ui.Controls.FluentWindow
     private void OnPairingRequested(string name, int code) => Dispatcher.BeginInvoke(() =>
     {
         if (_done) return;
-        StatusText.Text = $"«{name}» просит привязку. Сравните код с экраном Switch:";
+        StatusText.Text = Loc.F("Pair.Request", name);
         CodeText.Text = $"{code / 1000:000} {code % 1000:000}";
         CodeText.Visibility = Visibility.Visible;
-        HintText.Text = "Привязывайте, только если коды совпадают. Если нет — кто-то пытается подключиться вместо вашего Switch.";
+        HintText.Text = Loc.T("Pair.Warning");
         AcceptButton.Visibility = RejectButton.Visibility = Visibility.Visible;
     });
 
@@ -68,7 +68,7 @@ public partial class PairingWindow : Wpf.Ui.Controls.FluentWindow
         _session.CompletePairing(accept);
         AcceptButton.Visibility = RejectButton.Visibility = Visibility.Collapsed;
         CodeText.Visibility = Visibility.Collapsed;
-        StatusText.Text = accept ? "Готово: Switch привязан." : "Привязка отклонена.";
-        HintText.Text = accept ? "Теперь Switch подключается к этому ПК через интернет без кода." : "";
+        StatusText.Text = Loc.T(accept ? "Pair.Done" : "Pair.Rejected");
+        HintText.Text = accept ? Loc.T("Pair.DoneHint") : "";
     }
 }

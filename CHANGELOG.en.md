@@ -6,6 +6,16 @@ Versions follow [Semantic Versioning](https://semver.org/). While the project is
 (`0.x.y-alpha`), settings, the library and the protocol are not guaranteed to be compatible between
 versions: install the same version on the PC and on the Switch.
 
+## [0.2.1-alpha] - 2026-11-02
+
+- The PC app now speaks two languages, Russian and English: Settings → Language. By default it follows
+  Windows; it changes at once, no restart needed.
+- The installer is bilingual too.
+- The Switch app now also speaks Russian: the language comes from the console's settings and can be
+  changed in the main menu, X → Language. The Switch now shows Cyrillic, including in game names
+  from the library.
+- The X screen on the Switch is renamed Settings: it now holds the language choice too.
+
 ## [0.2.0-alpha] - 2026-11-02
 
 - The project is renamed: **OrbitNX → SolarNX**. The PC app is `SolarNX.exe`, the Switch app is
@@ -52,5 +62,6 @@ First public alpha.
 - Steam button with − and +, back to the menu by holding − for 3 seconds.
 - HOME menu tile (forwarder, built yourself).
 
+[0.2.1-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.1-alpha
 [0.2.0-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.0-alpha
 [0.1.0-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.1.0-alpha

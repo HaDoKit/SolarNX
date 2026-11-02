@@ -3,6 +3,7 @@
 
 #include <switch.h>
 
+#include "common/lang/lang.h"
 #include "network/network.h"
 #include "video/video.h"
 #include "audio/audio.h"
@@ -227,6 +228,7 @@ void main() {
     // tries to load anything from "romfs:/...".
     romfsInit();
     settingsInit(); // before initNetwork() starts the library thread, which syncs these
+    langInit();
 
     if (!initNetwork())
         return;

@@ -46,7 +46,7 @@ The output is `SolarNX/bin/Release/net10.0-windows10.0.18362.0/SolarNX.exe`. The
 - Settings (`config.json`), the library (`library.json`, `covers/`) and the log (`SolarNX.log`) are
   stored next to the exe. Log timestamps use `HH:mm:ss.fff`, the same format as the Switch log.
 - Virtual gamepads need the ViGEmBus driver. If it is missing, you can install it from the app's
-  settings («Драйверы», Drivers).
+  settings (Drivers).
 - Only one instance of SolarNX can run at a time.
 
 ### Bundled tools in `SolarNX/lib/`

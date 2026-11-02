@@ -14,14 +14,16 @@
 #include "../transport/transport.h"
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
+#include "../common/lang/lang.h"
 
 #define MENU_OPTION_COUNT 3
 #define MENU_OPTION_LIBRARY 2 // index of the "My games" tile
 
+// NULL = the translated "My games" (see drawMenuFrame).
 static const char *kOptionLabels[MENU_OPTION_COUNT] = {
     "Steam",
     "shadPS4",
-    "My games",
+    NULL,
 };
 
 static const char *kIconPaths[MENU_OPTION_COUNT] = {
@@ -239,24 +241,24 @@ static void drawButtonLayoutHint(MenuContext *context)
     bool swapAbxy;
     uint32_t revision;
     settingsGetButtonLayout(&swapAbxy, &revision);
-    const char *text = swapAbxy ? "Y  Layout: Switch (A = A)" : "Y  Layout: Xbox (by position)";
+    const char *text = tr(swapAbxy ? Str_LayoutSwitch : Str_LayoutXbox);
     drawScaledText(context, MENU_RESX - 24 - scaledWidth(context, 0.5f, text), MENU_RESY - 34, 0.5f, kDim, text);
 
     // Above it: the connection mode (X opens the connection screen), with the Internet status.
-    char connection[96];
+    char connection[160];
     TransportStatus status = transportGetStatus();
     if (status == TransportStatus_Off)
-        snprintf(connection, sizeof(connection), "X  Connection: Wi-Fi");
+        snprintf(connection, sizeof(connection), "%s", tr(Str_MenuSettingsWifi));
     else
-        snprintf(connection, sizeof(connection), "X  Internet: %s", transportStatusText(status));
+        snprintf(connection, sizeof(connection), "%s%s", tr(Str_MenuInternetPrefix), transportStatusText(status));
     drawScaledText(context, MENU_RESX - 24 - scaledWidth(context, 0.5f, connection), MENU_RESY - 62, 0.5f,
         status == TransportStatus_Off || status == TransportStatus_Connected ? kDim : kGold, connection);
 }
 
-// --- Connection screen (X): Wi-Fi / experimental Internet mode, PC address, pairing ---
+// --- Settings screen (X): Wi-Fi / experimental Internet mode, PC address, pairing, language ---
 
-#define CONNECTION_ROWS 6
-enum { ROW_MODE, ROW_ADDRESS, ROW_SERVER, ROW_SERVER_KEY, ROW_PC_ID, ROW_PAIR };
+#define CONNECTION_ROWS 7
+enum { ROW_MODE, ROW_ADDRESS, ROW_SERVER, ROW_SERVER_KEY, ROW_PC_ID, ROW_PAIR, ROW_LANGUAGE };
 
 // The system keyboard applet; false if it couldn't be shown or the player cancelled.
 static bool editText(const char *header, const char *current, char *out, size_t size)
@@ -280,7 +282,7 @@ static void drawConnectionFrame(MenuContext *context, StarSystem *starSystem, in
     starsystem_draw(context, starSystem);
     drawSolarNxTopBar(context);
 
-    const char *title = "Connection";
+    const char *title = tr(Str_SettingsTitle);
     SDL_DrawText(context, MENU_RESX - 24 - FC_GetWidth(context->font, "%s", title), 14, kWhite, title);
 
     SettingsConnectionMode mode = settingsGetConnectionMode();
@@ -288,28 +290,37 @@ static void drawConnectionFrame(MenuContext *context, StarSystem *starSystem, in
     settingsGetPcAddress(address, sizeof(address));
     uint8_t key[32];
     char hostId[SETTINGS_HOST_ID_SIZE + 1];
-    char pairing[48];
+    char pairing[64];
     if (settingsGetPairing(key, hostId))
-        snprintf(pairing, sizeof(pairing), "paired with PC %s", hostId);
+        snprintf(pairing, sizeof(pairing), "%s%s", tr(Str_PairedWithPrefix), hostId);
     else
-        snprintf(pairing, sizeof(pairing), "not paired");
+        snprintf(pairing, sizeof(pairing), "%s", tr(Str_NotPaired));
 
     char server[SETTINGS_ADDRESS_MAX], serverKey[40], pcId[SETTINGS_HOST_ID_SIZE + 1];
     settingsGetServer(server, sizeof(server));
     settingsGetServerKey(serverKey, sizeof(serverKey));
     settingsGetPcId(pcId);
 
-    const char *labels[CONNECTION_ROWS] = {"Mode", "PC address (no server)", "Server (optional)", "Server key", "PC ID (on the server)", "Pair with this PC"};
+    // Each language by its own name, so it can be found whatever the current one is.
+    SettingsLanguage language = settingsGetLanguage();
+    const char *languageName = language == SettingsLanguage_Russian ? "Русский"
+                             : language == SettingsLanguage_English ? "English" : tr(Str_LanguageAuto);
+
+    const char *labels[CONNECTION_ROWS] = {
+        tr(Str_RowMode), tr(Str_RowAddress), tr(Str_RowServer), tr(Str_RowServerKey), tr(Str_RowPcId), tr(Str_RowPair),
+        tr(Str_RowLanguage),
+    };
     const char *values[CONNECTION_ROWS] = {
-        mode == SettingsConnection_Internet ? "Internet (experimental)" : "Wi-Fi (local network)",
-        address[0] != '\0' ? address : "(not set)",
-        server[0] != '\0' ? server : "(none - direct)",
-        serverKey[0] != '\0' ? "(set)" : "(none)",
-        pcId[0] != '\0' ? pcId : "(not set)",
+        tr(mode == SettingsConnection_Internet ? Str_ModeInternet : Str_ModeWifi),
+        address[0] != '\0' ? address : tr(Str_NotSet),
+        server[0] != '\0' ? server : tr(Str_NoServer),
+        tr(serverKey[0] != '\0' ? Str_KeySet : Str_KeyNone),
+        pcId[0] != '\0' ? pcId : tr(Str_NotSet),
         pairing,
+        languageName,
     };
 
-    const int rowX = 160, rowW = MENU_RESX - 320, rowH = 52, rowTop = 92, rowPitch = 60;
+    const int rowX = 160, rowW = MENU_RESX - 320, rowH = 46, rowTop = 84, rowPitch = 52;
     for (int i = 0; i < CONNECTION_ROWS; i++)
     {
         int y = rowTop + i * rowPitch;
@@ -317,16 +328,12 @@ static void drawConnectionFrame(MenuContext *context, StarSystem *starSystem, in
         if (i == selected)
             for (int t = 0; t < 3; t++)
                 drawRoundedRect(context, rowX + t, y + t, rowW - t * 2, rowH - t * 2, 14, kGold);
-        drawScaledText(context, rowX + 24, y + 12, 0.6f, kDim, labels[i]);
-        drawScaledText(context, rowX + rowW - 24 - scaledWidth(context, 0.6f, values[i]), y + 12, 0.6f, kWhite, values[i]);
+        drawScaledText(context, rowX + 24, y + 9, 0.6f, kDim, labels[i]);
+        drawScaledText(context, rowX + rowW - 24 - scaledWidth(context, 0.6f, values[i]), y + 9, 0.6f, kWhite, values[i]);
     }
 
     int y = rowTop + CONNECTION_ROWS * rowPitch + 10;
-    const char *notes[] = {
-        "Without a server: forward UDP 19010 on the PC's router and enter its public address.",
-        "With your rendezvous server: no forwarding - enter the server and the PC ID from the PC.",
-        "Then pair once: \"Pair with this PC\" here and \"Привязать Switch\" on the PC.",
-    };
+    const char *notes[] = {tr(Str_Note1), tr(Str_Note2), tr(Str_Note3)};
     for (int i = 0; i < 3; i++)
         drawScaledText(context, rowX, y + i * 28, 0.48f, kDim, notes[i]);
     y += 3 * 28 + 12;
@@ -334,12 +341,12 @@ static void drawConnectionFrame(MenuContext *context, StarSystem *starSystem, in
     // The mode in use was fixed at startup (transport running or not); a changed setting needs a restart.
     bool internetRunning = transportGetStatus() != TransportStatus_Off;
     if ((mode == SettingsConnection_Internet) != internetRunning)
-        drawScaledText(context, rowX, y, 0.55f, kGold, "Restart SolarNX to switch to the new mode.");
+        drawScaledText(context, rowX, y, 0.55f, kGold, tr(Str_RestartNote));
     else if (internetRunning)
     {
         TransportStatus status = transportGetStatus();
-        char line[96];
-        snprintf(line, sizeof(line), "Status: %s", transportStatusText(status));
+        char line[160];
+        snprintf(line, sizeof(line), "%s%s", tr(Str_StatusPrefix), transportStatusText(status));
         drawScaledText(context, rowX, y, 0.55f, status == TransportStatus_Connected || status == TransportStatus_Paired ? kWhite : kGold, line);
         if (status == TransportStatus_PairingCode)
         {
@@ -352,7 +359,7 @@ static void drawConnectionFrame(MenuContext *context, StarSystem *starSystem, in
         }
     }
 
-    const char *hint = selected == ROW_PAIR ? "A  Pair      B  Back" : "A  Change      B  Back";
+    const char *hint = tr(selected == ROW_PAIR ? Str_HintPair : Str_HintChange);
     drawScaledText(context, MENU_RESX / 2 - scaledWidth(context, 0.55f, hint) / 2, MENU_RESY - 34, 0.55f, kDim, hint);
     SDL_RenderPresent(context->renderer);
 }
@@ -382,26 +389,30 @@ static void runConnectionScreen(MenuContext *context, StarSystem *starSystem, Pa
             else if (selected == ROW_ADDRESS)
             {
                 settingsGetPcAddress(current, sizeof(current));
-                if (editText("PC address (IP or domain, optionally :port)", current, edited, sizeof(edited)))
+                if (editText(tr(Str_KbdAddress), current, edited, sizeof(edited)))
                     settingsSetPcAddress(edited);
             }
             else if (selected == ROW_SERVER)
             {
                 settingsGetServer(current, sizeof(current));
-                if (editText("Rendezvous server (address or address:port, empty = none)", current, edited, sizeof(edited)))
+                if (editText(tr(Str_KbdServer), current, edited, sizeof(edited)))
                     settingsSetServer(edited);
             }
             else if (selected == ROW_SERVER_KEY)
             {
                 settingsGetServerKey(current, sizeof(current));
-                if (editText("Server access key (empty = none)", current, edited, 33))
+                if (editText(tr(Str_KbdServerKey), current, edited, 33))
                     settingsSetServerKey(edited);
             }
             else if (selected == ROW_PC_ID)
             {
                 settingsGetPcId(current);
-                if (editText("PC ID - shown in the PC's settings", current, edited, SETTINGS_HOST_ID_SIZE + 1))
+                if (editText(tr(Str_KbdPcId), current, edited, SETTINGS_HOST_ID_SIZE + 1))
                     settingsSetPcId(edited);
+            }
+            else if (selected == ROW_LANGUAGE)
+            {
+                settingsCycleLanguage();
             }
             else if (transportGetStatus() != TransportStatus_Off)
             {
@@ -436,7 +447,7 @@ static void drawMenuFrame(MenuContext *context, StarSystem *starSystem, int sele
     {
         int blockX = firstBlockX + i * (blockW + blockGap);
         drawCard(context, blockX, blockY, blockW, blockH, i == selectedIndex, icons[i], lib,
-            i == MENU_OPTION_LIBRARY, kOptionLabels[i]);
+            i == MENU_OPTION_LIBRARY, kOptionLabels[i] != NULL ? kOptionLabels[i] : tr(Str_MyGames));
     }
 
     drawIpAddressLine(context);
@@ -454,13 +465,13 @@ static void drawLibraryFrame(MenuContext *context, StarSystem *starSystem, const
     starsystem_draw(context, starSystem);
     drawSolarNxTopBar(context);
 
-    const char *title = "My games";
+    const char *title = tr(Str_MyGames);
     SDL_DrawText(context, MENU_RESX - 24 - FC_GetWidth(context->font, "%s", title), 14, kWhite, title);
 
     if (lib->count == 0)
     {
-        const char *line1 = lib->version == 0 ? "Waiting for the library from your PC..." : "Your library is empty";
-        const char *line2 = "Add games in SolarNX on the PC (Library button) with streaming enabled";
+        const char *line1 = tr(lib->version == 0 ? Str_LibWaiting : Str_LibEmpty);
+        const char *line2 = tr(Str_LibAddHint);
         SDL_DrawText(context, MENU_RESX / 2 - FC_GetWidth(context->font, "%s", line1) / 2, 300, kWhite, line1);
         drawScaledText(context, MENU_RESX / 2 - scaledWidth(context, 0.55f, line2) / 2, 360, 0.55f, kDim, line2);
     }
@@ -504,7 +515,7 @@ static void drawLibraryFrame(MenuContext *context, StarSystem *starSystem, const
         }
     }
 
-    const char *hint = lib->count > 0 ? "A  Play      B  Back" : "B  Back";
+    const char *hint = tr(lib->count > 0 ? Str_HintPlay : Str_HintBack);
     drawScaledText(context, MENU_RESX / 2 - scaledWidth(context, 0.55f, hint) / 2, MENU_RESY - 34, 0.55f, kDim, hint);
 
     SDL_RenderPresent(context->renderer);
