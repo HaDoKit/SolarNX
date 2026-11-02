@@ -2,7 +2,7 @@
 
 # SolarNX
 
-> **Alpha version 0.2.2-alpha.** The project is at an early stage: expect bugs, and settings and the
+> **Alpha version 0.2.3-alpha.** The project is at an early stage: expect bugs, and settings and the
 > protocol may change between versions. Stable operation has so far been confirmed on a single setup
 > only; see [Tested configuration](#tested-configuration). For what changed, see
 > [CHANGELOG.en.md](CHANGELOG.en.md).
