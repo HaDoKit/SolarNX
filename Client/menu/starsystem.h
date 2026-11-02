@@ -2,72 +2,33 @@
 
 #include "context.h"
 
-#define SS_MAX_PLANETS 4
-#define SS_TRAIL_LENGTH 40
-#define SS_MOON_TRAIL_LENGTH 16
-#define SS_STAR_COUNT 140
+// Menu background: the pre-rendered eclipse scene (romfs:/branding/background.png, made by
+// tools/branding/make_branding.py - corona, orbits, stars) with two planets moving along its
+// orbits. The orbit geometry below must match SCENE in that script.
+#define SS_PLANET_COUNT 2
 
 typedef struct
 {
-    float x, y;
-} SSTrailPoint;
-
-typedef struct
-{
-    float x, y;
-    float vx, vy;
-    float mass;
-    float visualRadius;
-    SDL_Color color;
-
-    SSTrailPoint trail[SS_TRAIL_LENGTH];
-    int trailCount;
-    int trailHead; // index of the most recently written trail point
-    float trailTimer;
-
-    // Kinematic satellite orbiting this planet - deliberately NOT driven by gravity: a moon close
-    // enough to look good around its planet is too easily perturbed by the star/neighbours under
-    // real N-body gravity to guarantee it looks right, so it just walks a perfect circle instead.
-    float moonAngle;
-    float moonAngularSpeed;
-    float moonOrbitRadius;
-    float moonVisualRadius;
-
-    // Moon's own (shorter, faster-sampled) trail - separate buffer from the planet's because the
-    // moon's world position is derived (planet position + orbit offset), not stored directly.
-    SSTrailPoint moonTrail[SS_MOON_TRAIL_LENGTH];
-    int moonTrailCount;
-    int moonTrailHead;
-    float moonTrailTimer;
-} SSBody;
-
-typedef struct
-{
-    float x, y;
-    float radius;
-    SDL_Color color;
-} SSStar;
+    float angle;             // parameter on the orbit ellipse, radians
+    float angularSpeed;      // radians per second
+    int orbit;               // index into the scene's orbits
+    float radius;            // pixels
+    SDL_Color colour;
+} SSPlanet;
 
 typedef struct
 {
     float centreX, centreY;
-    float gravityConstant;
-
-    SSBody star;
-    SSBody planets[SS_MAX_PLANETS];
-    int planetCount;
-
-    SSStar background[SS_STAR_COUNT];
+    SSPlanet planets[SS_PLANET_COUNT];
 } StarSystem;
 
-/* Randomly generates a fresh system (planet count, colours, orbits) centred at (centreX, centreY).
- * Call once before the first starsystem_update/draw. */
+/* Places the planets at random points of their orbits around (centreX, centreY). Call once before
+ * the first starsystem_update/draw. */
 void starsystem_init(StarSystem *system, float centreX, float centreY);
 
-/* Advances the simulation by dt seconds - real star gravity for the planets (star-only, not
- * planet-to-planet, so nothing can ever perturb a neighbour into a collision), kinematic angle
- * step for each moon. */
+/* Moves the planets along their orbits by dt seconds. */
 void starsystem_update(StarSystem *system, float dt);
 
-/* Draws the starfield, nebula haze, trails, star, planets and moons, in that back-to-front order. */
+/* Draws the background image, then the planets; a planet on the far side of its orbit is hidden
+ * while it passes behind the eclipse disc. */
 void starsystem_draw(MenuContext *context, const StarSystem *system);

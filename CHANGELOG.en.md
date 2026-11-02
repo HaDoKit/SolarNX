@@ -10,6 +10,8 @@ versions: install the same version on the PC and on the Switch.
 
 - The project is renamed: **OrbitNX → SolarNX**. The PC app is `SolarNX.exe`, the Switch app is
   `/switch/SolarNX/SolarNX-Switch.nro`.
+- New "eclipse" style: icon, background and the glowing SOLARNX wordmark on the PC and the Switch,
+  gold accent in the PC interface. The version number on the Switch moved to the bottom-left corner.
 - The installer puts SolarNX in its own folder, carries over the settings, library and covers from
   OrbitNX, and removes the old version.
 

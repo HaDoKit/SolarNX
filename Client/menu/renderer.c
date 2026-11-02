@@ -34,6 +34,21 @@ float rendererTick(void)
     return dt;
 }
 
+static SDL_Texture *loadTexture(MenuContext *context, const char *path)
+{
+    SDL_Surface *surface = IMG_Load(path);
+    if (surface == NULL)
+    {
+        logWrite("menu", "loadTexture: failed to load %s: %s", path, IMG_GetError());
+        return NULL;
+    }
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(context->renderer, surface);
+    SDL_FreeSurface(surface);
+    if (texture == NULL)
+        logWrite("menu", "loadTexture: failed to create texture from %s: %s", path, SDL_GetError());
+    return texture;
+}
+
 MenuContext *makeRenderer(void)
 {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0)
@@ -86,6 +101,9 @@ MenuContext *makeRenderer(void)
         SDL_RWFromMem((void *)fontExtData.address, fontExtData.size),
         1, 40, FC_MakeColor(0, 0, 0, 255), TTF_STYLE_NORMAL);
 
+    context->background = loadTexture(context, "romfs:/branding/background.png");
+    context->wordmark = loadTexture(context, "romfs:/branding/wordmark.png");
+
     s_lastTick = 0; // reset so the first rendererTick() after this doesn't see a stale tick
     return context;
 }
@@ -94,6 +112,8 @@ void freeRenderer(MenuContext *context)
 {
     if (context == NULL)
         return;
+    if (context->background != NULL) SDL_DestroyTexture(context->background);
+    if (context->wordmark != NULL) SDL_DestroyTexture(context->wordmark);
     if (context->font != NULL) FC_FreeFont(context->font);
     if (context->renderer != NULL) SDL_DestroyRenderer(context->renderer);
     if (context->window != NULL) SDL_DestroyWindow(context->window);
@@ -157,22 +177,33 @@ void drawSolarNxTopBar(MenuContext *context)
     SDL_Color barColour = {150, 150, 150, 26}; // ~0.1 alpha
     draw_rect(context, 0, 0, MENU_RESX, 70, barColour);
 
-    SDL_Color white = {255, 255, 255, 255};
-    SDL_Color red = {230, 57, 70, 255};
-    SDL_Color blue = {58, 134, 255, 255};
-
-    int x = 24;
     int y = 14;
-    SDL_DrawText(context, x, y, white, "Solar");
-    x += FC_GetWidth(context->font, "%s", "Solar");
-    SDL_DrawText(context, x, y, red, "N");
-    x += FC_GetWidth(context->font, "%s", "N");
-    SDL_DrawText(context, x, y, blue, "X");
+    if (context->wordmark != NULL)
+    {
+        // The image carries transparent padding around the letters for their glow - offset so the
+        // letters themselves sit where the text logo used to start (x 24), centred in the bar.
+        int w, h;
+        SDL_QueryTexture(context->wordmark, NULL, NULL, &w, &h);
+        SDL_Rect dest = {24 - h / 4, 35 - h / 2, w, h};
+        SDL_RenderCopy(context->renderer, context->wordmark, NULL, &dest);
+    }
+    else
+    {
+        SDL_Color gold = {255, 214, 140, 255};
+        SDL_Color red = {255, 60, 40, 255};
+        SDL_Color blue = {10, 185, 230, 255};
+        int x = 24;
+        SDL_DrawText(context, x, y, gold, "SOLAR");
+        x += FC_GetWidth(context->font, "%s", "SOLAR");
+        SDL_DrawText(context, x, y, red, "N");
+        x += FC_GetWidth(context->font, "%s", "N");
+        SDL_DrawText(context, x, y, blue, "X");
+    }
 
-    SDL_Color grey = {150, 150, 160, 255};
-    const char *version = "v" SOLARNX_VERSION;
-    int versionWidth = FC_GetWidth(context->font, "%s", version);
-    SDL_DrawText(context, MENU_RESX - 24 - versionWidth, y, grey, version);
+    // Small, bottom-left: the top-right corner belongs to screen titles ("My games").
+    SDL_Color grey = {150, 150, 160, 200};
+    FC_DrawEffect(context->font, context->renderer, 24, MENU_RESY - 30,
+        FC_MakeEffect(FC_ALIGN_LEFT, FC_MakeScale(0.45f, 0.45f), grey), "%s", "v" SOLARNX_VERSION);
 }
 
 void drawIpAddressLine(MenuContext *context)

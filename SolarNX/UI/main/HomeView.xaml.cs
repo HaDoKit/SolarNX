@@ -72,18 +72,32 @@ public partial class HomeView : System.Windows.Controls.UserControl
         RefreshStatus();
     }
 
+    /// <summary>Applies the "Start" or "Stop" brushes from HomeView.xaml's resources.</summary>
+    private void ApplyToggleButtonStyle(string state)
+    {
+        var b = ToggleStreamingButton;
+        b.Background = (System.Windows.Media.Brush)Resources[state + "Background"];
+        b.MouseOverBackground = (System.Windows.Media.Brush)Resources[state + "HoverBackground"];
+        b.PressedBackground = (System.Windows.Media.Brush)Resources[state + "PressedBackground"];
+        b.Foreground = (System.Windows.Media.Brush)Resources[state + "Foreground"];
+        b.PressedForeground = b.Foreground;
+        b.BorderBrush = (System.Windows.Media.Brush)Resources[state + "Border"];
+        b.MouseOverBorderBrush = b.BorderBrush;
+        b.PressedBorderBrush = b.BorderBrush;
+    }
+
     public void RefreshStatus()
     {
         if (!_orchestrator.IsArmed)
         {
             ToggleStreamingButton.Content = "▶  Включить трансляцию";
-            ToggleStreamingButton.Appearance = ControlAppearance.Success;
+            ApplyToggleButtonStyle("Start");
             StatusLabel.Text = "Статус: выключено";
         }
         else if (_orchestrator.IsConnected)
         {
             ToggleStreamingButton.Content = "■  Выключить трансляцию";
-            ToggleStreamingButton.Appearance = ControlAppearance.Danger;
+            ApplyToggleButtonStyle("Stop");
             var targetName = _orchestrator.ActiveTarget switch
             {
                 AppTarget.BigPicture => "Big Picture (Steam)",
@@ -97,7 +111,7 @@ public partial class HomeView : System.Windows.Controls.UserControl
         else
         {
             ToggleStreamingButton.Content = "■  Выключить трансляцию";
-            ToggleStreamingButton.Appearance = ControlAppearance.Danger;
+            ApplyToggleButtonStyle("Stop");
             StatusLabel.Text = "Статус: ожидание подключения клиента…";
         }
 

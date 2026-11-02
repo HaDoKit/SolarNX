@@ -9,5 +9,12 @@ namespace SolarNX;
 /// </summary>
 public partial class App : System.Windows.Application
 {
-    public App() => InitializeComponent();
+    public App()
+    {
+        InitializeComponent();
+        // Gold accent (the eclipse rim, see tools/branding/make_branding.py) instead of the Windows
+        // accent colour - toggles, primary buttons and links follow the app's own style.
+        Wpf.Ui.Appearance.ApplicationAccentColorManager.Apply(
+            System.Windows.Media.Color.FromRgb(0xFF, 0xC0, 0x64), Wpf.Ui.Appearance.ApplicationTheme.Dark);
+    }
 }
