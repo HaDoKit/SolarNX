@@ -46,6 +46,10 @@ public sealed class Config
     /// on this machine falls back to Auto.</summary>
     public Capture.EncoderKind Encoder { get; set; } = Capture.EncoderKind.Auto;
 
+    /// <summary>H.265 by default - a better picture at the same bitrate. Falls back to H.264 when the
+    /// resolved encoder can't do H.265 here - see Capture/EncoderSelection.ResolveCodec.</summary>
+    public Capture.VideoCodec Codec { get; set; } = Capture.VideoCodec.Hevc;
+
     /// <summary>Sample rate the PCM is captured/resampled to before Opus encoding (see
     /// AudioCaptureSender). RFC 7587 mandates Opus's RTP clock rate be 48000Hz regardless of this
     /// value, and the client (SolarNX/source/audio.c) decodes via libavcodec/libswresample rather than

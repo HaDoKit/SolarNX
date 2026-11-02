@@ -177,10 +177,23 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         EncoderKind.Auto, EncoderKind.Nvenc, EncoderKind.Amf, EncoderKind.Qsv, EncoderKind.MediaFoundation, EncoderKind.Software,
     };
 
+    private static readonly VideoCodec[] CodecOptions = { VideoCodec.Hevc, VideoCodec.H264 };
+
     // Probing the encoders spawns ffmpeg once per encoder (cached afterwards), so it runs off the UI
     // thread; until it finishes every option is selectable and the line under the combo says so.
     private void InitEncoderRow()
     {
+        foreach (var codec in CodecOptions)
+            CodecCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = EncoderSelection.DisplayName(codec), Tag = codec });
+        CodecCombo.SelectedIndex = Math.Max(0, Array.IndexOf(CodecOptions, _config.Codec));
+        CodecCombo.SelectionChanged += (_, _) =>
+        {
+            if (CodecCombo.SelectedItem is not System.Windows.Controls.ComboBoxItem { Tag: VideoCodec codec }) return;
+            _config.Codec = codec;
+            _config.Save();
+            _ = RefreshEncoderInfoAsync();
+        };
+
         foreach (var kind in EncoderOptions)
             EncoderCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = EncoderSelection.DisplayName(kind), Tag = kind });
         EncoderCombo.SelectedIndex = Math.Max(0, Array.IndexOf(EncoderOptions, _config.Encoder));
@@ -200,15 +213,17 @@ public partial class SettingsView : System.Windows.Controls.UserControl
     private async Task RefreshEncoderInfoAsync()
     {
         var preference = _config.Encoder;
+        var codecPreference = _config.Codec;
         try
         {
-            var (gpus, available, resolved) = await Task.Run(() =>
+            var (gpus, available, resolved, codec) = await Task.Run(() =>
             {
                 var gpuList = EncoderSelection.Gpus;
                 var availability = EncoderOptions.Where(k => k != EncoderKind.Auto).ToDictionary(k => k, EncoderSelection.IsAvailable);
-                return (gpuList, availability, EncoderSelection.Resolve(preference));
+                var kind = EncoderSelection.Resolve(preference);
+                return (gpuList, availability, kind, EncoderSelection.ResolveCodec(kind, codecPreference));
             });
-            await Dispatcher.InvokeAsync(() => ShowEncoderInfo(preference, gpus, available, resolved));
+            await Dispatcher.InvokeAsync(() => ShowEncoderInfo(preference, gpus, available, resolved, codecPreference, codec));
         }
         catch (Exception ex)
         {
@@ -216,7 +231,8 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         }
     }
 
-    private void ShowEncoderInfo(EncoderKind preference, IReadOnlyList<GpuInfo> gpus, Dictionary<EncoderKind, bool> available, EncoderKind resolved)
+    private void ShowEncoderInfo(EncoderKind preference, IReadOnlyList<GpuInfo> gpus, Dictionary<EncoderKind, bool> available, EncoderKind resolved,
+        VideoCodec codecPreference, VideoCodec codec)
     {
         foreach (System.Windows.Controls.ComboBoxItem item in EncoderCombo.Items)
         {
@@ -229,9 +245,11 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         // Auto is the one entry the availability loop above skips.
         ((System.Windows.Controls.ComboBoxItem)EncoderCombo.Items[0]).Content = EncoderSelection.DisplayName(EncoderKind.Auto);
         var gpuText = gpus.Count == 0 ? Loc.T("Settings.GpuNotFound") : string.Join(", ", gpus.Select(g => g.Name));
-        var fallbackNote = preference != EncoderKind.Auto && resolved != preference ? Loc.T("Settings.EncoderFallback") : "";
+        var fallbackNote = (preference != EncoderKind.Auto && resolved != preference ? Loc.T("Settings.EncoderFallback") : "")
+            + (codec != codecPreference ? Loc.T("Settings.CodecFallback") : "");
         var cpuNote = resolved == EncoderKind.Software ? Loc.T("Settings.EncoderCpuNote") : "";
-        EncoderInfoText.Text = Loc.F("Settings.EncoderInfo", gpuText, EncoderSelection.DisplayName(resolved), fallbackNote, cpuNote);
+        var used = $"{EncoderSelection.DisplayName(resolved)}, {EncoderSelection.DisplayName(codec)}";
+        EncoderInfoText.Text = Loc.F("Settings.EncoderInfo", gpuText, used, fallbackNote, cpuNote);
     }
 
     // AdaptiveBitrateController scales the actually-running bitrate on its own between a fixed

@@ -65,6 +65,9 @@
     <sys:String x:Key="Settings.GpuNotFound">не найдена</sys:String>
     <sys:String x:Key="Settings.EncoderInfo">Видеокарта: {0}. Будет использоваться: {1}{2}.{3} Изменение применится при следующем подключении Switch.</sys:String>
     <sys:String x:Key="Settings.EncoderFallback"> (выбранный недоступен)</sys:String>
+    <sys:String x:Key="Settings.CodecFallback"> (H.265 этим кодировщиком недоступен — используется H.264)</sys:String>
+    <sys:String x:Key="Settings.Codec">Кодек</sys:String>
+    <sys:String x:Key="Settings.CodecHint">H.265 даёт заметно лучшую картинку при том же битрейте. H.264 — если с H.265 что-то не так.</sys:String>
     <sys:String x:Key="Settings.EncoderCpuNote"> Аппаратный кодировщик не найден — видео кодирует процессор, это заметно его нагружает.</sys:String>
     <sys:String x:Key="Settings.Gamepad">Геймпад</sys:String>
     <sys:String x:Key="Settings.SwitchLayout">Раскладка Switch (A↔B, X↔Y)</sys:String>

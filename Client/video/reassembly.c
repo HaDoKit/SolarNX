@@ -29,6 +29,7 @@ static struct {
     bool active;
     bool complete;
     bool keyframe;
+    bool hevc;
     uint32_t number;
     uint32_t size;
     int blockCount;
@@ -85,7 +86,7 @@ const ReassemblyStats *reassemblyStats(void)
     return &s_stats;
 }
 
-static bool startFrame(uint32_t number, uint32_t size, int blockCount, bool keyframe)
+static bool startFrame(uint32_t number, uint32_t size, int blockCount, bool keyframe, bool hevc)
 {
     s_frame.active = false;
     if (size == 0 || size > MAX_FRAME_BYTES || blockCount == 0)
@@ -121,6 +122,7 @@ static bool startFrame(uint32_t number, uint32_t size, int blockCount, bool keyf
     s_frame.active = true;
     s_frame.complete = false;
     s_frame.keyframe = keyframe;
+    s_frame.hevc = hevc;
     s_frame.number = number;
     s_frame.size = size;
     s_frame.blockCount = blockCount;
@@ -172,6 +174,7 @@ bool reassemblyPush(const uint8_t *datagram, size_t length, ReassembledFrame *ou
     }
 
     bool keyframe = (datagram[2] & VIDEO_WIRE_FLAG_KEYFRAME) != 0;
+    bool hevc = (datagram[2] & VIDEO_WIRE_FLAG_HEVC) != 0;
     int blockIndex = datagram[3];
     int blockCount = datagram[4];
     int shardIndex = datagram[5];
@@ -197,7 +200,7 @@ bool reassemblyPush(const uint8_t *datagram, size_t length, ReassembledFrame *ou
             s_needKeyframe = true;
         }
 
-        if (!startFrame(number, size, blockCount, keyframe))
+        if (!startFrame(number, size, blockCount, keyframe, hevc))
         {
             s_stats.datagramsRejected++;
             return false;
@@ -263,5 +266,6 @@ bool reassemblyPush(const uint8_t *datagram, size_t length, ReassembledFrame *ou
     out->size = s_frame.size;
     out->number = s_frame.number;
     out->keyframe = s_frame.keyframe;
+    out->hevc = s_frame.hevc;
     return true;
 }

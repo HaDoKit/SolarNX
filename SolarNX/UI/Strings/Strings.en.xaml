@@ -65,6 +65,9 @@
     <sys:String x:Key="Settings.GpuNotFound">not found</sys:String>
     <sys:String x:Key="Settings.EncoderInfo">Graphics card: {0}. Will use: {1}{2}.{3} The change applies the next time the Switch connects.</sys:String>
     <sys:String x:Key="Settings.EncoderFallback"> (the selected one is unavailable)</sys:String>
+    <sys:String x:Key="Settings.CodecFallback"> (H.265 is unavailable with this encoder — using H.264)</sys:String>
+    <sys:String x:Key="Settings.Codec">Codec</sys:String>
+    <sys:String x:Key="Settings.CodecHint">H.265 gives a noticeably better picture at the same bitrate. H.264 is there in case something is wrong with H.265.</sys:String>
     <sys:String x:Key="Settings.EncoderCpuNote"> No hardware encoder found — the processor encodes the video, which puts a noticeable load on it.</sys:String>
     <sys:String x:Key="Settings.Gamepad">Gamepad</sys:String>
     <sys:String x:Key="Settings.SwitchLayout">Switch layout (A↔B, X↔Y)</sys:String>

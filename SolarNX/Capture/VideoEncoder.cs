@@ -5,7 +5,7 @@ namespace SolarNX.Capture;
 
 /// <summary>
 /// Captures the real primary monitor directly via ffmpeg's own "gfxcapture" filter (Windows.Graphics.Capture,
-/// WinRT/UWP-based) and encodes it to H264.
+/// WinRT/UWP-based) and encodes it to H.265 or H.264 (<see cref="Config.Codec"/>).
 ///
 /// gfxcapture (not gdigrab/DXGI) is required because it reads directly from the compositor - GDI
 /// BitBlt-based capture misses DirectComposition-rendered layers (Steam overlay, some UI, hardware-
@@ -70,6 +70,9 @@ public sealed class VideoEncoder : IDisposable
     /// running.</summary>
     public EncoderKind? ActiveEncoder { get; private set; }
 
+    /// <summary>The codec the running ffmpeg process streams, or null if none is running.</summary>
+    public VideoCodec? ActiveCodec { get; private set; }
+
     /// <summary>The window being captured instead of the monitor (IntPtr.Zero = whole primary
     /// monitor). Lets a restart (watchdog / adaptive bitrate) carry the same capture target over.</summary>
     public IntPtr CaptureWindow { get; private set; }
@@ -115,26 +118,28 @@ public sealed class VideoEncoder : IDisposable
         var switchEndpoint = _config.ConnectionMode == Session.ConnectionMode.Internet
             ? new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, Session.InternetSession.VideoRelayPort)
             : VideoSender.ResolveTarget(_config.ClientIp, _config.VideoPort);
-        _sender = new VideoSender(switchEndpoint, _config.Fps);
+        var encoder = EncoderSelection.Resolve(encoderOverride ?? _config.Encoder);
+        var codec = EncoderSelection.ResolveCodec(encoder, _config.Codec);
+        ActiveEncoder = encoder;
+        ActiveCodec = codec;
+        var pixelFormat = EncoderSelection.PixelFormat(encoder);
+        _sender = new VideoSender(switchEndpoint, _config.Fps, codec);
         // RTP over plain udp:// (not rtp://, which would also send RTCP to a second port nobody
         // listens on). Loopback has no 1500-byte MTU: big packets keep a frame to a few datagrams.
         var target = $"udp://127.0.0.1:{_sender.RtpPort}?pkt_size=16384";
-        var encoder = EncoderSelection.Resolve(encoderOverride ?? _config.Encoder);
-        ActiveEncoder = encoder;
-        var pixelFormat = EncoderSelection.PixelFormat(encoder);
 
         // -g (keyframe interval): ~0.5s (shorter than the ~2s used under TCP) - bounds how long a
         // lost packet's corruption can visibly propagate via motion compensation before the next
         // keyframe resyncs it, at the cost of more frequent (bigger) keyframes eating into the
         // bitrate budget. A reasonable hedge against ordinary UDP packet loss.
         var keyframeInterval = Math.Max(1, _config.Fps / 2);
-        // Constant bitrate, High profile, no B-frames/lookahead for every encoder - see
+        // Constant bitrate, High (H.264) / Main (H.265) profile, no B-frames/lookahead for every encoder - see
         // EncoderSelection.EncodeArgs. -profile:v high (was baseline): confirmed live that the encoder
         // ran at q=32-36 during gameplay at this bitrate; High (CABAC, 8x8 transform) gives ~15-25%
         // better quality at the same bitrate with no latency cost. The Switch decodes High (NVTEGRA).
         // A quality-target rate mode (the original "-rc vbr -cq:v 19") fought the hard bitrate bounds
         // below and made the encoder fall behind real time - keep rate control constant-bitrate.
-        var encodeArgs = EncoderSelection.EncodeArgs(encoder, keyframeInterval);
+        var encodeArgs = EncoderSelection.EncodeArgs(encoder, codec, keyframeInterval);
 
         // gfxcapture scales to the stream's target resolution itself (resize_mode=scale) - no
         // separate -vf scale step needed. hwdownload+format=bgra brings the D3D11 hardware frame
@@ -218,7 +223,7 @@ public sealed class VideoEncoder : IDisposable
             catch (Exception) { Logger.Log("ffmpeg-video", "process exited (exit code unavailable - already disposed)"); }
         };
         _ffmpeg.EnableRaisingEvents = true;
-        Logger.Log("ffmpeg-video", $"encoder: {EncoderSelection.DisplayName(encoder)}");
+        Logger.Log("ffmpeg-video", $"encoder: {EncoderSelection.DisplayName(encoder)}, {EncoderSelection.DisplayName(codec)}");
         Logger.Log("ffmpeg-video", $"starting: {ffmpegPath} {args}");
         _ffmpeg.Start();
         ChildProcessJob.Assign(_ffmpeg); // dies with this process even on a crash/debugger stop - see ChildProcessJob
@@ -243,6 +248,7 @@ public sealed class VideoEncoder : IDisposable
         _sender = null;
         ActiveBitrateKbps = null;
         ActiveEncoder = null;
+        ActiveCodec = null;
         CaptureWindow = IntPtr.Zero;
         CaptureSize = default;
     }
