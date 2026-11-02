@@ -46,6 +46,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The rendezvous protocol is defined once, in the server project. -->
+    <Compile Include="..\Server\RendezvousWire.cs" Link="Session\RendezvousWire.cs" />
+    <!-- Branding art from tools/branding/make_branding.py (main-window background, home logo). -->
+    <Resource Include="Assets\background.png" />
+    <Resource Include="Assets\wordmark.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.106">
       <PrivateAssets>all</PrivateAssets>

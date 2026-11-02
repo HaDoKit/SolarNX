@@ -10,6 +10,8 @@
 #include "renderer.h"
 #include "../input/input.h"
 #include "../library/library.h"
+#include "../settings/settings.h"
+#include "../transport/transport.h"
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
 
@@ -230,6 +232,190 @@ static void drawCard(MenuContext *context, int blockX, int blockY, int blockW, i
     SDL_DrawText(context, blockX + blockW / 2 - labelWidth / 2, blockY + blockH - labelHeight + 14, labelColour, label);
 }
 
+// Bottom-right, opposite the version: the current A/B X/Y layout and the button that flips it.
+// Synced with the PC's setting (see settings.h).
+static void drawButtonLayoutHint(MenuContext *context)
+{
+    bool swapAbxy;
+    uint32_t revision;
+    settingsGetButtonLayout(&swapAbxy, &revision);
+    const char *text = swapAbxy ? "Y  Layout: Switch (A = A)" : "Y  Layout: Xbox (by position)";
+    drawScaledText(context, MENU_RESX - 24 - scaledWidth(context, 0.5f, text), MENU_RESY - 34, 0.5f, kDim, text);
+
+    // Above it: the connection mode (X opens the connection screen), with the Internet status.
+    char connection[96];
+    TransportStatus status = transportGetStatus();
+    if (status == TransportStatus_Off)
+        snprintf(connection, sizeof(connection), "X  Connection: Wi-Fi");
+    else
+        snprintf(connection, sizeof(connection), "X  Internet: %s", transportStatusText(status));
+    drawScaledText(context, MENU_RESX - 24 - scaledWidth(context, 0.5f, connection), MENU_RESY - 62, 0.5f,
+        status == TransportStatus_Off || status == TransportStatus_Connected ? kDim : kGold, connection);
+}
+
+// --- Connection screen (X): Wi-Fi / experimental Internet mode, PC address, pairing ---
+
+#define CONNECTION_ROWS 6
+enum { ROW_MODE, ROW_ADDRESS, ROW_SERVER, ROW_SERVER_KEY, ROW_PC_ID, ROW_PAIR };
+
+// The system keyboard applet; false if it couldn't be shown or the player cancelled.
+static bool editText(const char *header, const char *current, char *out, size_t size)
+{
+    SwkbdConfig kbd;
+    if (R_FAILED(swkbdCreate(&kbd, 0)))
+        return false;
+    swkbdConfigMakePresetDefault(&kbd);
+    swkbdConfigSetHeaderText(&kbd, header);
+    swkbdConfigSetInitialText(&kbd, current);
+    swkbdConfigSetStringLenMax(&kbd, (u32)(size - 1));
+    Result rc = swkbdShow(&kbd, out, size);
+    swkbdClose(&kbd);
+    return R_SUCCEEDED(rc);
+}
+
+static void drawConnectionFrame(MenuContext *context, StarSystem *starSystem, int selected)
+{
+    SDL_Color bg = {5, 5, 8, 255};
+    SDL_ClearScreen(context, bg);
+    starsystem_draw(context, starSystem);
+    drawSolarNxTopBar(context);
+
+    const char *title = "Connection";
+    SDL_DrawText(context, MENU_RESX - 24 - FC_GetWidth(context->font, "%s", title), 14, kWhite, title);
+
+    SettingsConnectionMode mode = settingsGetConnectionMode();
+    char address[SETTINGS_ADDRESS_MAX];
+    settingsGetPcAddress(address, sizeof(address));
+    uint8_t key[32];
+    char hostId[SETTINGS_HOST_ID_SIZE + 1];
+    char pairing[48];
+    if (settingsGetPairing(key, hostId))
+        snprintf(pairing, sizeof(pairing), "paired with PC %s", hostId);
+    else
+        snprintf(pairing, sizeof(pairing), "not paired");
+
+    char server[SETTINGS_ADDRESS_MAX], serverKey[40], pcId[SETTINGS_HOST_ID_SIZE + 1];
+    settingsGetServer(server, sizeof(server));
+    settingsGetServerKey(serverKey, sizeof(serverKey));
+    settingsGetPcId(pcId);
+
+    const char *labels[CONNECTION_ROWS] = {"Mode", "PC address (no server)", "Server (optional)", "Server key", "PC ID (on the server)", "Pair with this PC"};
+    const char *values[CONNECTION_ROWS] = {
+        mode == SettingsConnection_Internet ? "Internet (experimental)" : "Wi-Fi (local network)",
+        address[0] != '\0' ? address : "(not set)",
+        server[0] != '\0' ? server : "(none - direct)",
+        serverKey[0] != '\0' ? "(set)" : "(none)",
+        pcId[0] != '\0' ? pcId : "(not set)",
+        pairing,
+    };
+
+    const int rowX = 160, rowW = MENU_RESX - 320, rowH = 52, rowTop = 92, rowPitch = 60;
+    for (int i = 0; i < CONNECTION_ROWS; i++)
+    {
+        int y = rowTop + i * rowPitch;
+        fillRoundedRect(context, rowX, y, rowW, rowH, 14, (SDL_Color){20, 21, 28, 220});
+        if (i == selected)
+            for (int t = 0; t < 3; t++)
+                drawRoundedRect(context, rowX + t, y + t, rowW - t * 2, rowH - t * 2, 14, kGold);
+        drawScaledText(context, rowX + 24, y + 12, 0.6f, kDim, labels[i]);
+        drawScaledText(context, rowX + rowW - 24 - scaledWidth(context, 0.6f, values[i]), y + 12, 0.6f, kWhite, values[i]);
+    }
+
+    int y = rowTop + CONNECTION_ROWS * rowPitch + 10;
+    const char *notes[] = {
+        "Without a server: forward UDP 19010 on the PC's router and enter its public address.",
+        "With your rendezvous server: no forwarding - enter the server and the PC ID from the PC.",
+        "Then pair once: \"Pair with this PC\" here and \"Привязать Switch\" on the PC.",
+    };
+    for (int i = 0; i < 3; i++)
+        drawScaledText(context, rowX, y + i * 28, 0.48f, kDim, notes[i]);
+    y += 3 * 28 + 12;
+
+    // The mode in use was fixed at startup (transport running or not); a changed setting needs a restart.
+    bool internetRunning = transportGetStatus() != TransportStatus_Off;
+    if ((mode == SettingsConnection_Internet) != internetRunning)
+        drawScaledText(context, rowX, y, 0.55f, kGold, "Restart SolarNX to switch to the new mode.");
+    else if (internetRunning)
+    {
+        TransportStatus status = transportGetStatus();
+        char line[96];
+        snprintf(line, sizeof(line), "Status: %s", transportStatusText(status));
+        drawScaledText(context, rowX, y, 0.55f, status == TransportStatus_Connected || status == TransportStatus_Paired ? kWhite : kGold, line);
+        if (status == TransportStatus_PairingCode)
+        {
+            // The numeric comparison: the same code must show on the PC before it's accepted there.
+            uint32_t code = transportPairingCode();
+            char text[32];
+            snprintf(text, sizeof(text), "%03u %03u", (unsigned)(code / 1000), (unsigned)(code % 1000));
+            int width = scaledWidth(context, 1.6f, text);
+            drawScaledText(context, MENU_RESX - rowX - width, y - 20, 1.6f, kGold, text);
+        }
+    }
+
+    const char *hint = selected == ROW_PAIR ? "A  Pair      B  Back" : "A  Change      B  Back";
+    drawScaledText(context, MENU_RESX / 2 - scaledWidth(context, 0.55f, hint) / 2, MENU_RESY - 34, 0.55f, kDim, hint);
+    SDL_RenderPresent(context->renderer);
+}
+
+static void runConnectionScreen(MenuContext *context, StarSystem *starSystem, PadState *pad)
+{
+    int selected = 0;
+    while (appMainLoop())
+    {
+        padUpdate(pad);
+        u64 down = padGetButtonsDown(pad);
+        if (down & HidNpadButton_B)
+            return;
+        if ((down & HidNpadButton_AnyUp) && selected > 0)
+            selected--;
+        else if ((down & HidNpadButton_AnyDown) && selected + 1 < CONNECTION_ROWS)
+            selected++;
+        else if (down & HidNpadButton_A)
+        {
+            char current[SETTINGS_ADDRESS_MAX];
+            char edited[SETTINGS_ADDRESS_MAX];
+            if (selected == ROW_MODE)
+            {
+                settingsSetConnectionMode(settingsGetConnectionMode() == SettingsConnection_Internet
+                    ? SettingsConnection_Wifi : SettingsConnection_Internet);
+            }
+            else if (selected == ROW_ADDRESS)
+            {
+                settingsGetPcAddress(current, sizeof(current));
+                if (editText("PC address (IP or domain, optionally :port)", current, edited, sizeof(edited)))
+                    settingsSetPcAddress(edited);
+            }
+            else if (selected == ROW_SERVER)
+            {
+                settingsGetServer(current, sizeof(current));
+                if (editText("Rendezvous server (address or address:port, empty = none)", current, edited, sizeof(edited)))
+                    settingsSetServer(edited);
+            }
+            else if (selected == ROW_SERVER_KEY)
+            {
+                settingsGetServerKey(current, sizeof(current));
+                if (editText("Server access key (empty = none)", current, edited, 33))
+                    settingsSetServerKey(edited);
+            }
+            else if (selected == ROW_PC_ID)
+            {
+                settingsGetPcId(current);
+                if (editText("PC ID - shown in the PC's settings", current, edited, SETTINGS_HOST_ID_SIZE + 1))
+                    settingsSetPcId(edited);
+            }
+            else if (transportGetStatus() != TransportStatus_Off)
+            {
+                transportStartPairing(); // needs the Internet mode running - see the restart note otherwise
+            }
+        }
+
+        float dt = rendererTick();
+        starsystem_update(starSystem, dt);
+        drawConnectionFrame(context, starSystem, selected);
+        svcSleepThread(MENU_FRAME_NS);
+    }
+}
+
 static void drawMenuFrame(MenuContext *context, StarSystem *starSystem, int selectedIndex,
                           SDL_Texture *icons[MENU_OPTION_COUNT], const MenuLibrary *lib)
 {
@@ -254,6 +440,7 @@ static void drawMenuFrame(MenuContext *context, StarSystem *starSystem, int sele
     }
 
     drawIpAddressLine(context);
+    drawButtonLayoutHint(context);
 
     SDL_RenderPresent(context->renderer);
 }
@@ -409,6 +596,15 @@ SolarNxAppTarget runAppSelectMenu(MenuContext *context, StarSystem *starSystem)
         else if (down & HidNpadButton_AnyRight)
         {
             selectedIndex = (selectedIndex + 1) % MENU_OPTION_COUNT;
+        }
+        else if (down & HidNpadButton_Y)
+        {
+            settingsToggleButtonLayout();
+        }
+        else if (down & HidNpadButton_X)
+        {
+            runConnectionScreen(context, starSystem, &menuPad);
+            continue;
         }
         else if (down & HidNpadButton_A)
         {

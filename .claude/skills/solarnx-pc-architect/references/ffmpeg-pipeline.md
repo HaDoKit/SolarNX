@@ -23,8 +23,7 @@ terminates the app.
 -fflags nobuffer -flags low_delay -probesize 32
 -filter_complex "gfxcapture=monitor_idx=0:max_framerate={fps}:width={w}:height={h}:resize_mode=scale,hwdownload,format=bgra,fps={fps},format=yuv420p"
 -f mpegts
--c:v h264_nvenc -gpu 0 -preset p4 -tune ll -rc cbr -zerolatency 1 -delay 0 -rc-lookahead 0 -bf 0 -profile:v high -g {fps/2}
-  (fallback: -c:v libx264 -preset faster -tune zerolatency -profile:v high -crf 18 -g {fps/2})
+{encoder args - Capture/EncoderSelection.EncodeArgs, see "Encoder selection" below}
 -b:v {kbps}k -minrate {kbps}k -maxrate {kbps}k -bufsize {kbps}k
 -flush_packets 1
 udp://{clientIp}:{videoPort}?pkt_size=1316
@@ -45,12 +44,36 @@ udp://{clientIp}:{videoPort}?pkt_size=1316
 - `-delay 0 -rc-lookahead 0 -bf 0` deliberately strip out NVENC's own internal
   frame buffering, even though a zerolatency/low-latency preset is already
   selected — that preset alone was not enough to eliminate buffering delay.
-- NVENC availability is probed once per process lifetime (`_nvencAvailable`
-  static cache) by encoding a single frame of `color=black:s=256x256:d=0.1` to
-  `-f null -`. **Do not probe at a smaller resolution** — 64×64 was confirmed
-  live to fail with "Frame Dimension less than the minimum supported value."
-  Driver requirement: NVENC failures also surface as "Driver does not support the
-  required nvenc API version" below driver 610 / Video Codec SDK 13.1.
+- The filter chain ends in `format=yuv420p`, or `format=nv12` for QSV and Media Foundation
+  (`EncoderSelection.PixelFormat`) - those two take NV12 only.
+
+## Encoder selection (`Capture/EncoderSelection.cs`)
+
+`Config.Encoder` (`EncoderKind`: Auto, Nvenc, Amf, Qsv, MediaFoundation, Software) ->
+`EncoderSelection.Resolve`. Auto: GPUs from WMI `Win32_VideoController` (only `PCI\` devices -
+virtual adapters dropped; vendor from `VEN_10DE`/`VEN_1002`/`VEN_8086`), their own encoders in the
+order NVIDIA -> AMD -> Intel (dGPU before iGPU), then Media Foundation (`h264_mf -hw_encoding 1`, any
+GPU with a hardware MFT), then libx264. A specific choice that doesn't work falls back to Auto.
+
+Availability = a real probe per encoder (one 256x256 frame with the encoder's real arguments to
+`-f null -`), cached for the process lifetime under a lock (Settings probes off the UI thread,
+VideoEncoder.Start may probe concurrently). **Do not probe at a smaller size** - NVENC rejects 64x64
+("Frame Dimension less than the minimum supported value"). Typical failures: NVENC below driver 610
+("Driver does not support the required nvenc API version"), AMF without `amfrt64.dll`, QSV "Error
+creating a MFX session".
+
+All encoders: CBR, no B-frames, no lookahead, keyframe every fps/2. Per-encoder notes:
+- NVENC: `-preset p4 -tune ll -rc cbr -zerolatency 1 -delay 0 -rc-lookahead 0` - NVENC still buffers
+  frames in a low-latency preset without `-delay 0 -rc-lookahead 0`.
+- AMF: `-usage ultralowlatency -quality speed -rc cbr -latency 1 -async_depth 1 -preencode 0
+  -header_spacing {gop}` - `async_depth` defaults to 16 frames in flight; this ffmpeg build has no
+  `header_insertion_mode`, `header_spacing` repeats SPS/PPS instead (needed to join MPEG-TS mid-stream).
+- QSV: `-preset veryfast -look_ahead 0 -async_depth 1 -repeat_pps 1`, NV12 input.
+- Media Foundation: `-scenario display_remoting -rate_control cbr -profile:v 100` - h264_mf only
+  takes the profile as a number (100 = High); NV12 input. Verified decodable from mid-stream.
+- **AMF and QSV are untested on real hardware** (the dev machine is NVIDIA only) and are labelled
+  experimental in the UI, docs and CHANGELOG. Remove the label everywhere once a working stream is
+  confirmed on AMD/Intel.
 
 ## Capture method — rejected approaches, in order
 

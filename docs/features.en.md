@@ -55,10 +55,11 @@ PC, the Switch returns to the menu by itself.
 ![Settings](images/app/settings.png)
 
 - **Video:** resolution (640×360 to 1920×1080), frame rate (24, 30, 45, 60), bitrate.
+- **Encoder:** Auto or a specific one; the line under the list shows the detected graphics card and the encoder that will be used.
 - **Adaptive bitrate:** if packets are lost on the Switch, SolarNX lowers the bitrate (no lower than
   1500 kbps), and after 30 seconds of stable connection carefully raises it back to the configured
   value.
-- **Switch layout:** swaps A/B and X/Y.
+- **Switch layout:** swaps A/B and X/Y. Can be changed both on the PC and on the Switch (Y in the menu).
 - **shadPS4:** path to the emulator (found automatically) and a download link.
 - **Drivers:** reinstalling ViGEmBus.
 
@@ -101,7 +102,10 @@ More in [Game library](library.en.md).
 
 **Video**
 - Captures the primary monitor or the game window through Windows.Graphics.Capture.
-- Encodes H.264 on an NVIDIA graphics card (NVENC) with minimal latency; without NVIDIA, on the CPU.
+- Encodes H.264 on the graphics card with minimal latency: NVIDIA (NVENC), AMD (AMF), Intel (Quick Sync),
+  or through Media Foundation on any other graphics card. SolarNX finds the graphics card itself and checks
+  which encoder works on it; the CPU is used only when none of them does. AMD and Intel are
+  experimental: not tested on real graphics cards yet.
 - If capture freezes (this happens when games switch fullscreen mode), SolarNX restarts it by
   itself.
 
@@ -127,6 +131,8 @@ More in [Game library](library.en.md).
 **Menu**
 - Three tiles: Steam, shadPS4, My games. The console's IP address is shown at the bottom of the
   screen.
+- Y switches the A/B and X/Y layout; the current one is shown in the bottom-right corner.
+- X opens the connection settings: Wi-Fi or the experimental Internet mode.
 - My games is a grid of your library's covers: A to play, B to go back. The list comes from the PC
   automatically and updates by itself.
 

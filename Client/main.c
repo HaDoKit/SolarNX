@@ -13,6 +13,8 @@
 #include "common/logger/logger.h"
 #include "common/appstate/appstate.h"
 #include "library/library.h"
+#include "settings/settings.h"
+#include "transport/transport.h"
 
 // HID (network.c) blocks forever on its own accept/send loop, and video (video.c) blocks forever
 // pumping appMainLoop()/SDL - they can't both run on one thread, so HID gets its own. 0x4000
@@ -82,6 +84,11 @@ _Bool initNetwork() {
     // without it the "My games" tile just stays empty.
     if (!libraryStart())
         logWrite("library", "library listener failed to start - \"My games\" will stay empty");
+
+    // Experimental Internet mode: this side dials the PC over one UDP port - session, library and
+    // the video/audio relay all go through transport.c instead of the listeners above.
+    if (settingsGetConnectionMode() == SettingsConnection_Internet && !transportStart())
+        logWrite("transport", "UDP transport failed to start - Internet mode won't connect");
 
     return 1;
 }
@@ -219,6 +226,7 @@ void main() {
     // Mounts the embedded romfs (icons/etc for the menu below) - must happen before makeRenderer()
     // tries to load anything from "romfs:/...".
     romfsInit();
+    settingsInit(); // before initNetwork() starts the library thread, which syncs these
 
     if (!initNetwork())
         return;

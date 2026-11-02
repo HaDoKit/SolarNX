@@ -31,3 +31,10 @@ uint32_t libraryVersion(void);
 void libraryLock(void);
 const LibraryEntry *libraryEntries(int *count);
 void libraryUnlock(void);
+
+// Internet mode (transport/transport.c). The same exchange as on the TCP channel, over UDP:
+// libraryUdpOffer says whether the offered hash is new; libraryUdpChunk takes the payload in order
+// (go-back-N) and returns how many bytes have arrived in order so far - the host's ack. The whole
+// payload is parsed and swapped in once the last chunk arrives. Called from the transport thread only.
+bool libraryUdpOffer(uint64_t hash);
+uint32_t libraryUdpChunk(uint64_t hash, uint32_t total, uint32_t offset, const uint8_t *data, uint32_t length);

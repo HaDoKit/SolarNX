@@ -10,5 +10,6 @@
 3. [Game library](library.en.md): adding games of every type, covers and framing, game-window capture.
 4. [Troubleshooting](troubleshooting.en.md): common problems and where to find the logs.
 5. [How it works](architecture.en.md): for those who want to understand or extend the project.
+6. [Server for playing over the internet](server.en.md): your own server on a VPS, connecting without port forwarding.
 
 For developers: [DEVELOPMENT.en.md](../DEVELOPMENT.en.md).

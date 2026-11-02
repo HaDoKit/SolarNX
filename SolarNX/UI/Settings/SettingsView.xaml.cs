@@ -1,3 +1,4 @@
+using SolarNX.Capture;
 using SolarNX.Input;
 using SolarNX.ShadPs4;
 
@@ -32,6 +33,7 @@ public partial class SettingsView : System.Windows.Controls.UserControl
 
         BackButton.Click += (_, _) => BackRequested?.Invoke();
 
+        InitConnectionSection();
         InitVideoSection();
         InitGamepadSection();
         InitShadPs4Section();
@@ -39,6 +41,63 @@ public partial class SettingsView : System.Windows.Controls.UserControl
 
         PortsCard.Visibility = devMode ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
         if (devMode) InitPortsSection();
+    }
+
+    private void InitConnectionSection()
+    {
+        ConnectionModeCombo.Items.Add("Wi-Fi (локальная сеть)");
+        ConnectionModeCombo.Items.Add("Интернет (экспериментально)");
+        ConnectionModeCombo.SelectedIndex = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet ? 1 : 0;
+        ConnectionModeCombo.SelectionChanged += (_, _) =>
+        {
+            _config.ConnectionMode = ConnectionModeCombo.SelectedIndex == 1 ? SolarNX.Session.ConnectionMode.Internet : SolarNX.Session.ConnectionMode.Wifi;
+            _config.Save();
+            RefreshConnectionSection();
+        };
+        PairButton.Click += (_, _) => OpenPairing();
+        ServerBox.Text = _config.RendezvousServer;
+        ServerKeyBox.Text = _config.RendezvousKey;
+        ServerBox.LostFocus += (_, _) => { _config.RendezvousServer = ServerBox.Text.Trim(); _config.Save(); };
+        ServerKeyBox.LostFocus += (_, _) => { _config.RendezvousKey = ServerKeyBox.Text; _config.Save(); };
+        ForgetDevicesButton.Click += (_, _) =>
+        {
+            var answer = System.Windows.MessageBox.Show(System.Windows.Window.GetWindow(this),
+                "Забыть все привязанные Switch? Им придётся привязаться заново.", "SolarNX",
+                System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question);
+            if (answer == System.Windows.MessageBoxResult.Yes) SolarNX.Session.PairedDevices.RemoveAll();
+        };
+        SolarNX.Session.PairedDevices.Changed += () => Dispatcher.BeginInvoke(RefreshConnectionSection);
+        RefreshConnectionSection();
+    }
+
+    private void RefreshConnectionSection()
+    {
+        var internet = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet;
+        InternetPanel.Visibility = internet ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+        ServerPanel.Visibility = InternetPanel.Visibility;
+        if (internet && string.IsNullOrWhiteSpace(_config.HostId))
+        {
+            _config.HostId = SolarNX.Session.InternetSession.NewId();
+            _config.Save();
+        }
+        HostIdBox.Text = _config.HostId;
+        var devices = SolarNX.Session.PairedDevices.All;
+        PairedDevicesText.Text = devices.Count == 0
+            ? "Нет — привяжите Switch, чтобы подключаться через интернет."
+            : string.Join(", ", devices.Select(d => $"{d.Name} ({d.PairedUtc.ToLocalTime():d})"));
+    }
+
+    private void OpenPairing()
+    {
+        var session = _orchestrator.Internet;
+        if (session is null)
+        {
+            System.Windows.MessageBox.Show(System.Windows.Window.GetWindow(this),
+                "Сначала включите трансляцию в режиме «Интернет» — привязка идёт через его соединение.", "SolarNX",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            return;
+        }
+        new PairingWindow(session) { Owner = System.Windows.Window.GetWindow(this) }.ShowDialog();
     }
 
     private void InitVideoSection()
@@ -72,6 +131,69 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         AdaptiveBitrateToggle.IsChecked = _config.AdaptiveBitrate;
         AdaptiveBitrateToggle.Checked += (_, _) => SetAdaptiveBitrate(true);
         AdaptiveBitrateToggle.Unchecked += (_, _) => SetAdaptiveBitrate(false);
+
+        InitEncoderRow();
+    }
+
+    private static readonly EncoderKind[] EncoderOptions =
+    {
+        EncoderKind.Auto, EncoderKind.Nvenc, EncoderKind.Amf, EncoderKind.Qsv, EncoderKind.MediaFoundation, EncoderKind.Software,
+    };
+
+    // Probing the encoders spawns ffmpeg once per encoder (cached afterwards), so it runs off the UI
+    // thread; until it finishes every option is selectable and the line under the combo says so.
+    private void InitEncoderRow()
+    {
+        foreach (var kind in EncoderOptions)
+            EncoderCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = EncoderSelection.DisplayName(kind), Tag = kind });
+        EncoderCombo.SelectedIndex = Math.Max(0, Array.IndexOf(EncoderOptions, _config.Encoder));
+        EncoderCombo.SelectionChanged += (_, _) =>
+        {
+            if (EncoderCombo.SelectedItem is not System.Windows.Controls.ComboBoxItem { Tag: EncoderKind kind }) return;
+            _config.Encoder = kind;
+            _config.Save();
+            _ = RefreshEncoderInfoAsync();
+        };
+        _ = RefreshEncoderInfoAsync();
+    }
+
+    // This view is built in Program.Main before the WPF message loop runs, when there is no
+    // SynchronizationContext yet - an await would resume on the thread pool, so the result is handed
+    // to the UI thread explicitly.
+    private async Task RefreshEncoderInfoAsync()
+    {
+        var preference = _config.Encoder;
+        try
+        {
+            var (gpus, available, resolved) = await Task.Run(() =>
+            {
+                var gpuList = EncoderSelection.Gpus;
+                var availability = EncoderOptions.Where(k => k != EncoderKind.Auto).ToDictionary(k => k, EncoderSelection.IsAvailable);
+                return (gpuList, availability, EncoderSelection.Resolve(preference));
+            });
+            await Dispatcher.InvokeAsync(() => ShowEncoderInfo(preference, gpus, available, resolved));
+        }
+        catch (Exception ex)
+        {
+            Logger.Log("encoder", $"encoder check for settings failed: {ex}");
+        }
+    }
+
+    private void ShowEncoderInfo(EncoderKind preference, IReadOnlyList<GpuInfo> gpus, Dictionary<EncoderKind, bool> available, EncoderKind resolved)
+    {
+        foreach (System.Windows.Controls.ComboBoxItem item in EncoderCombo.Items)
+        {
+            if (item.Tag is not EncoderKind kind || kind == EncoderKind.Auto) continue;
+            var ok = available[kind];
+            item.Content = ok ? EncoderSelection.DisplayName(kind) : $"{EncoderSelection.DisplayName(kind)} — недоступен";
+            item.Foreground = ok ? System.Windows.Media.Brushes.White : System.Windows.Media.Brushes.Gray;
+        }
+
+        var gpuText = gpus.Count == 0 ? "не найдена" : string.Join(", ", gpus.Select(g => g.Name));
+        var fallbackNote = preference != EncoderKind.Auto && resolved != preference ? " (выбранный недоступен)" : "";
+        var cpuNote = resolved == EncoderKind.Software ? " Аппаратный кодировщик не найден — видео кодирует процессор, это заметно его нагружает." : "";
+        EncoderInfoText.Text = $"Видеокарта: {gpuText}. Будет использоваться: {EncoderSelection.DisplayName(resolved)}{fallbackNote}.{cpuNote} " +
+                               "Изменение применится при следующем подключении Switch.";
     }
 
     // AdaptiveBitrateController scales the actually-running bitrate on its own between a fixed
@@ -85,18 +207,27 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         _config.Save();
     }
 
+    // Set while the toggle is moved to show a change made on the Switch - that must not be saved
+    // back as a new PC-side change.
+    private bool _showingSwitchLayout;
+
     private void InitGamepadSection()
     {
         SwitchLayoutToggle.IsChecked = _config.SwitchButtonLayout;
         SwitchLayoutToggle.Checked += (_, _) => SetSwitchLayout(true);
         SwitchLayoutToggle.Unchecked += (_, _) => SetSwitchLayout(false);
+        _orchestrator.ButtonLayoutChanged += () => Dispatcher.BeginInvoke(() =>
+        {
+            _showingSwitchLayout = true;
+            SwitchLayoutToggle.IsChecked = _orchestrator.SwapAbxy;
+            _showingSwitchLayout = false;
+        });
     }
 
     private void SetSwitchLayout(bool enabled)
     {
-        _config.SwitchButtonLayout = enabled;
-        _orchestrator.SwapAbxy = enabled;
-        _config.Save();
+        if (_showingSwitchLayout) return;
+        _orchestrator.SetSwapAbxy(enabled);
     }
 
     private void InitShadPs4Section()

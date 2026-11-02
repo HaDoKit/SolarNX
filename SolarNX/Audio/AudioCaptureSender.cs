@@ -83,7 +83,11 @@ public sealed class AudioCaptureSender : IDisposable
         else
         {
             _udpClient = new UdpClient();
-            _udpClient.Connect(_config.ClientIp, _config.AudioPort);
+            // Internet mode: to the loopback relay of Session/InternetSession, which forwards to the Switch.
+            if (_config.ConnectionMode == Session.ConnectionMode.Internet)
+                _udpClient.Connect("127.0.0.1", Session.InternetSession.AudioRelayPort);
+            else
+                _udpClient.Connect(_config.ClientIp, _config.AudioPort);
             // OpusCodecFactory (not the OpusEncoder constructor directly) - lets Concentus pick a
             // native implementation if the platform supports one, falling back to its pure-managed
             // encoder otherwise; the constructor-based API is obsolete precisely because it always

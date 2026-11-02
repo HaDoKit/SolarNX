@@ -3,6 +3,8 @@ SolarNX/bin/
 SolarNX/obj/
 SolarNX/publish/
 SolarNX/Setup/*.exe
+Server/bin/
+Server/obj/
 # Leftover local build output from before the OrbitNX -> SolarNX rename
 OrbitNX/
 *.user

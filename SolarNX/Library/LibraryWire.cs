@@ -10,18 +10,25 @@ namespace SolarNX.Library;
 /// sides together. All integers little-endian.
 ///
 /// One exchange per connection:
-///   host → Switch   header: u32 magic "ONXL" (0x4C584E4F), u32 protocol version (1), u64 content hash
-///   Switch → host   u8: 1 = "send it", 0 = "I already have this hash"
+///   host → Switch   header: u32 magic "ONXL" (0x4C584E4F), u32 protocol version (2), u64 content hash,
+///                   u8 button layout (1 = A/B X/Y by label), u8[3] zero, u32 layout revision
+///   Switch → host   u8: 1 = "send it", 0 = "I already have this hash", u8 button layout, u8[2] zero,
+///                   u32 layout revision - the Switch's, after syncing with the host's
 ///   host → Switch   (only if 1) payload: u32 count, then per entry:
 ///                     u32 id, u16 nameLength, UTF-8 name, u32 coverLength, JPEG bytes (0 = no cover)
 /// then the host closes. The hash covers the whole payload, so any edit (name, cover, add, remove)
 /// produces a new hash and the Switch re-downloads; an unchanged library costs one tiny round trip.
+///
+/// The button layout rides along because this is the only channel open while the Switch is in its
+/// menu - where its own layout toggle lives. Both sides keep the layout plus a revision bumped on
+/// every change; the higher revision wins, a tie goes to the host (see Client/settings/settings.c).
 /// </summary>
 internal static class LibraryWire
 {
     public const uint Magic = 0x4C584E4F; // "ONXL"
-    public const uint ProtocolVersion = 1;
-    public const int HeaderSize = 16;
+    public const uint ProtocolVersion = 2;
+    public const int HeaderSize = 24;
+    public const int ReplySize = 8;
 
     // Client-side caps (LIBRARY_MAX_ENTRIES / LIBRARY_MAX_NAME_BYTES in library.h) - enforced here
     // too so the host never sends something the Switch would reject halfway through.
@@ -62,14 +69,21 @@ internal static class LibraryWire
         return (payload, hash);
     }
 
-    public static byte[] BuildHeader(ulong hash)
+    public static byte[] BuildHeader(ulong hash, bool swapAbxy, uint layoutRevision)
     {
         var header = new byte[HeaderSize];
         BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(0), Magic);
         BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(4), ProtocolVersion);
         BinaryPrimitives.WriteUInt64LittleEndian(header.AsSpan(8), hash);
+        header[16] = swapAbxy ? (byte)1 : (byte)0;
+        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(20), layoutRevision);
         return header;
     }
+
+    public readonly record struct Reply(bool NeedsPayload, bool SwapAbxy, uint LayoutRevision);
+
+    public static Reply ParseReply(ReadOnlySpan<byte> reply) =>
+        new(reply[0] == 1, reply[1] != 0, BinaryPrimitives.ReadUInt32LittleEndian(reply[4..]));
 
     // Cuts on a character boundary - never leaves half a UTF-8 sequence for the Switch to render.
     private static byte[] TruncateUtf8(string text, int maxBytes)

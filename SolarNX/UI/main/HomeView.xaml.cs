@@ -37,11 +37,25 @@ public partial class HomeView : System.Windows.Controls.UserControl
         // control not visible, and the capture loop has no reason to keep running while it isn't.
         IsVisibleChanged += (_, _) => { if (!IsVisible) StopPreview(); };
 
+        RefreshMode();
+    }
+
+    /// <summary>Wi-Fi: the editable client IP. Internet (experimental): the Switch finds this PC
+    /// itself, so the same field shows how many Switches are paired, read-only.
+    /// Called on start and whenever the settings screen closes.</summary>
+    public void RefreshMode()
+    {
+        var internet = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet;
+        var paired = SolarNX.Session.PairedDevices.All.Count;
+        IpLabel.Text = internet ? $"Интернет, UDP {SolarNX.Session.InternetSession.Port} (эксперимент)" : "IP клиента";
+        IpBox.Text = internet ? (paired == 0 ? "Нет привязанных Switch — см. Настройки" : $"Привязано Switch: {paired}") : _config.ClientIp;
+        IpBox.IsReadOnly = internet;
         RefreshStatus();
     }
 
     private void SaveClientIp()
     {
+        if (_config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet) return; // the field shows the pairing state
         var ip = IpBox.Text.Trim();
         if (ip == _config.ClientIp) return;
         _config.ClientIp = ip;
@@ -72,18 +86,32 @@ public partial class HomeView : System.Windows.Controls.UserControl
         RefreshStatus();
     }
 
+    /// <summary>Applies the "Start" or "Stop" brushes from HomeView.xaml's resources.</summary>
+    private void ApplyToggleButtonStyle(string state)
+    {
+        var b = ToggleStreamingButton;
+        b.Background = (System.Windows.Media.Brush)Resources[state + "Background"];
+        b.MouseOverBackground = (System.Windows.Media.Brush)Resources[state + "HoverBackground"];
+        b.PressedBackground = (System.Windows.Media.Brush)Resources[state + "PressedBackground"];
+        b.Foreground = (System.Windows.Media.Brush)Resources[state + "Foreground"];
+        b.PressedForeground = b.Foreground;
+        b.BorderBrush = (System.Windows.Media.Brush)Resources[state + "Border"];
+        b.MouseOverBorderBrush = b.BorderBrush;
+        b.PressedBorderBrush = b.BorderBrush;
+    }
+
     public void RefreshStatus()
     {
         if (!_orchestrator.IsArmed)
         {
             ToggleStreamingButton.Content = "▶  Включить трансляцию";
-            ToggleStreamingButton.Appearance = ControlAppearance.Success;
+            ApplyToggleButtonStyle("Start");
             StatusLabel.Text = "Статус: выключено";
         }
         else if (_orchestrator.IsConnected)
         {
             ToggleStreamingButton.Content = "■  Выключить трансляцию";
-            ToggleStreamingButton.Appearance = ControlAppearance.Danger;
+            ApplyToggleButtonStyle("Stop");
             var targetName = _orchestrator.ActiveTarget switch
             {
                 AppTarget.BigPicture => "Big Picture (Steam)",
@@ -97,8 +125,10 @@ public partial class HomeView : System.Windows.Controls.UserControl
         else
         {
             ToggleStreamingButton.Content = "■  Выключить трансляцию";
-            ToggleStreamingButton.Appearance = ControlAppearance.Danger;
-            StatusLabel.Text = "Статус: ожидание подключения клиента…";
+            ApplyToggleButtonStyle("Stop");
+            StatusLabel.Text = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet
+                ? $"Статус: ожидание Switch через интернет (UDP {SolarNX.Session.InternetSession.Port})…"
+                : "Статус: ожидание подключения клиента…";
         }
 
         // "Показать экран" only makes sense once a client is actually connected and streaming -

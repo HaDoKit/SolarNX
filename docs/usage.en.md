@@ -53,6 +53,18 @@ The Switch system keeps the HOME and Capture buttons for itself, so SolarNX uses
 A single − or + press is delayed by up to 0.1 seconds, while SolarNX waits to see whether the second
 button follows.
 
+### Button layout on the Switch
+
+In the Switch main menu, press **Y** to switch the A/B and X/Y layout. The current layout is shown in the
+bottom-right corner:
+
+- **Layout: Switch (A = A)**: the buttons match the labels on the Switch; press A and the game gets A.
+- **Layout: Xbox (by position)**: the buttons match an Xbox gamepad by position; the right button is A.
+
+This is the same setting as «Раскладка Switch» (Switch layout) on the PC: the Switch and the PC exchange
+it while streaming is on, and the last change wins, wherever it was made. Syncing takes a few seconds.
+The Switch keeps the setting on the SD card in `/switch/SolarNX/settings.cfg`.
+
 ## PC settings
 
 The gear button on the SolarNX main screen.
@@ -65,12 +77,48 @@ The gear button on the SolarNX main screen.
 | Frames per second | 60 is smoother; 30 halves the network load and gives a sharper picture at the same bitrate |
 | Bitrate (kbps) | video quality. Higher is sharper but harder on Wi-Fi. Lower it if you see artifacts |
 | Adaptive bitrate | SolarNX lowers the bitrate when the connection has problems and raises it back once things are stable. The Bitrate value becomes the upper limit |
-| Switch layout (A↔B, X↔Y) | swaps A/B and X/Y so the buttons match the labels on the Switch |
+| Encoder | Auto (recommended): SolarNX picks the encoder for your graphics card itself. The line under the list shows the detected graphics card and the encoder that will be used. Choose one by hand only if the automatic one causes problems, such as artifacts. The AMD and Intel encoders are experimental. Takes effect the next time the Switch connects |
+| Switch layout (A↔B, X↔Y) | swaps A/B and X/Y so the buttons match the labels on the Switch. The same setting can be changed on the Switch (see below); the last change wins |
 | shadPS4 | path to the emulator |
 | Drivers | reinstalls ViGEmBus |
 
 The **«Показать экран»** (Show screen) toggle on the main window shows a preview of what the Switch
 sees.
+
+## Playing over the internet (experimental)
+
+> **Experimental feature.** Internet mode hasn't been tested on many networks and routers yet. The
+> regular Wi-Fi mode works as before and doesn't depend on this mode.
+
+In Internet mode the Switch connects to the PC over the internet on a single UDP port, **19010**.
+Everything goes through that one connection: input, video, audio and the library, and all of it is
+**encrypted**. Only a Switch paired with the PC once can connect. There is no NAT hole punching yet, so
+the port has to be forwarded on the router by hand.
+
+**Setup (once):**
+1. **PC:** «Настройки» (Settings) → «Подключение» (Connection) → «Режим» (Mode) → **«Интернет
+   (экспериментально)»** (Internet, experimental). On the router, forward **UDP port 19010** to this
+   PC. Turn streaming on; allow SolarNX through Windows Firewall if it asks.
+2. **Switch:** in the main menu press **X** to open the Connection screen. **Mode** → Internet,
+   **PC address**: the PC's public IP address or a domain (if the router uses a different port, add it
+   after a colon, `example.com:19010`). Restart SolarNX on the Switch: the mode is picked at startup.
+3. **Pairing.** On the PC: «Настройки» → «Подключение» → **«Привязать Switch…»** (Pair Switch); the
+   window waits 2 minutes for a request. On the Switch: X → **Pair with this PC**. Both screens show
+   the same 6-digit code. If the codes match, click **«Коды совпадают — привязать»** (Codes match -
+   pair) on the PC.
+
+From then on the Switch connects by itself. The bottom-right corner of the menu shows "X  Internet: …":
+"connected (encrypted)" (all good), "waiting for the PC" (the PC doesn't answer: check the address and
+the port forwarding), "not paired" (pairing needed).
+
+> Pair only if the codes match. Different codes mean someone is sitting between the Switch and the PC.
+> The paired Switches are listed in the same Connection card; «Забыть все» (Forget all) removes every
+> pairing.
+
+Don't want to forward a port, or your provider gives you a shared address? Run your own rendezvous
+server: [Server for playing over the internet](server.en.md).
+
+To go back to Wi-Fi: choose «Wi-Fi» on the PC, Mode → Wi-Fi on the Switch, and restart the app.
 
 ## Stopping
 

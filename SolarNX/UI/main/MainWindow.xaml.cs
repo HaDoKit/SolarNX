@@ -51,6 +51,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         {
             _settingsView.Visibility = Visibility.Collapsed;
             _homeView.Visibility = Visibility.Visible;
+            _homeView.RefreshMode(); // the connection mode may have changed
         };
         _libraryView = new LibraryView(orchestrator.Library) { Visibility = Visibility.Collapsed };
         _homeView.LibraryRequested += () =>

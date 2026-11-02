@@ -26,11 +26,11 @@ internal static class GameLauncher
             {
                 case GameEntryType.Native:
                     return StartDetached(entry.ExePath, entry.Arguments,
-                        NonEmpty(entry.WorkingDirectory) ?? Path.GetDirectoryName(entry.ExePath));
+                        NonEmpty(entry.WorkingDirectory) ?? Path.GetDirectoryName(entry.ExePath), entry.RunAsAdmin);
 
                 case GameEntryType.Emulator:
                     var args = (NonEmpty(entry.ArgumentTemplate) ?? "\"{rom}\"").Replace("{rom}", entry.RomPath);
-                    return StartDetached(entry.EmulatorPath, args, Path.GetDirectoryName(entry.EmulatorPath));
+                    return StartDetached(entry.EmulatorPath, args, Path.GetDirectoryName(entry.EmulatorPath), entry.RunAsAdmin);
 
                 case GameEntryType.Script:
                     return StartScript(entry);
@@ -49,12 +49,21 @@ internal static class GameLauncher
         }
     }
 
-    private static TrackedProcess? StartDetached(string exePath, string arguments, string? workingDirectory)
+    private static TrackedProcess? StartDetached(string exePath, string arguments, string? workingDirectory, bool runAsAdmin)
     {
         if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
         {
             Logger.Log("GameLauncher", $"exe not found: '{exePath}'");
             return null;
+        }
+
+        // Only a real exe can be started with the user's token directly; anything else (a .lnk, .bat,
+        // ...) needs the shell and goes the administrator way.
+        if (!runAsAdmin && Path.GetExtension(exePath).Equals(".exe", StringComparison.OrdinalIgnoreCase)
+            && TryStartUnelevated(exePath, arguments ?? "", workingDirectory, hideWindow: false) is { } pid)
+        {
+            Logger.Log("GameLauncher", $"started {exePath} {arguments} as the desktop user (pid={pid})");
+            return TrackedProcess.Capture(pid, includeDescendants: true);
         }
 
         // UseShellExecute: honours the exe's own manifest (UAC elevation prompt for games that require
@@ -66,7 +75,7 @@ internal static class GameLauncher
         };
         using var process = Process.Start(psi);
         if (process is null) return null;
-        Logger.Log("GameLauncher", $"started {exePath} {arguments} (pid={process.Id})");
+        Logger.Log("GameLauncher", $"started {exePath} {arguments} as administrator (pid={process.Id})");
         // Descendants included: launchers routinely start the real game and exit.
         return TrackedProcess.Capture(process.Id, includeDescendants: true);
     }
@@ -83,7 +92,15 @@ internal static class GameLauncher
         File.WriteAllText(scriptPath, "@chcp 65001 >nul\r\n" + entry.Script.Replace("\r\n", "\n").Replace("\n", "\r\n") + "\r\n",
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
-        var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"), $"/c \"{scriptPath}\"")
+        var cmd = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+        if (!entry.RunAsAdmin && TryStartUnelevated(cmd, $"/c \"{scriptPath}\"",
+                NonEmpty(entry.WorkingDirectory) ?? dir, hideWindow: true) is { } pid)
+        {
+            Logger.Log("GameLauncher", $"started script for '{entry.Name}' as the desktop user (cmd pid={pid})");
+            return TrackedProcess.Capture(pid, includeDescendants: true);
+        }
+
+        var psi = new ProcessStartInfo(cmd, $"/c \"{scriptPath}\"")
         {
             UseShellExecute = false,
             CreateNoWindow = true,
@@ -91,9 +108,26 @@ internal static class GameLauncher
         };
         using var process = Process.Start(psi);
         if (process is null) return null;
-        Logger.Log("GameLauncher", $"started script for '{entry.Name}' (cmd pid={process.Id})");
+        Logger.Log("GameLauncher", $"started script for '{entry.Name}' as administrator (cmd pid={process.Id})");
         // A script usually `start`s the game and returns - the game is followed as a descendant of cmd.
         return TrackedProcess.Capture(process.Id, includeDescendants: true);
+    }
+
+    // Null = it didn't work; the caller then starts it as administrator, which is how every game
+    // started before this option existed - better a game with too many rights than none at all.
+    private static int? TryStartUnelevated(string exePath, string arguments, string? workingDirectory, bool hideWindow)
+    {
+        try
+        {
+            return UnelevatedProcess.Start(exePath, arguments, workingDirectory, hideWindow);
+        }
+        catch (Exception ex)
+        {
+            Logger.Log("GameLauncher", UnelevatedProcess.IsElevationRequired(ex)
+                ? $"{Path.GetFileName(exePath)} requires administrator itself - starting it as administrator"
+                : $"could not start {Path.GetFileName(exePath)} as the desktop user ({ex.Message}) - starting it as administrator");
+            return null;
+        }
     }
 
     private static async Task<TrackedProcess?> StartSteamGameAsync(GameEntry entry, SteamLauncher steam, CancellationToken ct)

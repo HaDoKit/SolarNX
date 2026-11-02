@@ -172,6 +172,18 @@
                             <TextBlock Text="Показывать на Switch только окно игры" TextWrapping="Wrap" />
                         </CheckBox>
                     </Grid>
+
+                    <Grid x:Name="RunAsAdminRow" Style="{StaticResource Row}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Права" Style="{StaticResource FieldLabel}" />
+                        <CheckBox x:Name="RunAsAdminCheck" Grid.Column="1" Foreground="White"
+                                  ToolTip="Без галочки игра запускается как обычный пользователь — так же, как двойным щелчком в проводнике. Включите для игр и программ, которым нужны права администратора.">
+                            <TextBlock Text="Запускать от имени администратора" TextWrapping="Wrap" />
+                        </CheckBox>
+                    </Grid>
                 </StackPanel>
 
                 <!-- Обложка -->

@@ -24,7 +24,7 @@ namespace SolarNX;
 public sealed class AppOrchestrator : IDisposable
 {
     private readonly Config _config;
-    private readonly SessionController _session;
+    private ISessionController _session;
     private readonly SteamLauncher _launcher = new();
     private readonly ShadPs4Launcher _shadLauncher = new();
     private readonly VirtualGamepadHub _gamepads = new();
@@ -60,12 +60,9 @@ public sealed class AppOrchestrator : IDisposable
     {
         _config = config;
         _gamepads.SwapAbxy = config.SwitchButtonLayout;
-        _session = new SessionController(config);
-        _session.SessionStarted += OnSessionStarted;
-        _session.SessionStopped += OnSessionStopped;
-        _session.PacketReceived += OnPacketReceived;
+        _session = CreateSession();
         _adaptiveBitrate = new AdaptiveBitrateController(config, ApplyAdaptiveBitrate);
-        _libraryPusher = new LibraryPusher(config, _library);
+        _libraryPusher = new LibraryPusher(config, _library, AdoptSwitchButtonLayout, () => _session as InternetSession);
     }
 
     /// <summary>The host-side game library, for the UI's library screen.</summary>
@@ -95,11 +92,44 @@ public sealed class AppOrchestrator : IDisposable
     /// since AppOrchestrator itself has no UI to show one.</summary>
     public event Action? ShadPs4NotConfigured;
 
-    /// <summary>Takes effect on the very next gamepad packet, no reconnect needed.</summary>
-    public bool SwapAbxy
+    /// <summary>A/B X/Y by label (true) or by position. Takes effect on the very next gamepad
+    /// packet, no reconnect needed. Settable here (the PC settings) and on the Switch - see
+    /// <see cref="SetSwapAbxy"/> and <see cref="AdoptSwitchButtonLayout"/>.</summary>
+    public bool SwapAbxy => _gamepads.SwapAbxy;
+
+    /// <summary>Fired on the thread pool when the Switch's newer layout replaced the PC's, so the
+    /// settings screen can show it.</summary>
+    public event Action? ButtonLayoutChanged;
+
+    private readonly object _layoutLock = new();
+
+    /// <summary>A change made on the PC: saved with a bumped revision, so it beats the Switch's
+    /// current value on the next library-channel sync.</summary>
+    public void SetSwapAbxy(bool value)
     {
-        get => _gamepads.SwapAbxy;
-        set => _gamepads.SwapAbxy = value;
+        lock (_layoutLock)
+        {
+            _config.SwitchButtonLayout = value;
+            _config.ButtonLayoutRevision++;
+            _config.Save();
+            _gamepads.SwapAbxy = value;
+        }
+    }
+
+    // The Switch's layout from the library channel: adopted only if it was changed there more
+    // recently (higher revision). On a tie the PC's value stands - the Switch adopts it instead.
+    private void AdoptSwitchButtonLayout(bool swapAbxy, uint revision)
+    {
+        lock (_layoutLock)
+        {
+            if (revision <= _config.ButtonLayoutRevision) return;
+            _config.SwitchButtonLayout = swapAbxy;
+            _config.ButtonLayoutRevision = revision;
+            _config.Save();
+            _gamepads.SwapAbxy = swapAbxy;
+        }
+        Logger.Log("AppOrchestrator", $"button layout changed on the Switch: {(swapAbxy ? "by label" : "by position")} (revision {revision})");
+        ButtonLayoutChanged?.Invoke();
     }
 
     /// <summary>Arms the app - starts listening for the client to connect. Actually launching Big
@@ -109,8 +139,30 @@ public sealed class AppOrchestrator : IDisposable
     {
         if (IsArmed) return;
         IsArmed = true;
+        // The connection mode may have changed in the settings since the last time.
+        var wantInternet = _config.ConnectionMode == ConnectionMode.Internet;
+        if (wantInternet != _session is InternetSession)
+        {
+            _session.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            _session = CreateSession();
+        }
         _session.Start();
         _libraryPusher.Start();
+    }
+
+    /// <summary>The running Internet-mode session (null in Wi-Fi mode or while not armed) - the
+    /// settings' pairing window works on it.</summary>
+    public InternetSession? Internet => IsArmed ? _session as InternetSession : null;
+
+    private ISessionController CreateSession()
+    {
+        ISessionController session = _config.ConnectionMode == ConnectionMode.Internet
+            ? new InternetSession(_config)
+            : new SessionController(_config);
+        session.SessionStarted += OnSessionStarted;
+        session.SessionStopped += OnSessionStopped;
+        session.PacketReceived += OnPacketReceived;
+        return session;
     }
 
     /// <summary>Disarms the app - stops listening entirely. If a client was actually connected,
@@ -215,10 +267,8 @@ public sealed class AppOrchestrator : IDisposable
                     // Launches straight into shadPS4's own --big-picture mode (its native,
                     // gamepad-navigable game list/UI) instead of a specific title picked via our own
                     // Switch-side picker screen - see ShadPs4Launcher.LaunchOrFocusAsync's doc
-                    // comment. The titleId-driven direct-launch path (ShadPs4LibraryChannel/
-                    // LibraryProtocol/library.c on the Switch) is deprecated/unwired but left intact
-                    // in case it's worth reviving later - passing null here always takes the
-                    // --big-picture fallback branch.
+                    // comment. Passing null always takes the --big-picture branch; the
+                    // titleId-driven direct launch is kept in the launcher only.
                     Logger.Log("AppOrchestrator", "OnSessionStarted: launching shadPS4 (--big-picture)");
                     var launched = await _shadLauncher.LaunchOrFocusAsync(_config.ShadPs4ExePath, titleId: null, CancellationToken.None);
                     if (!launched)

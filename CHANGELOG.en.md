@@ -6,10 +6,29 @@ Versions follow [Semantic Versioning](https://semver.org/). While the project is
 (`0.x.y-alpha`), settings, the library and the protocol are not guaranteed to be compatible between
 versions: install the same version on the PC and on the Switch.
 
-## [Unreleased]
+## [0.2.0-alpha] - 2026-11-02
 
 - The project is renamed: **OrbitNX → SolarNX**. The PC app is `SolarNX.exe`, the Switch app is
   `/switch/SolarNX/SolarNX-Switch.nro`.
+- **Experimental:** Internet mode - the Switch connects to the PC over the internet on a single UDP port,
+  19010: through your own rendezvous server or with the port forwarded by hand. Only a paired Switch can connect:
+  pairing is done once, comparing a 6-digit code on both screens. All traffic is encrypted (X25519,
+  AES-256, HMAC-SHA256). Wi-Fi mode is unchanged.
+- **Experimental:** the SolarNX Rendezvous server for your own VPS (Linux, Windows, Docker): the PC and
+  the Switch find each other by ID and connect directly without port forwarding; if needed, the server
+  relays the encrypted traffic itself.
+- Removed the old unused shadPS4 game-picker channel.
+- Library games now start as an ordinary user rather than with SolarNX's own administrator rights. Games
+  that need administrator rights have a «Запускать от имени администратора» (Run as administrator)
+  checkbox in the game editor.
+- The A/B and X/Y layout can be switched on the Switch itself, with Y in the main menu. The setting
+  syncs with the PC; the last change wins.
+- **Experimental:** hardware video encoding on AMD (AMF) and Intel (Quick Sync) graphics cards, and through Media
+  Foundation on any graphics card - previously NVIDIA only. The encoder is picked automatically from the
+  detected graphics card; the settings show the card and the chosen encoder, which can be changed by hand.
+  Not tested on real AMD and Intel graphics cards yet.
+- New "eclipse" style: icon, background and the glowing SOLARNX wordmark on the PC and the Switch,
+  gold accent in the PC interface. The version number on the Switch moved to the bottom-left corner.
 - The installer puts SolarNX in its own folder, carries over the settings, library and covers from
   OrbitNX, and removes the old version.
 
@@ -33,4 +52,5 @@ First public alpha.
 - Steam button with − and +, back to the menu by holding − for 3 seconds.
 - HOME menu tile (forwarder, built yourself).
 
+[0.2.0-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.0-alpha
 [0.1.0-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.1.0-alpha

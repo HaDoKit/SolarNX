@@ -41,6 +41,11 @@ public sealed class Config
     /// with new args, since it has no live reconfigure of its own.</summary>
     public bool AdaptiveBitrate { get; set; } = false;
 
+    /// <summary>H.264 encoder: Auto (default) picks the GPU's own hardware encoder, then Media
+    /// Foundation, then the CPU - see Capture/EncoderSelection. A specific choice that doesn't work
+    /// on this machine falls back to Auto.</summary>
+    public Capture.EncoderKind Encoder { get; set; } = Capture.EncoderKind.Auto;
+
     /// <summary>Sample rate the PCM is captured/resampled to before Opus encoding (see
     /// AudioCaptureSender). RFC 7587 mandates Opus's RTP clock rate be 48000Hz regardless of this
     /// value, and the client (SolarNX/source/audio.c) decodes via libavcodec/libswresample rather than
@@ -64,6 +69,11 @@ public sealed class Config
     /// layout), A/B and X/Y are swapped relative to the wire protocol's bit positions before being
     /// applied to the virtual Xbox 360 controller - see VirtualGamepadHub.</summary>
     public bool SwitchButtonLayout { get; set; } = true;
+
+    /// <summary>Bumped on every change of <see cref="SwitchButtonLayout"/>, here or on the Switch -
+    /// the side with the higher revision wins when the two sync over the library channel (see
+    /// LibraryWire), so the last change made on either side is the one that sticks.</summary>
+    public uint ButtonLayoutRevision { get; set; }
 
     /// <summary>Off by default: after a game exits, Steam returns to Big Picture by itself. When on,
     /// AppOrchestrator additionally sends Escape and fully closes/reopens Big Picture - an old
@@ -128,5 +138,23 @@ public sealed class Config
         File.WriteAllText(ConfigPath, json);
     }
 
-    public bool IsValid() => !string.IsNullOrWhiteSpace(ClientIp);
+    /// <summary>Wi-Fi (default): the PC dials the Switch at <see cref="ClientIp"/>. Internet
+    /// (experimental): a paired Switch dials the PC on UDP <see cref="Session.InternetSession.Port"/>,
+    /// encrypted (Session/PairedDevices, InternetCrypto). Applied the next time streaming is turned on.</summary>
+    public Session.ConnectionMode ConnectionMode { get; set; } = Session.ConnectionMode.Wifi;
+
+    /// <summary>This PC's id in Internet mode (8 characters, generated on first use) - a paired Switch
+    /// learns it, and a rendezvous server will use it to find this PC.</summary>
+    public string HostId { get; set; } = "";
+
+    /// <summary>Optional rendezvous server ("host" or "host:port", default port 19020) - with it the
+    /// Switch finds this PC by <see cref="HostId"/> and no port forwarding is needed (UDP hole punching,
+    /// or the server's relay if it allows it). Empty = the Switch dials the PC's address directly.</summary>
+    public string RendezvousServer { get; set; } = "";
+
+    /// <summary>The server's access key, if it has one.</summary>
+    public string RendezvousKey { get; set; } = "";
+
+    /// <summary>Wi-Fi needs the Switch's address; in Internet mode the Switch finds the PC itself.</summary>
+    public bool IsValid() => ConnectionMode == Session.ConnectionMode.Internet || !string.IsNullOrWhiteSpace(ClientIp);
 }
