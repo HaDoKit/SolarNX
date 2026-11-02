@@ -43,6 +43,9 @@
          pack URI can resolve - MainWindow's Icon="pack://application:,,,/Assets/icon.ico" needs
          this separate Resource entry to find it. -->
     <Resource Include="Assets\icon.ico" />
+    <!-- Branding art from tools/branding/make_branding.py (main-window background, home logo). -->
+    <Resource Include="Assets\background.png" />
+    <Resource Include="Assets\wordmark.png" />
   </ItemGroup>
 
   <ItemGroup>

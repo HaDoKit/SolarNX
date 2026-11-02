@@ -17,4 +17,8 @@ typedef struct {
     SDL_Window *window;
     SDL_Renderer *renderer;
     FC_Font *font;
+    // Branding art from romfs:/branding/ (tools/branding/make_branding.py); NULL if loading failed -
+    // the screens then fall back to the plain clear colour / text logo.
+    SDL_Texture *background;
+    SDL_Texture *wordmark;
 } MenuContext;

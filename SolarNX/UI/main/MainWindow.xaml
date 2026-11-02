@@ -8,7 +8,7 @@
         WindowStartupLocation="CenterScreen"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="None"
-        Background="#FF0B0B14">
+        Background="#FF08090D">
     <Grid>
         <controls:AnimatedBackgroundControl />
 

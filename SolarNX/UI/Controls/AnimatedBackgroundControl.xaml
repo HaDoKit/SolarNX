@@ -3,7 +3,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              IsHitTestVisible="False"
              ClipToBounds="True">
-    <Grid Background="#FF0B0B14">
+    <Grid Background="#FF08090D">
+        <Image x:Name="SceneImage" Source="pack://application:,,,/Assets/background.png"
+               Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"
+               RenderOptions.BitmapScalingMode="HighQuality" />
         <Canvas x:Name="RootCanvas" />
     </Grid>
 </UserControl>
