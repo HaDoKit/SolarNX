@@ -33,7 +33,7 @@ match `SolarNX/Config.cs`.
    connection is still open: connects that queued in the listen backlog while the menu was up may
    already be closed by the host, and taking one as live used to fake "host ended the library
    session" and bounce the player back to the menu.
-3. `startNetwork` (`main.c`) sends `8×0xFF` + `SolarNxHidPacket` (224 bytes) every 23.3ms until a send
+3. `startNetwork` (`main.c`) sends `8×0xFF` + `SolarNxHidPacket` (224 bytes) every 8.3ms (~120Hz) until a send
    fails or the back-to-menu request is raised (then it closes the connection and parks).
 
 ### `SolarNxHidPacket` (224 bytes, little-endian, no byte swapping)

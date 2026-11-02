@@ -51,11 +51,12 @@ static Thread s_audioThread;
 // system on homebrew titles) - set via svcSetThreadCoreMask at the top of main().
 #define MAIN_THREAD_CORE 1
 
-// ~43Hz - matches the interval the original client used for its HID send loop, not a requirement
-// from the host (SessionController just reads whatever arrives off the TCP stream), but a
-// reasonable default cadence until real input timing exists.
-#define HID_SEND_INTERVAL_NS 23333333ULL
-#define HID_HEARTBEAT_EVERY  43u // ~once per second at the interval above
+// ~120Hz. A press waits for the next send, so this interval adds up to its own length to the input
+// lag (half of it on average). It was ~43Hz (23.3ms, inherited from the original client) - up to
+// 23ms of lag for no reason: the host applies every packet as it arrives and 232 bytes at 120Hz is
+// ~28KB/s, nothing for Wi-Fi or the Internet transport.
+#define HID_SEND_INTERVAL_NS 8333333ULL
+#define HID_HEARTBEAT_EVERY  120u // ~once per second at the interval above
 
 _Bool initAudio() {
     return audioInit();
