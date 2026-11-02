@@ -60,7 +60,7 @@ sends it on in SolarNX's own framing with Reed-Solomon parity - see the next sec
 ## Video transport with FEC (`Capture/VideoSender.cs`, `Capture/ReedSolomon.cs`)
 
 Every datagram to the Switch is 16 + 1280 bytes (under the 1316 the Internet relay has room for; no
-IP fragmentation). Header (LE): magic 0x53, version 1, flags (bit 0 keyframe), block index, block
+IP fragmentation). Header (LE): magic 0x53, version 2, flags (bit 0 keyframe, bit 1 H.265), block index, block
 count, shard index, parity count of the block, reserved, u32 frame number (random start per
 VideoSender, +1 per frame), u32 frame size. Mirrored by `Client/video/videowire.h`.
 
@@ -81,6 +81,18 @@ VideoSender, +1 per frame), u32 frame size. Mirrored by `Client/video/videowire.
   frames; no decode errors in any case (damaged frames never reach the decoder).
 - No keyframe on request yet: ffmpeg.exe can't be told to emit one. Planned with an in-process
   encoder (0.2.4); the Switch already reports lost frames (HidPacket.VideoLostFrameCount).
+
+## Codec (`Config.Codec`, `EncoderSelection.ResolveCodec`) - since 0.2.4
+
+H.265 (default) or H.264. The encoder kind is resolved as before (H.264 probes); then
+`ResolveCodec` keeps H.265 only if `IsAvailable(kind, Hevc)` - probes are cached per
+(encoder, codec). Software never does H.265 (libx265 can't keep real time) and streams H.264.
+`HevcArgs` mirror the H.264 tuning per encoder with `-profile:v main` (8-bit - the Switch shows NV12);
+AMF adds `-header_insertion_mode idr -gops_per_idr 1`. `VideoSender` depacketizes RFC 7798 (2-byte
+NAL header, AP = 48, FU = 49; keyframe = IRAP types 16-21) and sets flag bit 1 in every datagram;
+wire version is 2 since then (a 0.2.3 Switch rejects the stream instead of decoding H.265 as H.264).
+The Switch (re)opens its decoder for whichever codec the frames carry. Bench test: hevc_nvenc
+20 Mbit/s, 480/480 frames, 5% loss fully rebuilt, no decode errors.
 
 ## Encoder selection (`Capture/EncoderSelection.cs`)
 

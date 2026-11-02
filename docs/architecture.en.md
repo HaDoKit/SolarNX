@@ -7,7 +7,7 @@
 ```mermaid
 flowchart LR
     subgraph PC["PC (Windows, SolarNX/)"]
-        cap["ffmpeg.exe: screen or window capture<br/>(Windows.Graphics.Capture)<br/>→ H.264 (NVENC, AMF, Quick Sync,<br/>Media Foundation or x264)"]
+        cap["ffmpeg.exe: screen or window capture<br/>(Windows.Graphics.Capture)<br/>→ H.265 or H.264 (NVENC, AMF, Quick Sync,<br/>Media Foundation or x264)"]
         aud["WASAPI loopback → Opus"]
         inp["virtual gamepads (ViGEmBus),<br/>touch, game launching"]
         lib["game library"]
@@ -18,7 +18,7 @@ flowchart LR
         ctl["buttons, sticks, touch, gyro"]
         menu["My games menu with covers"]
     end
-    cap -- "UDP 19000 · H.264 + error correction" --> dec
+    cap -- "UDP 19000 · H.265/H.264 + error correction" --> dec
     aud -- "UDP 19002" --> play
     ctl -- "TCP 19001" --> inp
     lib -- "TCP 19003" --> menu
@@ -65,7 +65,7 @@ C, devkitPro / libnx.
 
 ## Video
 
-ffmpeg encodes the picture to H.264 and hands the frames to SolarNX. SolarNX cuts each frame into
+ffmpeg encodes the picture to H.265 (or H.264) and hands the frames to SolarNX. SolarNX cuts each frame into
 1280-byte packets and adds about 20% extra packets computed with a Reed–Solomon code. If some of a
 frame's packets are lost on the way, the Switch rebuilds them from the extra ones without asking
 the PC again. Big frames are split into several blocks; their packets are sent interleaved and

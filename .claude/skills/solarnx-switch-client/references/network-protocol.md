@@ -54,7 +54,8 @@ maps Minus+Plus to Guide/PS, and holding Minus for 3s is the client's back-to-me
 ## Video (UDP in)
 
 Plain BSD socket on `0.0.0.0:19000` (`SO_RCVBUF` 256KB, `SO_RCVTIMEO` 50ms), SolarNX framing
-(`video/videowire.h`): every datagram is 16 + 1280 bytes - magic 0x53, version 1, flags (keyframe),
+(`video/videowire.h`): every datagram is 16 + 1280 bytes - magic 0x53, version 2, flags (bit 0
+keyframe, bit 1 H.265),
 block index/count, shard index, block parity count, u32 frame number, u32 frame size. Frames are
 split into ≤64-data-shard Reed-Solomon blocks with ~20% parity (min 2); see `decode-pipeline.md`
 ("Reassembly"). Bursts are absorbed by the socket buffer and the always-reading decode thread.

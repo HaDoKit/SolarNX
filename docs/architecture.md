@@ -7,7 +7,7 @@
 ```mermaid
 flowchart LR
     subgraph PC["ПК (Windows, SolarNX/)"]
-        cap["ffmpeg.exe: захват экрана или окна<br/>(Windows.Graphics.Capture)<br/>→ H.264 (NVENC, AMF, Quick Sync,<br/>Media Foundation или x264)"]
+        cap["ffmpeg.exe: захват экрана или окна<br/>(Windows.Graphics.Capture)<br/>→ H.265 или H.264 (NVENC, AMF, Quick Sync,<br/>Media Foundation или x264)"]
         aud["WASAPI loopback → Opus"]
         inp["виртуальные геймпады (ViGEmBus),<br/>касания, запуск игр"]
         lib["библиотека игр"]
@@ -18,7 +18,7 @@ flowchart LR
         ctl["кнопки, стики, касания, гироскоп"]
         menu["меню «Мои игры» с обложками"]
     end
-    cap -- "UDP 19000 · H.264 + коррекция ошибок" --> dec
+    cap -- "UDP 19000 · H.265/H.264 + коррекция ошибок" --> dec
     aud -- "UDP 19002" --> play
     ctl -- "TCP 19001" --> inp
     lib -- "TCP 19003" --> menu
@@ -64,7 +64,7 @@ C, devkitPro / libnx.
 
 ## Видео
 
-ffmpeg кодирует картинку в H.264 и отдаёт кадры SolarNX. SolarNX режет каждый кадр на пакеты по
+ffmpeg кодирует картинку в H.265 (или H.264) и отдаёт кадры SolarNX. SolarNX режет каждый кадр на пакеты по
 1280 байт и добавляет к ним примерно 20 % избыточных пакетов, посчитанных кодом Рида — Соломона.
 Если по дороге часть пакетов кадра потерялась, Switch восстанавливает их из избыточных, не
 переспрашивая ПК. Большие кадры делятся на несколько блоков, их пакеты отправляются вперемешку и
