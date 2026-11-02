@@ -65,6 +65,7 @@ The gear button on the SolarNX main screen.
 | Frames per second | 60 is smoother; 30 halves the network load and gives a sharper picture at the same bitrate |
 | Bitrate (kbps) | video quality. Higher is sharper but harder on Wi-Fi. Lower it if you see artifacts |
 | Adaptive bitrate | SolarNX lowers the bitrate when the connection has problems and raises it back once things are stable. The Bitrate value becomes the upper limit |
+| Encoder | Auto (recommended): SolarNX picks the encoder for your graphics card itself. The line under the list shows the detected graphics card and the encoder that will be used. Choose one by hand only if the automatic one causes problems, such as artifacts. The AMD and Intel encoders are experimental. Takes effect the next time the Switch connects |
 | Switch layout (A↔B, X↔Y) | swaps A/B and X/Y so the buttons match the labels on the Switch |
 | shadPS4 | path to the emulator |
 | Drivers | reinstalls ViGEmBus |

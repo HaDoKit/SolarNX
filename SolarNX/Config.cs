@@ -41,6 +41,11 @@ public sealed class Config
     /// with new args, since it has no live reconfigure of its own.</summary>
     public bool AdaptiveBitrate { get; set; } = false;
 
+    /// <summary>H.264 encoder: Auto (default) picks the GPU's own hardware encoder, then Media
+    /// Foundation, then the CPU - see Capture/EncoderSelection. A specific choice that doesn't work
+    /// on this machine falls back to Auto.</summary>
+    public Capture.EncoderKind Encoder { get; set; } = Capture.EncoderKind.Auto;
+
     /// <summary>Sample rate the PCM is captured/resampled to before Opus encoding (see
     /// AudioCaptureSender). RFC 7587 mandates Opus's RTP clock rate be 48000Hz regardless of this
     /// value, and the client (SolarNX/source/audio.c) decodes via libavcodec/libswresample rather than

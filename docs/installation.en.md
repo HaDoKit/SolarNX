@@ -7,8 +7,14 @@
 ### PC
 
 - Windows 10 version 1903 (build 18362) or later, 64-bit.
-- An NVIDIA graphics card with driver 610 or later, for hardware encoding (NVENC). Without one,
-  SolarNX encodes video on the CPU (libx264). That works, but puts a noticeable load on the CPU.
+- An NVIDIA, AMD or Intel graphics card with an up-to-date driver, for hardware video encoding. SolarNX
+  finds the graphics card and picks the encoder itself: NVENC (NVIDIA, driver 610 or later), AMF (AMD),
+  Quick Sync (Intel), or Media Foundation for the rest. If none of them works, the CPU encodes the
+  video (x264). That works, but puts a noticeable load on the CPU.
+
+  > Encoding on **AMD and Intel graphics cards is an experimental feature**: it hasn't been tested on
+  > real hardware yet. If there's no video or it has artifacts, choose the Media Foundation or CPU
+  > encoder in the settings and let us know in [Issues](https://github.com/HaDoKit/SolarNX/issues).
 - The **ViGEmBus** virtual gamepad driver. The SolarNX installer offers to install it for you.
 - For Steam mode, Steam installed. For shadPS4 mode, [shadPS4](https://shadps4.net).
 

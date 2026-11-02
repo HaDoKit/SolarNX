@@ -25,10 +25,6 @@ public sealed class VideoEncoder : IDisposable
     private readonly Config _config;
     private Process? _ffmpeg;
 
-    // Cached for the process lifetime - the check itself takes a moment (spawns ffmpeg) and the
-    // answer can't change without a driver update, which needs a restart of this app anyway.
-    private static bool? _nvencAvailable;
-
     // Updated from ffmpeg's own periodic stderr progress lines ("frame=... fps=... time=...") -
     // used by AppOrchestrator's watchdog to detect a hung capture. Confirmed live: video can freeze
     // for many seconds (audio/gamepad input kept working throughout) with nothing in this class
@@ -66,6 +62,11 @@ public sealed class VideoEncoder : IDisposable
     /// ceiling (see Start's bitrateKbpsOverride parameter).</summary>
     public int? ActiveBitrateKbps { get; private set; }
 
+    /// <summary>The encoder the running ffmpeg process uses (resolved from
+    /// <see cref="Config.Encoder"/> - see <see cref="EncoderSelection.Resolve"/>), or null if none is
+    /// running.</summary>
+    public EncoderKind? ActiveEncoder { get; private set; }
+
     /// <summary>The window being captured instead of the monitor (IntPtr.Zero = whole primary
     /// monitor). Lets a restart (watchdog / adaptive bitrate) carry the same capture target over.</summary>
     public IntPtr CaptureWindow { get; private set; }
@@ -88,10 +89,9 @@ public sealed class VideoEncoder : IDisposable
         return DateTime.UtcNow - reference > effectiveThreshold;
     }
 
-    /// <param name="useNvenc">null (default) auto-detects: probes once whether h264_nvenc can
-    /// actually open (this ffmpeg build needs NVIDIA driver 610+ for its NVENC Video Codec SDK
-    /// 13.1, or it fails to open at all), and falls back to libx264 (software) if not. Pass
-    /// true/false to force one or the other.</param>
+    /// <param name="encoderOverride">null (default) uses <see cref="Config.Encoder"/>. Either way the
+    /// choice goes through <see cref="EncoderSelection.Resolve"/>, which falls back to whatever really
+    /// works here (hardware encoders are probed once per process).</param>
     /// <param name="bitrateKbpsOverride">Used by AdaptiveBitrateController (Path 1, ffmpeg
     /// restart-based) to start this process at a lower/raised bitrate than
     /// <see cref="Config.BitrateKbps"/> without touching (and risking persisting) that field -
@@ -101,7 +101,7 @@ public sealed class VideoEncoder : IDisposable
     /// stream size with its aspect ratio kept, instead of the whole primary monitor. A game running
     /// in a small window - or behind the first user's own windows - then still fills the Switch
     /// screen. IntPtr.Zero (default) = monitor 0, as for Big Picture.</param>
-    public void Start(bool? useNvenc = null, int? bitrateKbpsOverride = null, IntPtr captureWindow = default)
+    public void Start(EncoderKind? encoderOverride = null, int? bitrateKbpsOverride = null, IntPtr captureWindow = default)
     {
         var ffmpegPath = Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe");
         var bitrateKbps = bitrateKbpsOverride ?? _config.BitrateKbps;
@@ -112,33 +112,22 @@ public sealed class VideoEncoder : IDisposable
         // fragmentation (a fragmented UDP datagram only needs to lose one fragment to lose the
         // whole packet, which defeats the point of switching off TCP for resilience).
         var target = $"udp://{_config.ClientIp}:{_config.VideoPort}?pkt_size=1316";
-        var nvenc = useNvenc ?? IsNvencAvailable(ffmpegPath);
+        var encoder = EncoderSelection.Resolve(encoderOverride ?? _config.Encoder);
+        ActiveEncoder = encoder;
+        var pixelFormat = EncoderSelection.PixelFormat(encoder);
 
         // -g (keyframe interval): ~0.5s (shorter than the ~2s used under TCP) - bounds how long a
         // lost packet's corruption can visibly propagate via motion compensation before the next
         // keyframe resyncs it, at the cost of more frequent (bigger) keyframes eating into the
         // bitrate budget. A reasonable hedge against ordinary UDP packet loss.
         var keyframeInterval = Math.Max(1, _config.Fps / 2);
-        // rc "cbr" (not the original's "-rc vbr -cq:v 19"): a quality-target rate mode fighting the
-        // simultaneously-set hard bitrate bounds below causes the encoder to fall behind real time.
-        // "p4" (mid-tier NVENC preset, not "p1"/fastest) keeps real motion-search effort while
-        // still being a hardware encoder well within real-time budget for cbr. NVENC here requires
-        // a fairly recent NVIDIA driver for this ffmpeg build (Video Codec SDK 13.1, driver 610+) -
-        // falls back to libx264 (software) if unavailable/unwanted.
-        // -delay 0 -rc-lookahead 0 -bf 0: squeezes out NVENC's own internal frame buffering -
-        // without these it can hold back a few frames before emitting output even in a
-        // zerolatency/low-latency preset, adding a small but real amount of extra input-to-video
-        // delay on top of everything else already tuned for latency.
-        // -profile:v high (was baseline): confirmed live that at this bitrate the encoder ran at
-        // q=32-36 during gameplay (from ffmpeg's own progress lines) - bit-starved enough that
-        // text and fine detail visibly smeared. High adds CABAC and the 8x8 transform, typically
-        // 15-25% better quality at the same bitrate, with no latency cost: B-frames stay off
-        // (-bf 0 / x264's zerolatency tune), which is the part of High that would add delay. The
-        // Switch client decodes High fine - NVTEGRA (Tegra X1 NVDEC) supports it, and so does its
-        // libavcodec software fallback, just at somewhat more CPU than baseline.
-        var encodeArgs = nvenc
-            ? $"-c:v h264_nvenc -gpu 0 -preset p4 -tune ll -rc cbr -zerolatency 1 -delay 0 -rc-lookahead 0 -bf 0 -profile:v high -g {keyframeInterval}"
-            : $"-c:v libx264 -preset faster -tune zerolatency -profile:v high -crf 18 -g {keyframeInterval}";
+        // Constant bitrate, High profile, no B-frames/lookahead for every encoder - see
+        // EncoderSelection.EncodeArgs. -profile:v high (was baseline): confirmed live that the encoder
+        // ran at q=32-36 during gameplay at this bitrate; High (CABAC, 8x8 transform) gives ~15-25%
+        // better quality at the same bitrate with no latency cost. The Switch decodes High (NVTEGRA).
+        // A quality-target rate mode (the original "-rc vbr -cq:v 19") fought the hard bitrate bounds
+        // below and made the encoder fall behind real time - keep rate control constant-bitrate.
+        var encodeArgs = EncoderSelection.EncodeArgs(encoder, keyframeInterval);
 
         // gfxcapture scales to the stream's target resolution itself (resize_mode=scale) - no
         // separate -vf scale step needed. hwdownload+format=bgra brings the D3D11 hardware frame
@@ -159,14 +148,14 @@ public sealed class VideoEncoder : IDisposable
             var fit = WindowGeometry.Fit(clientW, clientH, _config.TargetWidth, _config.TargetHeight);
             filterChain =
                 $"gfxcapture=hwnd={(ulong)captureWindow.ToInt64()}:capture_border=0:capture_cursor=0:resize_mode=scale_aspect:max_framerate={_config.Fps}:width={fit.Width}:height={fit.Height}," +
-                $"hwdownload,format=bgra,pad={_config.TargetWidth}:{_config.TargetHeight}:{fit.OffsetX}:{fit.OffsetY}:black,fps={_config.Fps},format=yuv420p";
+                $"hwdownload,format=bgra,pad={_config.TargetWidth}:{_config.TargetHeight}:{fit.OffsetX}:{fit.OffsetY}:black,fps={_config.Fps},format={pixelFormat}";
             CaptureSize = (clientW, clientH);
         }
         else
         {
             if (captureWindow != IntPtr.Zero) Logger.Log("ffmpeg-video", $"window {captureWindow} has no client area - capturing the monitor instead");
             CaptureWindow = IntPtr.Zero;
-            filterChain = $"gfxcapture=monitor_idx=0:resize_mode=scale:max_framerate={_config.Fps}:width={_config.TargetWidth}:height={_config.TargetHeight},hwdownload,format=bgra,fps={_config.Fps},format=yuv420p";
+            filterChain = $"gfxcapture=monitor_idx=0:resize_mode=scale:max_framerate={_config.Fps}:width={_config.TargetWidth}:height={_config.TargetHeight},hwdownload,format=bgra,fps={_config.Fps},format={pixelFormat}";
         }
 
         var args = string.Join(' ', new[]
@@ -219,49 +208,11 @@ public sealed class VideoEncoder : IDisposable
             catch (Exception) { Logger.Log("ffmpeg-video", "process exited (exit code unavailable - already disposed)"); }
         };
         _ffmpeg.EnableRaisingEvents = true;
+        Logger.Log("ffmpeg-video", $"encoder: {EncoderSelection.DisplayName(encoder)}");
         Logger.Log("ffmpeg-video", $"starting: {ffmpegPath} {args}");
         _ffmpeg.Start();
         ChildProcessJob.Assign(_ffmpeg); // dies with this process even on a crash/debugger stop - see ChildProcessJob
         _ffmpeg.BeginErrorReadLine();
-    }
-
-    /// <summary>Encodes one throwaway frame with h264_nvenc as a real test, since a too-old NVIDIA
-    /// driver makes this ffmpeg build's h264_nvenc fail to open at all ("Driver does not support
-    /// the required nvenc API version") - a quick real probe is more reliable than trying to parse
-    /// driver/GPU info ourselves. 256x256, not smaller: 64x64 fails with "Frame Dimension less than
-    /// the minimum supported value", an NVENC resolution floor unrelated to driver compatibility
-    /// that would otherwise look like a false negative.</summary>
-    private static bool IsNvencAvailable(string ffmpegPath)
-    {
-        if (_nvencAvailable is not null) return _nvencAvailable.Value;
-
-        try
-        {
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo(ffmpegPath,
-                    "-f lavfi -i color=black:s=256x256:d=0.1 -frames:v 1 -c:v h264_nvenc -f null -")
-                {
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                },
-            };
-            process.Start();
-            process.StandardError.ReadToEnd();
-            process.WaitForExit(5000);
-            _nvencAvailable = process.ExitCode == 0;
-        }
-        catch (Exception ex)
-        {
-            Logger.Log("ffmpeg-video", $"NVENC probe failed: {ex}");
-            _nvencAvailable = false;
-        }
-
-        Logger.Log("ffmpeg-video", _nvencAvailable.Value
-            ? "NVENC probe succeeded - using h264_nvenc"
-            : "NVENC probe failed - falling back to libx264 (software)");
-        return _nvencAvailable.Value;
     }
 
     public void Stop()
@@ -278,6 +229,7 @@ public sealed class VideoEncoder : IDisposable
         _ffmpeg?.Dispose();
         _ffmpeg = null;
         ActiveBitrateKbps = null;
+        ActiveEncoder = null;
         CaptureWindow = IntPtr.Zero;
         CaptureSize = default;
     }

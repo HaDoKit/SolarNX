@@ -7,7 +7,7 @@
 ```mermaid
 flowchart LR
     subgraph PC["PC (Windows, SolarNX/)"]
-        cap["ffmpeg.exe: screen or window capture<br/>(Windows.Graphics.Capture)<br/>→ H.264 (NVENC or libx264)"]
+        cap["ffmpeg.exe: screen or window capture<br/>(Windows.Graphics.Capture)<br/>→ H.264 (NVENC, AMF, Quick Sync,<br/>Media Foundation or x264)"]
         aud["WASAPI loopback → Opus"]
         inp["virtual gamepads (ViGEmBus),<br/>touch, game launching"]
         lib["game library"]

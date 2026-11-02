@@ -1,3 +1,4 @@
+using SolarNX.Capture;
 using SolarNX.Input;
 using SolarNX.ShadPs4;
 
@@ -72,6 +73,69 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         AdaptiveBitrateToggle.IsChecked = _config.AdaptiveBitrate;
         AdaptiveBitrateToggle.Checked += (_, _) => SetAdaptiveBitrate(true);
         AdaptiveBitrateToggle.Unchecked += (_, _) => SetAdaptiveBitrate(false);
+
+        InitEncoderRow();
+    }
+
+    private static readonly EncoderKind[] EncoderOptions =
+    {
+        EncoderKind.Auto, EncoderKind.Nvenc, EncoderKind.Amf, EncoderKind.Qsv, EncoderKind.MediaFoundation, EncoderKind.Software,
+    };
+
+    // Probing the encoders spawns ffmpeg once per encoder (cached afterwards), so it runs off the UI
+    // thread; until it finishes every option is selectable and the line under the combo says so.
+    private void InitEncoderRow()
+    {
+        foreach (var kind in EncoderOptions)
+            EncoderCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = EncoderSelection.DisplayName(kind), Tag = kind });
+        EncoderCombo.SelectedIndex = Math.Max(0, Array.IndexOf(EncoderOptions, _config.Encoder));
+        EncoderCombo.SelectionChanged += (_, _) =>
+        {
+            if (EncoderCombo.SelectedItem is not System.Windows.Controls.ComboBoxItem { Tag: EncoderKind kind }) return;
+            _config.Encoder = kind;
+            _config.Save();
+            _ = RefreshEncoderInfoAsync();
+        };
+        _ = RefreshEncoderInfoAsync();
+    }
+
+    // This view is built in Program.Main before the WPF message loop runs, when there is no
+    // SynchronizationContext yet - an await would resume on the thread pool, so the result is handed
+    // to the UI thread explicitly.
+    private async Task RefreshEncoderInfoAsync()
+    {
+        var preference = _config.Encoder;
+        try
+        {
+            var (gpus, available, resolved) = await Task.Run(() =>
+            {
+                var gpuList = EncoderSelection.Gpus;
+                var availability = EncoderOptions.Where(k => k != EncoderKind.Auto).ToDictionary(k => k, EncoderSelection.IsAvailable);
+                return (gpuList, availability, EncoderSelection.Resolve(preference));
+            });
+            await Dispatcher.InvokeAsync(() => ShowEncoderInfo(preference, gpus, available, resolved));
+        }
+        catch (Exception ex)
+        {
+            Logger.Log("encoder", $"encoder check for settings failed: {ex}");
+        }
+    }
+
+    private void ShowEncoderInfo(EncoderKind preference, IReadOnlyList<GpuInfo> gpus, Dictionary<EncoderKind, bool> available, EncoderKind resolved)
+    {
+        foreach (System.Windows.Controls.ComboBoxItem item in EncoderCombo.Items)
+        {
+            if (item.Tag is not EncoderKind kind || kind == EncoderKind.Auto) continue;
+            var ok = available[kind];
+            item.Content = ok ? EncoderSelection.DisplayName(kind) : $"{EncoderSelection.DisplayName(kind)} — недоступен";
+            item.Foreground = ok ? System.Windows.Media.Brushes.White : System.Windows.Media.Brushes.Gray;
+        }
+
+        var gpuText = gpus.Count == 0 ? "не найдена" : string.Join(", ", gpus.Select(g => g.Name));
+        var fallbackNote = preference != EncoderKind.Auto && resolved != preference ? " (выбранный недоступен)" : "";
+        var cpuNote = resolved == EncoderKind.Software ? " Аппаратный кодировщик не найден — видео кодирует процессор, это заметно его нагружает." : "";
+        EncoderInfoText.Text = $"Видеокарта: {gpuText}. Будет использоваться: {EncoderSelection.DisplayName(resolved)}{fallbackNote}.{cpuNote} " +
+                               "Изменение применится при следующем подключении Switch.";
     }
 
     // AdaptiveBitrateController scales the actually-running bitrate on its own between a fixed
