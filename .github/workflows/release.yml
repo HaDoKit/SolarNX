@@ -112,6 +112,17 @@ jobs:
           & "${{ github.workspace }}\SolarNX\scripts\build-installer.ps1" -Version "${{ needs.version.outputs.version }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Build rendezvous server (Linux x64, Windows x64)
+        shell: pwsh
+        run: |
+          foreach ($rid in 'linux-x64', 'win-x64') {
+            dotnet publish Server/SolarNX.Rendezvous.csproj -c Release -r $rid --self-contained true `
+              -p:PublishSingleFile=true -o "out/server-$rid"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Copy-Item Server/rendezvous.example.json, Server/solarnx-rendezvous.service "out/server-$rid/"
+            Compress-Archive -Path "out/server-$rid/*" -DestinationPath "SolarNX-Rendezvous-$rid.zip" -Force
+          }
+
       - name: Download Switch client
         uses: actions/download-artifact@v4
         with:
@@ -131,3 +142,5 @@ jobs:
           files: |
             SolarNX/Setup/SolarNX-Setup.exe
             Client/SolarNX-Switch.nro
+            SolarNX-Rendezvous-linux-x64.zip
+            SolarNX-Rendezvous-win-x64.zip

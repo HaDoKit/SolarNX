@@ -87,31 +87,36 @@ sees.
 
 ## Playing over the internet (experimental)
 
-> **Experimental feature.** Internet mode hasn't been tested on real networks yet, and the traffic is
-> **not encrypted** yet. Only the connection code keeps strangers out. The regular Wi-Fi mode works as
-> before and doesn't depend on this mode.
+> **Experimental feature.** Internet mode hasn't been tested on many networks and routers yet. The
+> regular Wi-Fi mode works as before and doesn't depend on this mode.
 
 In Internet mode the Switch connects to the PC over the internet on a single UDP port, **19010**.
-Everything goes through that one connection: input, video, audio and the library. There is no NAT hole
-punching yet, so the port has to be forwarded on the router by hand.
+Everything goes through that one connection: input, video, audio and the library, and all of it is
+**encrypted**. Only a Switch paired with the PC once can connect. There is no NAT hole punching yet, so
+the port has to be forwarded on the router by hand.
 
-**On the PC:**
-1. «Настройки» (Settings) → «Подключение» (Connection) → «Режим» (Mode) → **«Интернет
-   (экспериментально)»** (Internet, experimental). An 8-character connection code appears. «Новый
-   код» (New code) creates a new one, which then has to be entered on the Switch again.
-2. On the router, forward **UDP port 19010** to this PC. Allow SolarNX through Windows Firewall if it
-   asks.
-3. Turn streaming on. The status says it's waiting for the Switch over the internet.
+**Setup (once):**
+1. **PC:** «Настройки» (Settings) → «Подключение» (Connection) → «Режим» (Mode) → **«Интернет
+   (экспериментально)»** (Internet, experimental). On the router, forward **UDP port 19010** to this
+   PC. Turn streaming on; allow SolarNX through Windows Firewall if it asks.
+2. **Switch:** in the main menu press **X** to open the Connection screen. **Mode** → Internet,
+   **PC address**: the PC's public IP address or a domain (if the router uses a different port, add it
+   after a colon, `example.com:19010`). Restart SolarNX on the Switch: the mode is picked at startup.
+3. **Pairing.** On the PC: «Настройки» → «Подключение» → **«Привязать Switch…»** (Pair Switch); the
+   window waits 2 minutes for a request. On the Switch: X → **Pair with this PC**. Both screens show
+   the same 6-digit code. If the codes match, click **«Коды совпадают — привязать»** (Codes match -
+   pair) on the PC.
 
-**On the Switch:**
-1. In the main menu, press **X** to open the Connection screen.
-2. **Mode** → Internet. **PC address**: the PC's public IP address or a domain; if the router uses a
-   different port, add it after a colon (`example.com:19010`). **Connection code**: the code from the PC.
-3. Restart SolarNX on the Switch: the mode is picked at startup.
+From then on the Switch connects by itself. The bottom-right corner of the menu shows "X  Internet: …":
+"connected (encrypted)" (all good), "waiting for the PC" (the PC doesn't answer: check the address and
+the port forwarding), "not paired" (pairing needed).
 
-The bottom-right corner of the menu shows "X  Internet: …" with the state: "connected" (the PC
-answers), "waiting for the PC" (no answer: check the address and the port forwarding), "wrong
-connection code".
+> Pair only if the codes match. Different codes mean someone is sitting between the Switch and the PC.
+> The paired Switches are listed in the same Connection card; «Забыть все» (Forget all) removes every
+> pairing.
+
+Don't want to forward a port, or your provider gives you a shared address? Run your own rendezvous
+server: [Server for playing over the internet](server.en.md).
 
 To go back to Wi-Fi: choose «Wi-Fi» on the PC, Mode → Wi-Fi on the Switch, and restart the app.
 

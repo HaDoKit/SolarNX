@@ -71,6 +71,12 @@ public sealed class GameEntry
     /// Reset whenever the cover file changes.</summary>
     public CoverCrop? CoverCrop { get; set; }
 
+    /// <summary>False (default): started as the ordinary desktop user, as a double-click in Explorer
+    /// would - although SolarNX itself runs as administrator. True: with SolarNX's administrator
+    /// rights, for games and tools that need them. A game whose own manifest demands administrator
+    /// gets it either way. Not used for Steam games - Steam starts those itself.</summary>
+    public bool RunAsAdmin { get; set; }
+
     public GameEntry Clone()
     {
         var copy = (GameEntry)MemberwiseClone();

@@ -58,6 +58,11 @@ Statically linked from the devkitPro toolchain's portlibs:
 - **FreeType** - FreeType License (FTL). Portions of this software are copyright (c) The FreeType
   Project (https://freetype.org). All rights reserved.
 - **HarfBuzz** - MIT ("Old MIT"). Copyright (c) HarfBuzz contributors.
+
+Included as source (also ported to C# in `SolarNX/Session/InternetCrypto.cs`):
+
+- **TweetNaCl** X25519 (`crypto_scalarmult`) - public domain. Daniel J. Bernstein, Bernard van Gastel,
+  Wesley Janssen, Tanja Lange, Peter Schwabe, Sjaak Smetsers. https://tweetnacl.cr.yp.to
 - **libpng** - libpng license; **zlib** - zlib; **libjpeg-turbo** - IJG / BSD 3-Clause;
   **libwebp** - BSD 3-Clause (Google).
 

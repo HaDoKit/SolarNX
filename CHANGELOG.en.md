@@ -11,9 +11,16 @@ versions: install the same version on the PC and on the Switch.
 - The project is renamed: **OrbitNX → SolarNX**. The PC app is `SolarNX.exe`, the Switch app is
   `/switch/SolarNX/SolarNX-Switch.nro`.
 - **Experimental:** Internet mode - the Switch connects to the PC over the internet on a single UDP port,
-  19010, with a connection code (no encryption and no NAT hole punching yet; the port is forwarded by
-  hand). Wi-Fi mode is unchanged.
+  19010 (no NAT hole punching yet; the port is forwarded by hand). Only a paired Switch can connect:
+  pairing is done once, comparing a 6-digit code on both screens. All traffic is encrypted (X25519,
+  AES-256, HMAC-SHA256). Wi-Fi mode is unchanged.
+- **Experimental:** the SolarNX Rendezvous server for your own VPS (Linux, Windows, Docker): the PC and
+  the Switch find each other by ID and connect directly without port forwarding; if needed, the server
+  relays the encrypted traffic itself.
 - Removed the old unused shadPS4 game-picker channel.
+- Library games now start as an ordinary user rather than with SolarNX's own administrator rights. Games
+  that need administrator rights have a «Запускать от имени администратора» (Run as administrator)
+  checkbox in the game editor.
 - The A/B and X/Y layout can be switched on the Switch itself, with Y in the main menu. The setting
   syncs with the PC; the last change wins.
 - **Experimental:** hardware video encoding on AMD (AMF) and Intel (Quick Sync) graphics cards, and through Media

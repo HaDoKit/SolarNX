@@ -1,0 +1,26 @@
+{
+  // Copy to rendezvous.json next to the program and adjust. Every setting can also be given as an
+  // environment variable (SOLARNX_RV_PORT, ...) or a command-line option (--port, ...) - see --help.
+
+  // UDP port the server listens on. Open it in the VPS firewall.
+  "Port": 19020,
+
+  // If set, the PC and the Switch must enter the same key - keeps strangers off your server.
+  "AccessKey": "",
+
+  // Forward the traffic through this server when the PC and the Switch can't reach each other
+  // directly. The whole video stream then goes through the VPS - mind its bandwidth and traffic limits.
+  "Relay": false,
+
+  // Relay limit per Switch, kilobits per second.
+  "RelayMaxKbps": 20000,
+
+  // How many PCs may be registered at once.
+  "MaxHosts": 64,
+
+  // Forget a PC after this many seconds without a registration (PCs re-register every 15 s).
+  "HostTimeoutSeconds": 60,
+
+  // Log every request, not only changes.
+  "Verbose": false
+}

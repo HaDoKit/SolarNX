@@ -150,6 +150,10 @@ public sealed class AppOrchestrator : IDisposable
         _libraryPusher.Start();
     }
 
+    /// <summary>The running Internet-mode session (null in Wi-Fi mode or while not armed) - the
+    /// settings' pairing window works on it.</summary>
+    public InternetSession? Internet => IsArmed ? _session as InternetSession : null;
+
     private ISessionController CreateSession()
     {
         ISessionController session = _config.ConnectionMode == ConnectionMode.Internet
