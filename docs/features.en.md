@@ -132,6 +132,7 @@ More in [Game library](library.en.md).
 - Three tiles: Steam, shadPS4, My games. The console's IP address is shown at the bottom of the
   screen.
 - Y switches the A/B and X/Y layout; the current one is shown in the bottom-right corner.
+- X opens the connection settings: Wi-Fi or the experimental Internet mode.
 - My games is a grid of your library's covers: A to play, B to go back. The list comes from the PC
   automatically and updates by itself.
 

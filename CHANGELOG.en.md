@@ -10,6 +10,10 @@ versions: install the same version on the PC and on the Switch.
 
 - The project is renamed: **OrbitNX → SolarNX**. The PC app is `SolarNX.exe`, the Switch app is
   `/switch/SolarNX/SolarNX-Switch.nro`.
+- **Experimental:** Internet mode - the Switch connects to the PC over the internet on a single UDP port,
+  19010, with a connection code (no encryption and no NAT hole punching yet; the port is forwarded by
+  hand). Wi-Fi mode is unchanged.
+- Removed the old unused shadPS4 game-picker channel.
 - The A/B and X/Y layout can be switched on the Switch itself, with Y in the main menu. The setting
   syncs with the PC; the last change wins.
 - **Experimental:** hardware video encoding on AMD (AMF) and Intel (Quick Sync) graphics cards, and through Media

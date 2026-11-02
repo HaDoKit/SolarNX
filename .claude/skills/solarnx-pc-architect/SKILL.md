@@ -46,7 +46,7 @@ captures the primary monitor.
 | `Input/GameBarSuppressor.cs` | Stubs `ms-gamebar:` so a new virtual Xbox pad doesn't pop a Game Bar dialog |
 | `BigPicture/SteamLauncher.cs` | Steam detect/launch, Big Picture open/close, content-window detection, closing the game on disconnect |
 | `Library/` | User game library: `GameLibrary` (library.json + covers/), `GameLauncher` (Native exe / Steam `rungameid` / Emulator template / cmd Script), `LibraryPusher` + `LibraryWire` (port 19003 protocol), `CoverImage` (→ 240×360 JPEG), `SteamLibraryScanner` (installed games + capsule art) |
-| `ShadPs4/` | shadPS4 launcher (`--big-picture`); `ShadPs4Library*`/`LibraryProtocol`/`ParamSfoReader` are deprecated and unwired |
+| `ShadPs4/` | shadPS4 launcher (`--big-picture`). The old Switch-side shadPS4 game picker and its TCP channel (`ShadPs4LibraryChannel`, `LibraryProtocol`, `ParamSfoReader`, scanner) were deleted - don't revive them |
 | `Native/` | `ChildProcessJob` (kill children with this process), `ProcessImagePath` (limited-rights exe path), `TrackedProcess` + `ProcessTree` (follow a game by pid/start time, optionally through descendants, via Toolhelp - no handles), `Mmcss`, `TimerResolution`, `TouchHelper/` (native helper) |
 | `UI/` | WPF `MainWindow`/`HomeView`/`SettingsView`/`Library/LibraryView` + `GameEditWindow` — UI only |
 | `Config.cs` | `config.json` next to the exe; see the field list in `references/architecture-conventions.md` |

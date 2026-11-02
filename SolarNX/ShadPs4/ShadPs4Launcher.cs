@@ -14,10 +14,8 @@ namespace SolarNX.ShadPs4;
 /// </summary>
 public sealed class ShadPs4Launcher
 {
-    // TitleIds are always short alphanumeric strings (e.g. "CUSA03173") - this is validated
-    // defense-in-depth given titleId ultimately arrives over the network (see
-    // ShadPs4LibraryChannel/LibraryProtocol), even though the wire format already caps its length.
-    // Anything failing this is treated as "no titleId" (falls back to the generic launch below)
+    // TitleIds are always short alphanumeric strings (e.g. "CUSA03173") - validated as
+    // defense-in-depth, since a titleId would come from outside this app. Anything failing this is treated as "no titleId" (falls back to the generic launch below)
     // rather than ever reaching ProcessStartInfo.Arguments unvalidated.
     private static readonly Regex TitleIdPattern = new(@"^[A-Za-z0-9]{1,16}$", RegexOptions.Compiled);
 
@@ -32,9 +30,8 @@ public sealed class ShadPs4Launcher
     /// generic launch below now uses shadPS4's own `--big-picture` mode (its native,
     /// gamepad-navigable game list) instead of our own Switch-side picker screen, so the user picks
     /// the game inside shadPS4 itself rather than on the Switch beforehand. The titleId-driven
-    /// direct-launch path (deprecated, not deleted - see ShadPs4LibraryChannel/LibraryProtocol/
-    /// library.c on the Switch, also deprecated/unwired) is kept intact below in case it's worth
-    /// reviving: when non-null, it launches straight into that specific game via CLI (confirmed
+    /// direct-launch path is kept below in case it's worth reviving (the Switch-side picker and its
+    /// TCP channel that fed it were removed): when non-null, it launches straight into that specific game via CLI (confirmed
     /// live: `shadPS4.exe CUSA03173` boots directly into the game, bypassing shadPS4's own GUI).
     /// If shadPS4 is already running, a titleId can't be injected into the existing window - this
     /// just refocuses it exactly like the title-less path always has.

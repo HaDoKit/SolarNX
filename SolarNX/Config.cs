@@ -138,5 +138,15 @@ public sealed class Config
         File.WriteAllText(ConfigPath, json);
     }
 
-    public bool IsValid() => !string.IsNullOrWhiteSpace(ClientIp);
+    /// <summary>Wi-Fi (default): the PC dials the Switch at <see cref="ClientIp"/>. Internet
+    /// (experimental): the Switch dials the PC on UDP <see cref="Session.InternetSession.Port"/> and
+    /// must present <see cref="ConnectionCode"/>. Applied the next time streaming is turned on.</summary>
+    public Session.ConnectionMode ConnectionMode { get; set; } = Session.ConnectionMode.Wifi;
+
+    /// <summary>What a Switch must send to be accepted in Internet mode - generated on first use,
+    /// shown in the settings, typed once on the Switch.</summary>
+    public string ConnectionCode { get; set; } = "";
+
+    /// <summary>Wi-Fi needs the Switch's address; in Internet mode the Switch finds the PC itself.</summary>
+    public bool IsValid() => ConnectionMode == Session.ConnectionMode.Internet || !string.IsNullOrWhiteSpace(ClientIp);
 }

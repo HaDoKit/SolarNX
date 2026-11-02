@@ -37,6 +37,9 @@ used (details in [How it works](architecture.en.md)):
 | 19002 | UDP | audio (PC → Switch) |
 | 19003 | TCP | game library (PC → Switch) |
 
+In the experimental Internet mode the Switch connects to the PC on a single port, **UDP 19010**, which
+has to be forwarded on the PC's router. See [Usage](usage.en.md#playing-over-the-internet-experimental).
+
 ## Installing on the PC
 
 1. Download `SolarNX-Setup.exe` from the [releases](https://github.com/HaDoKit/SolarNX/releases) and run it.

@@ -48,6 +48,39 @@
         <ScrollViewer Grid.Row="1" Margin="20" VerticalScrollBarVisibility="Auto">
             <StackPanel>
 
+                <!-- Подключение -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="Подключение" Style="{StaticResource CardHeader}" />
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Режим" Style="{StaticResource FieldLabel}" />
+                            <ComboBox x:Name="ConnectionModeCombo" Grid.Column="1" />
+                        </Grid>
+                        <Grid x:Name="InternetPanel">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Код подключения" Style="{StaticResource FieldLabel}" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <TextBox x:Name="ConnectionCodeBox" IsReadOnly="True" FontSize="16" FontFamily="Consolas"
+                                         MinWidth="160" Padding="8,4" Margin="0,0,8,0" />
+                                <ui:Button x:Name="NewCodeButton" Content="Новый код" Appearance="Secondary" />
+                            </StackPanel>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,8,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                       Text="Экспериментальный режим. Пробросьте на роутере UDP-порт 19010 на этот компьютер. На Switch в главном меню нажмите X, выберите Internet, введите внешний адрес этого ПК (IP или домен) и этот код. Трафик пока не шифруется. Режим применяется при следующем включении трансляции." />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
                 <!-- Видео -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>

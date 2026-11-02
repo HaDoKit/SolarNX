@@ -37,11 +37,24 @@ public partial class HomeView : System.Windows.Controls.UserControl
         // control not visible, and the capture loop has no reason to keep running while it isn't.
         IsVisibleChanged += (_, _) => { if (!IsVisible) StopPreview(); };
 
+        RefreshMode();
+    }
+
+    /// <summary>Wi-Fi: the editable client IP. Internet (experimental): the Switch finds this PC
+    /// itself, so the same field shows the connection code to type on the Switch, read-only.
+    /// Called on start and whenever the settings screen closes.</summary>
+    public void RefreshMode()
+    {
+        var internet = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet;
+        IpLabel.Text = internet ? $"Код подключения — Интернет, UDP {SolarNX.Session.InternetSession.Port} (эксперимент)" : "IP клиента";
+        IpBox.Text = internet ? _config.ConnectionCode : _config.ClientIp;
+        IpBox.IsReadOnly = internet;
         RefreshStatus();
     }
 
     private void SaveClientIp()
     {
+        if (_config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet) return; // the field shows the code
         var ip = IpBox.Text.Trim();
         if (ip == _config.ClientIp) return;
         _config.ClientIp = ip;
@@ -112,7 +125,9 @@ public partial class HomeView : System.Windows.Controls.UserControl
         {
             ToggleStreamingButton.Content = "■  Выключить трансляцию";
             ApplyToggleButtonStyle("Stop");
-            StatusLabel.Text = "Статус: ожидание подключения клиента…";
+            StatusLabel.Text = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet
+                ? $"Статус: ожидание Switch через интернет (UDP {SolarNX.Session.InternetSession.Port})…"
+                : "Статус: ожидание подключения клиента…";
         }
 
         // "Показать экран" only makes sense once a client is actually connected and streaming -

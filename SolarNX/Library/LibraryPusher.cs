@@ -21,6 +21,7 @@ public sealed class LibraryPusher : IDisposable
     private readonly Config _config;
     private readonly GameLibrary _library;
     private readonly Action<bool, uint> _onSwitchButtonLayout;
+    private readonly Func<Session.InternetSession?> _internetSession;
     private readonly object _payloadLock = new();
     private (byte[] Payload, ulong Hash)? _cached;
 
@@ -29,11 +30,14 @@ public sealed class LibraryPusher : IDisposable
 
     /// <param name="onSwitchButtonLayout">Called (on the thread pool) with the Switch's button layout
     /// and its revision after every exchange - the owner adopts it if it is newer.</param>
-    public LibraryPusher(Config config, GameLibrary library, Action<bool, uint> onSwitchButtonLayout)
+    /// <param name="internetSession">The current session when in Internet mode (null in Wi-Fi mode) -
+    /// the library then goes over its UDP channel to wherever the Switch is, not over TCP.</param>
+    public LibraryPusher(Config config, GameLibrary library, Action<bool, uint> onSwitchButtonLayout, Func<Session.InternetSession?> internetSession)
     {
         _config = config;
         _library = library;
         _onSwitchButtonLayout = onSwitchButtonLayout;
+        _internetSession = internetSession;
         _library.Changed += () => { lock (_payloadLock) _cached = null; };
     }
 
@@ -61,12 +65,12 @@ public sealed class LibraryPusher : IDisposable
                 try
                 {
                     await PushOnceAsync(ct);
-                    if (_lastAttemptOk != true) Logger.Log("LibraryPusher", $"library channel to {_config.ClientIp}:{_config.LibraryPort} is up");
+                    if (_lastAttemptOk != true) Logger.Log("LibraryPusher", $"library channel to {Target} is up");
                     _lastAttemptOk = true;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
                 {
-                    if (_lastAttemptOk != false) Logger.Log("LibraryPusher", $"library channel to {_config.ClientIp}:{_config.LibraryPort} unavailable: {ex.Message}");
+                    if (_lastAttemptOk != false) Logger.Log("LibraryPusher", $"library channel to {Target} unavailable: {ex.Message}");
                     _lastAttemptOk = false;
                 }
             }
@@ -75,9 +79,26 @@ public sealed class LibraryPusher : IDisposable
         }
     }
 
+    private string Target => _config.ConnectionMode == Session.ConnectionMode.Internet
+        ? $"the Switch over UDP {Session.InternetSession.Port}"
+        : $"{_config.ClientIp}:{_config.LibraryPort}";
+
     private async Task PushOnceAsync(CancellationToken ct)
     {
         var (payload, hash) = GetPayload();
+
+        if (_config.ConnectionMode == Session.ConnectionMode.Internet)
+        {
+            var session = _internetSession();
+            if (session?.Peer is null) return; // no Switch has said hello yet - nothing to push to
+            var offer = await session.OfferLibraryAsync(hash, _config.SwitchButtonLayout, _config.ButtonLayoutRevision, ct)
+                ?? throw new IOException("the Switch did not answer the library offer");
+            _onSwitchButtonLayout(offer.SwapAbxy, offer.LayoutRevision);
+            if (!offer.NeedsPayload) return;
+            await session.SendLibraryAsync(hash, payload, ct);
+            Logger.Log("LibraryPusher", $"sent library to the Switch over UDP: {payload.Length / 1024}KB, hash {hash:X16}");
+            return;
+        }
 
         using var client = new TcpClient { NoDelay = true };
         using (var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
