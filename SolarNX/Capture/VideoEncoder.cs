@@ -5,25 +5,28 @@ namespace SolarNX.Capture;
 
 /// <summary>
 /// Captures the real primary monitor directly via ffmpeg's own "gfxcapture" filter (Windows.Graphics.Capture,
-/// WinRT/UWP-based) and encodes it to H264, pushed over udp://clientIp:videoPort as an MPEG-TS stream.
+/// WinRT/UWP-based) and encodes it to H264.
 ///
 /// gfxcapture (not gdigrab/DXGI) is required because it reads directly from the compositor - GDI
 /// BitBlt-based capture misses DirectComposition-rendered layers (Steam overlay, some UI, hardware-
 /// accelerated elements). Requires ffmpeg 8.x+.
+///
+/// ffmpeg's output is RTP to <see cref="VideoSender"/> on loopback, which rebuilds each frame and
+/// sends it on to the Switch in SolarNX's own framing with Reed-Solomon parity - see that class.
 ///
 /// gfxcapture returns frames at whatever (highly variable) rate the compositor actually delivers
 /// them, including 0fps during static periods, so an explicit "fps" filter follows it to pace
 /// output at a steady rate for the encoder/stream.
 ///
 /// UDP, not TCP: a TCP connection carrying video/audio/HID together dies every ~7-20 seconds under
-/// load; UDP has no connection to drop. MPEG-TS's self-synchronizing packet format (sync bytes,
-/// continuity counters) tolerates the resulting packet loss. The Switch client
-/// (SolarNX/source/video.c, network.h) decodes via libav (avformat_open_input/avcodec_*).
+/// load; UDP has no connection to drop, and the parity rebuilds most lost datagrams. The Switch
+/// client (Client/video/video.c) reassembles the frames and decodes them with libavcodec.
 /// </summary>
 public sealed class VideoEncoder : IDisposable
 {
     private readonly Config _config;
     private Process? _ffmpeg;
+    private VideoSender? _sender;
 
     // Updated from ffmpeg's own periodic stderr progress lines ("frame=... fps=... time=...") -
     // used by AppOrchestrator's watchdog to detect a hung capture. Confirmed live: video can freeze
@@ -107,15 +110,15 @@ public sealed class VideoEncoder : IDisposable
         var bitrateKbps = bitrateKbpsOverride ?? _config.BitrateKbps;
         var bitrate = $"{bitrateKbps}k";
         ActiveBitrateKbps = bitrateKbps;
-        // pkt_size=1316 = 7*188 bytes - a whole number of MPEG-TS packets per UDP datagram, sized
-        // to stay under a standard 1500-byte-MTU LAN/Wi-Fi link's payload limit and avoid IP
-        // fragmentation (a fragmented UDP datagram only needs to lose one fragment to lose the
-        // whole packet, which defeats the point of switching off TCP for resilience).
         // Internet mode: to the loopback relay, which forwards each datagram to the Switch over the
         // session's one UDP port (Session/InternetSession).
-        var target = _config.ConnectionMode == Session.ConnectionMode.Internet
-            ? $"udp://127.0.0.1:{Session.InternetSession.VideoRelayPort}?pkt_size=1316"
-            : $"udp://{_config.ClientIp}:{_config.VideoPort}?pkt_size=1316";
+        var switchEndpoint = _config.ConnectionMode == Session.ConnectionMode.Internet
+            ? new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, Session.InternetSession.VideoRelayPort)
+            : VideoSender.ResolveTarget(_config.ClientIp, _config.VideoPort);
+        _sender = new VideoSender(switchEndpoint, _config.Fps);
+        // RTP over plain udp:// (not rtp://, which would also send RTCP to a second port nobody
+        // listens on). Loopback has no 1500-byte MTU: big packets keep a frame to a few datagrams.
+        var target = $"udp://127.0.0.1:{_sender.RtpPort}?pkt_size=16384";
         var encoder = EncoderSelection.Resolve(encoderOverride ?? _config.Encoder);
         ActiveEncoder = encoder;
         var pixelFormat = EncoderSelection.PixelFormat(encoder);
@@ -166,8 +169,11 @@ public sealed class VideoEncoder : IDisposable
         {
             "-fflags nobuffer -flags low_delay -probesize 32",
             $"-filter_complex \"{filterChain}\"",
-            "-f mpegts",
+            "-f rtp",
             encodeArgs,
+            // SPS/PPS in front of every keyframe, whichever encoder - the Switch has no other way to
+            // get them (no SDP), and needs them to start decoding at any keyframe.
+            "-bsf:v dump_extra=freq=keyframe",
             $"-b:v {bitrate} -minrate {bitrate} -maxrate {bitrate} -bufsize {bitrate}",
             // -flush_packets 1: pushes each encoded packet onto the socket immediately instead of
             // letting ffmpeg's own output muxer batch them up first.
@@ -217,6 +223,7 @@ public sealed class VideoEncoder : IDisposable
         _ffmpeg.Start();
         ChildProcessJob.Assign(_ffmpeg); // dies with this process even on a crash/debugger stop - see ChildProcessJob
         _ffmpeg.BeginErrorReadLine();
+        _ffmpeg.BeginOutputReadLine(); // the rtp muxer prints its SDP there - read so the pipe can't fill
     }
 
     public void Stop()
@@ -232,6 +239,8 @@ public sealed class VideoEncoder : IDisposable
         catch { /* best-effort teardown */ }
         _ffmpeg?.Dispose();
         _ffmpeg = null;
+        _sender?.Dispose();
+        _sender = null;
         ActiveBitrateKbps = null;
         ActiveEncoder = null;
         CaptureWindow = IntPtr.Zero;

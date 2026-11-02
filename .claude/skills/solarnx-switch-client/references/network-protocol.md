@@ -17,8 +17,7 @@ match `SolarNX/Config.cs`.
 - `num_bsd_sessions = 12` — HID listen + client, video UDP, audio UDP, nxlink in DEBUG, plus
   headroom: concurrent HID+video+audio crashed ~2s in at the previous value.
 - `udp_rx_buf_size = 0x40000` (libnx default `0xA500` ≈ 42KB ≈ 32 datagrams). Keyframes arrive as
-  60-150KB bursts every ~0.5s. `video.c` requests the matching `SO_RCVBUF` via the URL's
-  `buffer_size` — libavformat otherwise applies its own smaller value.
+  60-150KB bursts every ~0.5s. `video.c` requests the matching `SO_RCVBUF` on its socket.
 
 ## HID (TCP, PC dials in)
 
@@ -42,7 +41,7 @@ match `SolarNX/Config.cs`.
 |---|---|
 | 0 | `controllers[4]`, 44 bytes each: `heldKeys` u32 (low 16 bits used), `lJoyX/Y`, `rJoyX/Y` i32 (±0x7FFF), `accelX/Y/Z` f32 g, `gyroX/Y/Z` f32 rad/s |
 | 176 | `touchX1/Y1` u32 (1280×720; 0,0 = none) |
-| 184 | `touchX2/Y2` u32 — unused by host, keep for offsets |
+| 184 | `videoLostFrameCount`, `videoRecoveredPacketCount` u32 (were touchX2/Y2) — from `reassembly.c` |
 | 192 | `libraryEntryId` u32 — picked `LibraryEntry.id` when `appTarget` is Library, else 0 (was `frameRate`) |
 | 196 | `controllerCount` u32 |
 | 200 | `appTarget` u64 (`SolarNxAppTarget`: 0 Big Picture, 1 shadPS4, 2 Library) |
@@ -54,13 +53,16 @@ maps Minus+Plus to Guide/PS, and holding Minus for 3s is the client's back-to-me
 
 ## Video (UDP in)
 
-`udp://0.0.0.0:19000?fifo_size=0&buffer_size=262144`, opened by `avformat_open_input` (see
-`decode-pipeline.md`). **`fifo_size=0`, explicitly** (omitting it leaves the default ~5MB fifo on): libavformat's fifo thread makes the reader wait on a
-condition variable that never consults the interrupt callback, so exit/back-to-menu hung while
-waiting for a stream (confirmed live: black screen). Without it `udp_read` polls in 100ms steps and
-checks the callback. Bursts are absorbed by the 256KB socket buffer and the always-reading decode
-thread. UDP, not TCP: TCP video died every ~7-20s
-under load.
+Plain BSD socket on `0.0.0.0:19000` (`SO_RCVBUF` 256KB, `SO_RCVTIMEO` 50ms), SolarNX framing
+(`video/videowire.h`): every datagram is 16 + 1280 bytes - magic 0x53, version 1, flags (keyframe),
+block index/count, shard index, block parity count, u32 frame number, u32 frame size. Frames are
+split into ≤64-data-shard Reed-Solomon blocks with ~20% parity (min 2); see `decode-pipeline.md`
+("Reassembly"). Bursts are absorbed by the socket buffer and the always-reading decode thread.
+UDP, not TCP: TCP video died every ~7-20s under load.
+
+History: until 0.2.3 this was MPEG-TS via libavformat (`udp://...?fifo_size=0` - its fifo thread
+ignored the interrupt callback and hung back-to-menu). A lost datagram there smeared the picture
+until the next keyframe; that is what the FEC framing replaced.
 
 ## Library (TCP in, `library/library.c`)
 

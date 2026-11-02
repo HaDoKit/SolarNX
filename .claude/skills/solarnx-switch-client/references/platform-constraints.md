@@ -19,8 +19,8 @@ degraded over long sessions while the scheduler let video share their core. Thre
 per workload (FFmpeg decode needs a large stack; HID almost none) — reason about a new thread's needs
 instead of copying a row.
 
-libavformat's UDP fifo thread is deliberately **not** used (no `fifo_size`): it made blocked reads
-ignore the interrupt callback.
+Video no longer uses libavformat at all (own socket with a recv timeout - see decode-pipeline.md);
+its UDP fifo thread had made blocked reads ignore the interrupt callback.
 
 ## Socket config
 

@@ -1,12 +1,18 @@
 #include "video.h"
 
 #include <stdio.h>
+#include <string.h>
+#include <errno.h>
 #include <stdatomic.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 
 #include <switch.h>
 #include <SDL.h>
 
-#include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/hwcontext.h>
 #include <libavutil/pixfmt.h>
@@ -14,6 +20,8 @@
 #include "../network/network.h"
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
+#include "reassembly.h"
+#include "videowire.h"
 
 // Hardware H264 decode via NVTEGRA (the Tegra X1's NVDEC engine), through libavcodec's standard
 // hwaccel API - devkitPro's ffmpeg portlib is built with --enable-nvtegra (confirmed directly in
@@ -34,30 +42,29 @@
 // SolarNX/Capture/VideoEncoder.cs) - CABAC makes that fallback somewhat more CPU-hungry than the
 // baseline profile used previously, but the NVTEGRA path is the one that normally runs.
 
-#define VIDEO_RECONNECT_DELAY_NS 1000000000ULL // 1s between reconnect attempts
+// The stream: SolarNX's own framing (videowire.h) - each H.264 frame cut into datagrams with
+// Reed-Solomon parity, rebuilt by reassembly.c and handed to libavcodec as one packet. No
+// libavformat: there is no container to probe, so the first keyframe decodes the moment it lands.
+// In Internet mode transport.c unseals the same datagrams and delivers them to this port on loopback.
+
+#define VIDEO_RECONNECT_DELAY_NS 1000000000ULL // 1s between attempts after a failed setup
 #define VIDEO_HEARTBEAT_EVERY_FRAMES 300u       // ~once per 5s at 60fps
 
-// libavformat's UDP fifo is explicitly disabled (fifo_size=0) - only the kernel socket buffer.
-// Explicitly: simply omitting fifo_size does NOT disable it - its default is 7*4096 packets (~5MB),
-// so the fifo thread stayed and the hang below came back (confirmed live: the hold-Minus gesture
-// fired, but the main thread never got back to the menu).
-// The fifo runs its own receive thread, and while it waits for data the reader blocks on that
-// thread's condition variable instead of polling the socket, so the interrupt callback is never
-// consulted: confirmed live, a "back to menu" request raised while video was still waiting for the
-// stream left the main thread stuck there and the screen black. Without the fifo, udp_read polls in
-// 100ms steps and checks the callback each time. The fifo's other job - absorbing bursts while the
-// decoder was busy - is covered by the decode/render thread split (the decode thread reads
-// continuously) plus the 256KB socket buffer below (~0.3s at 6Mbps). Historical note: a 100000-packet
-// fifo (~37s) once just accumulated an ever-growing backlog; 300ms was the size that worked.
+// The decode thread reads continuously (see the decode/render split below), so the socket buffer
+// only has to absorb a frame's worth of datagrams while one frame decodes - 256KB is several
+// keyframes' worth at the PC's pacing.
 #define VIDEO_SOCKET_RCVBUF_BYTES 0x40000 // == network.c's cfg.udp_rx_buf_size - see its comment
+// recv() timeout - how often the decode thread looks at the stop flag while no video arrives.
+#define VIDEO_RECV_TIMEOUT_US 50000
+#define VIDEO_BITRATE_WINDOW_NS 2000000000ULL
 
-// The host's configured bitrate (from its SessionConfig - see videoStart) or the stream's measured
-// one; only reported back as telemetry (videoGetMeasuredBitrateKbps) and logged.
+// The host's configured bitrate (from its SessionConfig - see videoStart) until frames arrive, then
+// the measured one; only reported back as telemetry (videoGetMeasuredBitrateKbps) and logged.
 #define VIDEO_DEFAULT_BITRATE_KBPS 4000
 static int s_lastKnownBitrateKbps = VIDEO_DEFAULT_BITRATE_KBPS;
 
-// Bumped once per runStreamSession() return (stream dropped/failed to open) - see videoStart()'s
-// loop. Read by input.c via videoGetReconnectCount() to stamp onto the outgoing HID packet; the
+// Bumped once per runStreamSession() that ended without being asked to (setup failed, socket
+// error) - see videoStart()'s loop. Read by input.c via videoGetReconnectCount() to stamp onto the outgoing HID packet; the
 // host's AdaptiveBitrateController (SolarNX/Session/AdaptiveBitrateController.cs) diffs this
 // against its own last-seen value to detect video instability. Plain word, no locking - see
 // network.h's telemetry field doc comment.
@@ -71,6 +78,16 @@ uint32_t videoGetReconnectCount(void)
 uint32_t videoGetMeasuredBitrateKbps(void)
 {
     return (uint32_t)s_lastKnownBitrateKbps;
+}
+
+uint32_t videoGetLostFrameCount(void)
+{
+    return reassemblyStats()->framesLost;
+}
+
+uint32_t videoGetRecoveredPacketCount(void)
+{
+    return reassemblyStats()->shardsRecovered;
 }
 
 static SDL_Window *s_window = NULL;
@@ -115,7 +132,11 @@ bool videoInit(void)
         return false;
     }
 
-    avformat_network_init();
+    if (!reassemblyInit())
+    {
+        logWrite("video", "reassembly buffers could not be allocated");
+        return false;
+    }
 
     mutexInit(&s_frameMutex);
     s_pendingFrame = av_frame_alloc();
@@ -212,20 +233,13 @@ static enum AVPixelFormat negotiatePixelFormat(AVCodecContext *ctx, const enum A
     return pixFmts[0]; // no NVTEGRA offered (hwaccel unavailable) - take the software format
 }
 
-// libavformat's UDP reads block for as long as no datagram arrives - avformat_open_input()'s probe
-// and av_read_frame() both, whenever the PC isn't streaming (not connected yet, between sessions,
-// ffmpeg restarting). This thread is also the one that has to pump applet messages, so while it
-// sat in there HOME/close requests went unanswered until the system force-killed the app. Not
-// solved with the udp "timeout" option instead: that turns every brief host-side gap (the host
-// restarts ffmpeg to change bitrate - see AdaptiveBitrateController.cs) into a counted video
-// reconnect, which that same controller reads as link trouble and lowers the bitrate again - a
-// feedback loop. The interrupt callback only aborts the read when the app is actually exiting.
-#define VIDEO_INTERRUPT_POLL_NS 50000000ULL // 50ms - appMainLoop() is an IPC round-trip, callers poll this far more often
+// The main loop pumps applet messages (HOME, close requests) while it waits for frames - at most
+// every 50ms, since appMainLoop() is an IPC round-trip.
+#define VIDEO_INTERRUPT_POLL_NS 50000000ULL
 static u64 s_lastAppletPollTick = 0;
 
-// Rate-limited appMainLoop(). From the decode thread (which also runs the interrupt callback) this
-// only reads the latched exit flag - appMainLoop() itself refuses to touch the applet queue off
-// the main thread, see common/appstate.
+// Rate-limited appMainLoop() - main thread only (appMainLoop() refuses to touch the applet queue
+// off it, see common/appstate).
 static bool pumpAppletRateLimited(void)
 {
     u64 now = armGetSystemTick();
@@ -236,17 +250,8 @@ static bool pumpAppletRateLimited(void)
     return appMainLoop();
 }
 
-// Set by the main thread to make the decode thread give up now - checked by the interrupt callback,
-// so it also aborts an av_read_frame() that is blocked waiting for data.
+// Set by the main thread to make the decode thread give up - checked between recv() timeouts.
 static atomic_bool s_decodeStop = false;
-
-static int interruptCallback(void *opaque)
-{
-    (void)opaque;
-    // appMenuRequested(): the player held Minus to go back to the menu - abort a blocked read
-    // (e.g. waiting for a stream that will never come, now that the host session is ending).
-    return atomic_load(&s_decodeStop) || appMenuRequested() || !pumpAppletRateLimited();
-}
 
 // Decode thread vs. render (main) thread split.
 //
@@ -274,13 +279,69 @@ static int interruptCallback(void *opaque)
 
 typedef struct
 {
-    AVFormatContext *fmtCtx;
+    int socket;
     AVCodecContext *codecCtx;
-    int streamIndex;
 } DecodeJob;
 
 static atomic_uint s_framesDecoded = 0;
-static atomic_bool s_decodeEnded = false; // decode thread -> main: stream dropped, reconnect
+static atomic_bool s_decodeEnded = false; // decode thread -> main: socket failed, set up again
+
+// Decodes one reassembled frame and hands the newest picture to the render thread.
+static void decodeFrame(AVCodecContext *codecCtx, AVPacket *packet, AVFrame *frame, AVFrame *swFrame,
+    const ReassembledFrame *assembled)
+{
+    packet->data = (uint8_t *)assembled->data; // not reference-counted: libavcodec copies it
+    packet->size = (int)assembled->size;
+    packet->flags = assembled->keyframe ? AV_PKT_FLAG_KEY : 0;
+    if (avcodec_send_packet(codecCtx, packet) < 0)
+    {
+        // Damaged beyond what the decoder accepts - whatever it would make of the next frames
+        // until a keyframe would be garbage.
+        reassemblyRequestKeyframe();
+        return;
+    }
+
+    while (avcodec_receive_frame(codecCtx, frame) == 0)
+    {
+        AVFrame *displayable = frame;
+        if (frame->format == AV_PIX_FMT_NVTEGRA)
+        {
+            // Deliberately NOT pre-allocating swFrame with 256-byte alignment (tried live:
+            // it does make av_hwframe_transfer_data take a faster path - the "Frame
+            // address/pitch not aligned to 256, falling back to cpu transfer" log line
+            // disappeared entirely - but that faster path was confirmed live to bring real
+            // instability with it: video glitches, then total loss of HID input on a
+            // completely separate, dedicated core, which points at broader system
+            // instability rather than a video-only rendering glitch. This experimental
+            // hwaccel's internals aren't documented or debuggable from here (mailing-list
+            // patches, no source access to the actual transfer implementation) - reverted
+            // to the slower but proven-stable CPU-copy fallback rather than chase
+            // instability inside code neither of us can step through. The auto-allocated
+            // (unaligned) buffer below is what reliably takes that slow-but-stable path.
+            // Kept on this thread (the one that decoded the frame), not moved to the
+            // render thread, for the same reason: don't find out the hard way whether
+            // NVTEGRA's transfer tolerates a different thread.
+            if (av_hwframe_transfer_data(swFrame, frame, 0) < 0)
+            {
+                logWrite("video", "av_hwframe_transfer_data failed - dropping frame");
+                av_frame_unref(frame);
+                continue;
+            }
+            displayable = swFrame;
+        }
+
+        atomic_fetch_add(&s_framesDecoded, 1);
+
+        mutexLock(&s_frameMutex);
+        av_frame_unref(s_pendingFrame); // an older frame the display never got to is superseded
+        av_frame_move_ref(s_pendingFrame, displayable);
+        s_pendingValid = true;
+        mutexUnlock(&s_frameMutex);
+
+        av_frame_unref(frame);
+        av_frame_unref(swFrame);
+    }
+}
 
 static void decodeThreadFunc(void *arg)
 {
@@ -288,6 +349,11 @@ static void decodeThreadFunc(void *arg)
     AVPacket *packet = av_packet_alloc();
     AVFrame *frame = av_frame_alloc();
     AVFrame *swFrame = av_frame_alloc(); // readback target for NVTEGRA frames only
+    // Room for more than a valid datagram, so an oversized one shows up as the wrong length.
+    static uint8_t datagram[VIDEO_WIRE_DATAGRAM_SIZE + 64];
+
+    u64 windowStart = armGetSystemTick();
+    u64 windowBytes = 0;
 
     if (packet == NULL || frame == NULL || swFrame == NULL)
     {
@@ -297,60 +363,30 @@ static void decodeThreadFunc(void *arg)
     {
         while (!atomic_load(&s_decodeStop) && appIsRunning())
         {
-            int readResult = av_read_frame(job->fmtCtx, packet);
-            if (readResult < 0)
+            ssize_t length = recv(job->socket, datagram, sizeof(datagram), 0);
+            if (length < 0)
             {
-                if (!atomic_load(&s_decodeStop) && appIsRunning())
-                    logWrite("video", "av_read_frame failed (%d) after %u frames decoded - reconnecting",
-                        readResult, atomic_load(&s_framesDecoded));
+                if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+                    continue; // the timeout - just a chance to look at the stop flag
+                logWrite("video", "recv failed (errno %d) after %u frames decoded", errno, atomic_load(&s_framesDecoded));
                 break;
             }
 
-            if (packet->stream_index == job->streamIndex && avcodec_send_packet(job->codecCtx, packet) == 0)
+            ReassembledFrame assembled;
+            if (!reassemblyPush(datagram, (size_t)length, &assembled))
+                continue;
+
+            windowBytes += assembled.size;
+            u64 now = armGetSystemTick();
+            u64 elapsedNs = armTicksToNs(now - windowStart);
+            if (elapsedNs >= VIDEO_BITRATE_WINDOW_NS)
             {
-                while (avcodec_receive_frame(job->codecCtx, frame) == 0)
-                {
-                    AVFrame *displayable = frame;
-                    if (frame->format == AV_PIX_FMT_NVTEGRA)
-                    {
-                        // Deliberately NOT pre-allocating swFrame with 256-byte alignment (tried live:
-                        // it does make av_hwframe_transfer_data take a faster path - the "Frame
-                        // address/pitch not aligned to 256, falling back to cpu transfer" log line
-                        // disappeared entirely - but that faster path was confirmed live to bring real
-                        // instability with it: video glitches, then total loss of HID input on a
-                        // completely separate, dedicated core, which points at broader system
-                        // instability rather than a video-only rendering glitch. This experimental
-                        // hwaccel's internals aren't documented or debuggable from here (mailing-list
-                        // patches, no source access to the actual transfer implementation) - reverted
-                        // to the slower but proven-stable CPU-copy fallback rather than chase
-                        // instability inside code neither of us can step through. The auto-allocated
-                        // (unaligned) buffer below is what reliably takes that slow-but-stable path.
-                        // Kept on this thread (the one that decoded the frame), not moved to the
-                        // render thread, for the same reason: don't find out the hard way whether
-                        // NVTEGRA's transfer tolerates a different thread.
-                        if (av_hwframe_transfer_data(swFrame, frame, 0) < 0)
-                        {
-                            logWrite("video", "av_hwframe_transfer_data failed - dropping frame");
-                            av_frame_unref(frame);
-                            continue;
-                        }
-                        displayable = swFrame;
-                    }
-
-                    atomic_fetch_add(&s_framesDecoded, 1);
-
-                    mutexLock(&s_frameMutex);
-                    av_frame_unref(s_pendingFrame); // an older frame the display never got to is superseded
-                    av_frame_move_ref(s_pendingFrame, displayable);
-                    s_pendingValid = true;
-                    mutexUnlock(&s_frameMutex);
-
-                    av_frame_unref(frame);
-                    av_frame_unref(swFrame);
-                }
+                s_lastKnownBitrateKbps = (int)(windowBytes * 8ULL * 1000000ULL / elapsedNs);
+                windowStart = now;
+                windowBytes = 0;
             }
 
-            av_packet_unref(packet);
+            decodeFrame(job->codecCtx, packet, frame, swFrame, &assembled);
         }
     }
 
@@ -360,83 +396,51 @@ static void decodeThreadFunc(void *arg)
     atomic_store(&s_decodeEnded, true);
 }
 
-// One connect-decode-render cycle; returns when the stream drops or the app is exiting, so the
-// caller (videoStart) decides whether to reconnect.
-static void runStreamSession(const char *url)
+static int openVideoSocket(void)
 {
-    atomic_store(&s_decodeStop, false); // checked by interruptCallback during the open/probe below too
-    atomic_store(&s_decodeEnded, false);
-    atomic_store(&s_framesDecoded, 0);
-
-    AVFormatContext *fmtCtx = avformat_alloc_context();
-    if (fmtCtx == NULL)
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0)
     {
-        logWrite("video", "avformat_alloc_context failed");
-        return;
-    }
-    fmtCtx->interrupt_callback.callback = interruptCallback;
-    fmtCtx->interrupt_callback.opaque = NULL;
-
-    // On failure avformat_open_input() frees the caller-allocated context itself.
-    if (avformat_open_input(&fmtCtx, url, NULL, NULL) < 0)
-    {
-        logWrite("video", "avformat_open_input failed for %s", url);
-        return;
+        logWrite("video", "socket failed (errno %d)", errno);
+        return -1;
     }
 
-    // This stream carries H264 video only (audio is a separate UDP port with its own framing) and
-    // the encoder sends a keyframe at least every ~0.5s (VideoEncoder.cs's -g setting) - keep
-    // analysis short, there's only ever one stream to find.
-    fmtCtx->flags |= AVFMT_FLAG_NOBUFFER;
-    fmtCtx->probesize = 65536;
-    fmtCtx->max_analyze_duration = 500000; // microseconds
+    int rcvbuf = VIDEO_SOCKET_RCVBUF_BYTES;
+    setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+    struct timeval timeout = { .tv_sec = 0, .tv_usec = VIDEO_RECV_TIMEOUT_US };
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-    if (avformat_find_stream_info(fmtCtx, NULL) < 0)
+    struct sockaddr_in local;
+    memset(&local, 0, sizeof(local));
+    local.sin_family = AF_INET;
+    local.sin_addr.s_addr = htonl(INADDR_ANY);
+    local.sin_port = htons(SOLARNX_VIDEO_PORT);
+    if (bind(sock, (struct sockaddr *)&local, sizeof(local)) < 0)
     {
-        logWrite("video", "avformat_find_stream_info failed");
-        avformat_close_input(&fmtCtx);
-        return;
+        logWrite("video", "bind to port %d failed (errno %d)", SOLARNX_VIDEO_PORT, errno);
+        close(sock);
+        return -1;
     }
+    return sock;
+}
 
-    int streamIndex = av_find_best_stream(fmtCtx, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
-    if (streamIndex < 0)
-    {
-        logWrite("video", "no video stream found in input");
-        avformat_close_input(&fmtCtx);
-        return;
-    }
-
-    AVCodecParameters *codecPar = fmtCtx->streams[streamIndex]->codecpar;
-
-    // Records the stream's own bit_rate if avformat managed to estimate one during the probe (it
-    // doesn't always) - telemetry/log only.
-    if (codecPar->bit_rate > 0)
-    {
-        int measuredKbps = (int)(codecPar->bit_rate / 1000);
-        if (measuredKbps != s_lastKnownBitrateKbps)
-        {
-            logWrite("video", "measured stream bitrate %d kbps (host configured %d kbps)",
-                measuredKbps, s_lastKnownBitrateKbps);
-            s_lastKnownBitrateKbps = measuredKbps;
-        }
-    }
-    const AVCodec *decoder = avcodec_find_decoder(codecPar->codec_id);
+static AVCodecContext *openDecoder(void)
+{
+    const AVCodec *decoder = avcodec_find_decoder(AV_CODEC_ID_H264);
     if (decoder == NULL)
     {
-        logWrite("video", "no decoder for codec id %d", (int)codecPar->codec_id);
-        avformat_close_input(&fmtCtx);
-        return;
+        logWrite("video", "no H.264 decoder");
+        return NULL;
     }
 
     AVCodecContext *codecCtx = avcodec_alloc_context3(decoder);
-    if (codecCtx == NULL || avcodec_parameters_to_context(codecCtx, codecPar) < 0)
+    if (codecCtx == NULL)
     {
-        logWrite("video", "decoder context setup failed");
-        if (codecCtx != NULL)
-            avcodec_free_context(&codecCtx);
-        avformat_close_input(&fmtCtx);
-        return;
+        logWrite("video", "decoder context allocation failed");
+        return NULL;
     }
+    // Every frame goes out as soon as it is decoded - the stream has no B-frames to reorder.
+    codecCtx->flags |= AV_CODEC_FLAG_LOW_DELAY;
 
     if (s_hwDeviceCtx != NULL)
     {
@@ -448,21 +452,41 @@ static void runStreamSession(const char *url)
     {
         logWrite("video", "avcodec_open2 failed");
         avcodec_free_context(&codecCtx);
-        avformat_close_input(&fmtCtx);
+        return NULL;
+    }
+
+    logWrite("video", "decoder ready - %s (%s)", decoder->name, s_hwDeviceCtx != NULL ? "NVTEGRA hwaccel" : "software");
+    return codecCtx;
+}
+
+// One receive-decode-render cycle; returns when the player goes back to the menu, the app is
+// exiting, or the socket failed - the caller (videoStart) decides whether to set up again.
+static void runStreamSession(void)
+{
+    atomic_store(&s_decodeStop, false);
+    atomic_store(&s_decodeEnded, false);
+    atomic_store(&s_framesDecoded, 0);
+
+    int sock = openVideoSocket();
+    if (sock < 0)
+        return;
+
+    AVCodecContext *codecCtx = openDecoder();
+    if (codecCtx == NULL)
+    {
+        close(sock);
         return;
     }
 
-    logWrite("video", "stream connected - decoding with %s (%s)", decoder->name,
-        s_hwDeviceCtx != NULL ? "NVTEGRA hwaccel" : "software");
-
-    DecodeJob job = { fmtCtx, codecCtx, streamIndex };
+    reassemblyReset();
+    DecodeJob job = { sock, codecCtx };
     Thread decodeThread;
     if (R_FAILED(threadCreate(&decodeThread, decodeThreadFunc, &job, NULL,
             VIDEO_DECODE_THREAD_STACK_SIZE, VIDEO_DECODE_THREAD_PRIORITY, VIDEO_DECODE_THREAD_CORE)))
     {
         logWrite("video", "failed to create decode thread");
         avcodec_free_context(&codecCtx);
-        avformat_close_input(&fmtCtx);
+        close(sock);
         return;
     }
     if (R_FAILED(threadStart(&decodeThread)))
@@ -470,7 +494,7 @@ static void runStreamSession(const char *url)
         logWrite("video", "failed to start decode thread");
         threadClose(&decodeThread);
         avcodec_free_context(&codecCtx);
-        avformat_close_input(&fmtCtx);
+        close(sock);
         return;
     }
 
@@ -499,15 +523,20 @@ static void runStreamSession(const char *url)
         }
 
         if (renderFrame(displayFrame) && ++framesShown % VIDEO_HEARTBEAT_EVERY_FRAMES == 0)
-            logWrite("video", "connection stable - %u frames shown, %u decoded", framesShown, atomic_load(&s_framesDecoded));
+        {
+            const ReassemblyStats *stats = reassemblyStats();
+            logWrite("video", "%u frames shown, %u decoded, %d kbps; since start: %u packets rebuilt from parity, %u frames lost, %u skipped waiting for a keyframe",
+                framesShown, atomic_load(&s_framesDecoded), s_lastKnownBitrateKbps,
+                stats->shardsRecovered, stats->framesLost, stats->framesSkipped);
+        }
         av_frame_unref(displayFrame);
     }
 
-    // Makes the interrupt callback abort whatever av_read_frame() the decode thread is blocked in,
-    // so this join can't hang on a stream that simply went quiet.
+    // The decode thread notices within one recv() timeout.
     atomic_store(&s_decodeStop, true);
     threadWaitForExit(&decodeThread);
     threadClose(&decodeThread);
+    close(sock);
 
     mutexLock(&s_frameMutex);
     av_frame_unref(s_pendingFrame);
@@ -516,7 +545,6 @@ static void runStreamSession(const char *url)
     av_frame_free(&displayFrame);
 
     avcodec_free_context(&codecCtx);
-    avformat_close_input(&fmtCtx);
 }
 
 bool videoStart(void)
@@ -531,22 +559,13 @@ bool videoStart(void)
     while (!appMenuRequested() && appMainLoop())
     {
         // Blocks (briefly, only before the very first session ever) until the host's real
-        // BitrateKbps is known - see s_lastKnownBitrateKbps's doc comment. A false return only
-        // happens if the app is exiting before any session ever connected, in which case the
-        // loop condition below will also be false and this iteration's URL is never used.
+        // BitrateKbps is known - see s_lastKnownBitrateKbps's doc comment.
         SolarNxSessionConfig sessionConfig;
         if (networkWaitForSessionConfig(&sessionConfig) && sessionConfig.videoBitrateKbps > 0)
             s_lastKnownBitrateKbps = (int)sessionConfig.videoBitrateKbps;
 
-        char url[160];
-        // buffer_size: SO_RCVBUF for the socket - must match network.c's udp_rx_buf_size, or
-        // libavformat applies its own smaller default and the bigger BSD buffer goes unused.
-        // fifo_size=0 turns libavformat's fifo thread off - see the comment at VIDEO_SOCKET_RCVBUF_BYTES.
-        snprintf(url, sizeof(url), "udp://0.0.0.0:%d?fifo_size=0&buffer_size=%d", SOLARNX_VIDEO_PORT, VIDEO_SOCKET_RCVBUF_BYTES);
-
-        logWrite("video", "waiting for video stream on port %d (host bitrate %d kbps)...",
-            SOLARNX_VIDEO_PORT, s_lastKnownBitrateKbps);
-        runStreamSession(url);
+        logWrite("video", "waiting for video on port %d (host bitrate %d kbps)...", SOLARNX_VIDEO_PORT, s_lastKnownBitrateKbps);
+        runStreamSession();
         if (!appIsRunning() || appMenuRequested())
             break; // interrupted on purpose (exit / back to menu) - not a reconnect, and no point waiting 1s first
         s_videoReconnectCount++;
@@ -563,6 +582,6 @@ void videoExit(void)
     if (s_window != NULL) { SDL_DestroyWindow(s_window); s_window = NULL; }
     if (s_hwDeviceCtx != NULL) { av_buffer_unref(&s_hwDeviceCtx); }
     av_frame_free(&s_pendingFrame);
-    avformat_network_deinit();
+    reassemblyExit();
     SDL_Quit();
 }

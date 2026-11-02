@@ -4,7 +4,7 @@ namespace SolarNX.Session;
 
 /// <summary>
 /// Watches the link-quality telemetry the client stamps onto every HidPacket (see
-/// Input/HidProtocol.cs's VideoReconnectCount/VideoMeasuredBitrateKbps/AudioReconnectCount/
+/// Input/HidProtocol.cs's VideoReconnectCount/VideoLostFrameCount/AudioReconnectCount/
 /// AudioConcealedFrameCount) and, when Config.AdaptiveBitrate is on, lowers or raises the running
 /// ffmpeg video encoder's bitrate between <see cref="MinBitrateKbps"/> and Config.BitrateKbps (the
 /// ceiling) by restarting it - VideoEncoder wraps ffmpeg.exe as a subprocess with no live-reconfigure
@@ -12,7 +12,7 @@ namespace SolarNX.Session;
 /// reconnect/fifo logic already tolerates) is the only way to change its bitrate mid-session.
 ///
 /// Bitrate changes are decided on a fixed evaluation window (<see cref="EvaluationInterval"/>), not
-/// per-packet (HidPacket arrives at ~43Hz - reacting per-packet would be noisy and would restart
+/// per-packet (HidPacket arrives at ~120Hz - reacting per-packet would be noisy and would restart
 /// ffmpeg far too often). <see cref="OnPacketReceived"/> just remembers the latest packet; an
 /// internal timer ticks independently and diffs it against the previous window's snapshot.
 /// </summary>
@@ -38,6 +38,11 @@ public sealed class AdaptiveBitrateController : IDisposable
     // window counts as "bad".
     private const int ConcealedFrameBadThreshold = 10;
 
+    // A lost video frame is one the Reed-Solomon parity could not save - the picture then holds
+    // until the next keyframe (up to ~0.5s). One in a window is a stray burst; a few mean the link
+    // loses more than the ~20% parity covers, and a lower bitrate (fewer datagrams) helps.
+    private const int LostVideoFrameBadThreshold = 3;
+
     private const double LowerFactor = 0.75;
     private const double RaiseFactor = 1.10;
 
@@ -50,6 +55,7 @@ public sealed class AdaptiveBitrateController : IDisposable
     private readonly object _gate = new();
 
     private uint _lastVideoReconnectCount;
+    private uint _lastVideoLostFrameCount;
     private uint _lastAudioReconnectCount;
     private uint _lastAudioConcealedFrameCount;
     private bool _baselineCaptured;
@@ -124,6 +130,7 @@ public sealed class AdaptiveBitrateController : IDisposable
             if (!_baselineCaptured || !_wasEnabledLastTick)
             {
                 _lastVideoReconnectCount = packet.VideoReconnectCount;
+                _lastVideoLostFrameCount = packet.VideoLostFrameCount;
                 _lastAudioReconnectCount = packet.AudioReconnectCount;
                 _lastAudioConcealedFrameCount = packet.AudioConcealedFrameCount;
                 _baselineCaptured = true;
@@ -133,14 +140,17 @@ public sealed class AdaptiveBitrateController : IDisposable
             _wasEnabledLastTick = true;
 
             var deltaVideoReconnects = Unwrap(packet.VideoReconnectCount, _lastVideoReconnectCount);
+            var deltaLostFrames = Unwrap(packet.VideoLostFrameCount, _lastVideoLostFrameCount);
             var deltaAudioReconnects = Unwrap(packet.AudioReconnectCount, _lastAudioReconnectCount);
             var deltaConcealed = Unwrap(packet.AudioConcealedFrameCount, _lastAudioConcealedFrameCount);
 
             _lastVideoReconnectCount = packet.VideoReconnectCount;
+            _lastVideoLostFrameCount = packet.VideoLostFrameCount;
             _lastAudioReconnectCount = packet.AudioReconnectCount;
             _lastAudioConcealedFrameCount = packet.AudioConcealedFrameCount;
 
-            var bad = deltaVideoReconnects > 0 || deltaAudioReconnects > 0 || deltaConcealed > ConcealedFrameBadThreshold;
+            var bad = deltaVideoReconnects > 0 || deltaLostFrames >= LostVideoFrameBadThreshold
+                || deltaAudioReconnects > 0 || deltaConcealed > ConcealedFrameBadThreshold;
             var sinceLastChange = DateTime.UtcNow - _lastChangeUtc;
 
             if (bad)
@@ -151,7 +161,7 @@ public sealed class AdaptiveBitrateController : IDisposable
                 var lowered = Math.Max(MinBitrateKbps, (int)(_currentBitrateKbps * LowerFactor));
                 if (lowered == _currentBitrateKbps) return; // already at the floor
                 Logger.Log("AdaptiveBitrateController",
-                    $"lowering bitrate {_currentBitrateKbps} -> {lowered} kbps (videoReconnects+{deltaVideoReconnects}, audioReconnects+{deltaAudioReconnects}, concealed+{deltaConcealed})");
+                    $"lowering bitrate {_currentBitrateKbps} -> {lowered} kbps (videoReconnects+{deltaVideoReconnects}, lostFrames+{deltaLostFrames}, audioReconnects+{deltaAudioReconnects}, concealed+{deltaConcealed})");
                 ApplyLocked(lowered);
             }
             else

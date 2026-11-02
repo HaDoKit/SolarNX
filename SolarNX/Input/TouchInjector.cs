@@ -19,8 +19,8 @@ namespace SolarNX.Input;
 ///
 /// Single-touch only, by design: holding two fingers down on the Switch makes TouchX1/Y1 itself
 /// flicker between the two contact points (the client's single touch slot has no stable
-/// per-finger identity when more than one finger is down). TouchX2/Y2 (a second slot in the wire
-/// packet) is intentionally never read here.
+/// per-finger identity when more than one finger is down). The wire packet's second touch slot now
+/// carries video telemetry instead (HidPacket.VideoLostFrameCount).
 /// </summary>
 [SupportedOSPlatform("windows8.0")]
 public sealed class TouchInjector : IDisposable

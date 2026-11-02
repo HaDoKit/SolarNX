@@ -21,7 +21,7 @@ Three independent, unsynchronized streams to the Switch's IP:
 
 | Stream | Transport | Port | Direction | Payload |
 |---|---|---|---|---|
-| Video | UDP (MPEG-TS) | 19000 | PC → Switch | H.264 High profile, produced by a child `ffmpeg.exe` |
+| Video | UDP (own framing + Reed-Solomon FEC) | 19000 | PC → Switch | H.264 High profile from a child `ffmpeg.exe` (RTP on loopback → `Capture/VideoSender`) |
 | HID | TCP | 19001 | PC dials the Switch, Switch listens | 28-byte `SessionConfig` PC→Switch once, then 8×`0xFF` marker + 224-byte `HidPacket` Switch→PC at ~120Hz |
 | Audio | UDP (RTP-like) | 19002 | PC → Switch | Opus (Concentus), hand-rolled RTP header + 2-byte length prefix |
 | Library | TCP | 19003 | PC dials the Switch every 5s while armed | game list (id, name, 240×360 JPEG cover), sent only when the content hash changed |

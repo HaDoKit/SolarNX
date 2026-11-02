@@ -18,7 +18,7 @@ back.
 
 | Stream | Transport | Port | This side |
 |---|---|---|---|
-| Video | UDP, MPEG-TS/H.264 High | 19000 | passive listener via libavformat (`video.c`) |
+| Video | UDP, own framing + Reed-Solomon FEC, H.264 High | 19000 | plain BSD socket, `video/reassembly.c` rebuilds frames, libavcodec decodes (`video.c`) |
 | HID | TCP | 19001 | **listens + accepts** (`network.c`); PC dials in, sends a 28-byte `SessionConfig`, then this side sends marker + 224-byte packet at ~120Hz |
 | Audio | UDP, RTP-like + Opus | 19002 | raw BSD socket (`audio.c`) |
 | Library | TCP | 19003 | **listens** from app start (`library/library.c`); host pushes its game list + covers when it changes |
@@ -30,7 +30,7 @@ back.
 | `main.c` | Startup, thread creation, stream ↔ menu loop, HID send loop (`startNetwork`) |
 | `common/appstate/` | Single owner of `appletMainLoop()`; exit flag; back-to-menu request flag |
 | `network/` | Socket service init, HID listen/accept/send, `SessionConfig` receive, wire structs + ports |
-| `video/` | libavformat input, NVTEGRA hw decode, decode thread → render thread handoff, SDL2 output |
+| `video/` | own UDP socket, frame reassembly + Reed-Solomon recovery (`reassembly.c`, `common/rs`), NVTEGRA hw decode, decode thread → render thread handoff, SDL2 output |
 | `audio/` | UDP receive, RTP-ish parse, Opus decode + PLC, `audout` playback |
 | `input/` | 4 pads, touch, per-player sixaxis → `SolarNxHidPacket`; hold-Minus back-to-menu gesture |
 | `menu/` | App-selection screen (own SDL window/renderer, shared system font, star animation) + library cover grid |
@@ -72,12 +72,14 @@ HID connection - that's how the host says "the game exited". The audio thread li
   and the exit request isn't latched by libnx: when the audio thread also called it, it could eat
   the exit request and the app never closed. Worker threads use `appIsRunning()`; hot callers
   rate-limit (`pumpAppletRateLimited` in `video.c`).
-- **Never block the main thread on the network without an interrupt path.** libavformat UDP reads
-  block indefinitely when no stream comes; the interrupt callback aborts them on exit/menu. Not the
-  udp `timeout` option: that turns every host-side ffmpeg restart into a counted reconnect, which
-  the host's adaptive bitrate reads as link trouble (feedback loop).
+- **Never block the main thread on the network without an interrupt path.** The video socket has a
+  50ms `SO_RCVTIMEO` and the decode thread checks its stop flag between timeouts. A silent stream
+  (host restarting ffmpeg) is not a reconnect: counting it would make the host's adaptive bitrate
+  read every restart as link trouble (feedback loop).
+- **Never feed the decoder a frame the parity couldn't rebuild.** `reassembly.c` waits for the next
+  keyframe instead - a broken reference smears the picture ("water running down glass") until then.
 - **Never let VSYNC pace network reads.** One thread doing read→decode→readback→present dropped to
-  ~43fps in games and overflowed the UDP fifo (~100 overruns/s → "water running down glass"
+  ~43fps in games and overflowed the receive buffer (~100 overruns/s → "water running down glass"
   artifact). Decode and render are separate threads; only the newest frame is shown.
 - Don't pre-align the NVTEGRA readback target to 256 bytes: faster transfer, but it brought video
   glitches and then loss of HID on another core. The unaligned CPU-copy path is the stable one.
@@ -110,7 +112,7 @@ HID connection - that's how the host says "the game exited". The audio thread li
 
 - **`references/network-protocol.md`** — ports, `SessionConfig`, `SolarNxHidPacket` layout,
   telemetry, socket options, buffer sizing
-- **`references/decode-pipeline.md`** — libavformat input, NVTEGRA, decode/render split,
+- **`references/decode-pipeline.md`** — UDP framing + FEC reassembly, NVTEGRA, decode/render split,
   reconnects, interrupt callback
 - **`references/audio-pipeline.md`** — raw socket, RTP-ish framing, Opus PLC, `audout` buffering,
   known latency drift

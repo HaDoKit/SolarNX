@@ -275,6 +275,8 @@ void inputRead(SolarNxHidPacket *pkt)
     // comment on these fields.
     pkt->videoReconnectCount = videoGetReconnectCount();
     pkt->videoMeasuredBitrateKbps = videoGetMeasuredBitrateKbps();
+    pkt->videoLostFrameCount = videoGetLostFrameCount();
+    pkt->videoRecoveredPacketCount = videoGetRecoveredPacketCount();
     pkt->audioReconnectCount = audioGetReconnectCount();
     pkt->audioConcealedFrameCount = audioGetConcealedFrameCount();
 }
