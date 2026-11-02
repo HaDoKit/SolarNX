@@ -22,12 +22,24 @@ terminates the app.
 ```
 -fflags nobuffer -flags low_delay -probesize 32
 -filter_complex "gfxcapture=monitor_idx=0:max_framerate={fps}:width={w}:height={h}:resize_mode=scale,hwdownload,format=bgra,fps={fps},format=yuv420p"
--f mpegts
+-f rtp
 {encoder args - Capture/EncoderSelection.EncodeArgs, see "Encoder selection" below}
+-bsf:v dump_extra=freq=keyframe
 -b:v {kbps}k -minrate {kbps}k -maxrate {kbps}k -bufsize {kbps}k
 -flush_packets 1
-udp://{clientIp}:{videoPort}?pkt_size=1316
+udp://127.0.0.1:{VideoSender.RtpPort}?pkt_size=16384
 ```
+
+ffmpeg no longer talks to the Switch. Its RTP goes to `Capture/VideoSender` on loopback, which
+rebuilds each frame (Annex B, the RTP marker bit = end of frame, so no extra frame of delay) and
+sends it on in SolarNX's own framing with Reed-Solomon parity - see the next section.
+- `udp://`, not `rtp://`: `rtp://` would also send RTCP to port+1 where nobody listens. The rtp
+  muxer still mixes its RTCP sender reports into the same socket; VideoSender ignores every payload
+  type except 96.
+- `dump_extra=freq=keyframe`: SPS/PPS in front of every keyframe whichever encoder - the Switch has
+  no SDP and starts decoding at any keyframe.
+- `pkt_size=16384`: loopback has no 1500-byte MTU, big RTP packets keep a frame to a few datagrams.
+- The process's stdout is drained (`BeginOutputReadLine`): the rtp muxer prints its SDP there.
 
 - `-profile:v high` (was `baseline`): confirmed live the encoder ran at q=32-36 in games at 4000kbps;
   High (CABAC, 8x8 transform) gives ~15-25% better quality at the same bitrate. B-frames stay off
@@ -39,13 +51,36 @@ udp://{clientIp}:{videoPort}?pkt_size=1316
   into the full stream size itself pins the picture top-left (verified with test captures), which is
   why the fit is computed here. `VideoEncoder.CaptureWindow`/`CaptureSize` are carried over by
   restarts; AppOrchestrator restarts with a new fit when the window's client size changes.
-- `pkt_size=1316` = 7×188-byte MPEG-TS packets — chosen to avoid IP fragmentation
-  on a standard 1500-byte-MTU link.
 - `-delay 0 -rc-lookahead 0 -bf 0` deliberately strip out NVENC's own internal
   frame buffering, even though a zerolatency/low-latency preset is already
   selected — that preset alone was not enough to eliminate buffering delay.
 - The filter chain ends in `format=yuv420p`, or `format=nv12` for QSV and Media Foundation
   (`EncoderSelection.PixelFormat`) - those two take NV12 only.
+
+## Video transport with FEC (`Capture/VideoSender.cs`, `Capture/ReedSolomon.cs`)
+
+Every datagram to the Switch is 16 + 1280 bytes (under the 1316 the Internet relay has room for; no
+IP fragmentation). Header (LE): magic 0x53, version 1, flags (bit 0 keyframe), block index, block
+count, shard index, parity count of the block, reserved, u32 frame number (random start per
+VideoSender, +1 per frame), u32 frame size. Mirrored by `Client/video/videowire.h`.
+
+- A frame's N = ceil(size/1280) data shards (last zero-padded) are split into ceil(N/64) blocks as
+  evenly as possible (block b: N/B, +1 when b < N%B - the Switch derives the layout from that).
+- Parity per block: max(2, ceil(20% of K)). Reed-Solomon over GF(2^8), poly 0x11D, Cauchy
+  coefficient C(p,k) = 1/((255-p) xor k); the Switch's `Client/common/rs/rs.c` must match byte for
+  byte (verified with a cross-test: identical parity, 2100 random erasure patterns rebuilt).
+  Encoding uses SSSE3/AVX2 nibble tables (~0.02 ms for a 64+13 block).
+- Send order interleaves blocks (shard i of every block, then i+1) so a burst in a big frame is
+  spread over its blocks. Frames above 48 datagrams (keyframes) are paced over min(4ms, frame/4) in
+  groups of 16; ordinary frames go out at once (pacing them would delay every frame).
+- A frame damaged on loopback (RTP sequence gap) is dropped but its frame number is used up, so the
+  Switch sees the gap and waits for a keyframe.
+- Both modes: Wi-Fi sends to ClientIp:VideoPort, Internet mode to InternetSession's relay 19011.
+- End-to-end bench test (ffmpeg NVENC 20 Mbit/s → VideoSender → the Switch's reassembly.c built
+  with gcc, simulated loss): 1% and 5% random loss fully rebuilt; 2% in bursts of 5 lost 5 of 480
+  frames; no decode errors in any case (damaged frames never reach the decoder).
+- No keyframe on request yet: ffmpeg.exe can't be told to emit one. Planned with an in-process
+  encoder (0.2.4); the Switch already reports lost frames (HidPacket.VideoLostFrameCount).
 
 ## Encoder selection (`Capture/EncoderSelection.cs`)
 
@@ -67,7 +102,7 @@ All encoders: CBR, no B-frames, no lookahead, keyframe every fps/2. Per-encoder 
   frames in a low-latency preset without `-delay 0 -rc-lookahead 0`.
 - AMF: `-usage ultralowlatency -quality speed -rc cbr -latency 1 -async_depth 1 -preencode 0
   -header_spacing {gop}` - `async_depth` defaults to 16 frames in flight; this ffmpeg build has no
-  `header_insertion_mode`, `header_spacing` repeats SPS/PPS instead (needed to join MPEG-TS mid-stream).
+  `header_insertion_mode`, `header_spacing` repeats SPS/PPS instead (needed to join the stream mid-way).
 - QSV: `-preset veryfast -look_ahead 0 -async_depth 1 -repeat_pps 1`, NV12 input.
 - Media Foundation: `-scenario display_remoting -rate_control cbr -profile:v 100` - h264_mf only
   takes the profile as a number (100 = High); NV12 input. Verified decodable from mid-stream.

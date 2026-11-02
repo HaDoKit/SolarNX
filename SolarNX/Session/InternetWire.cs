@@ -29,7 +29,7 @@ namespace SolarNX.Session;
 ///   Switch → PC  Input       the 224-byte HID packet (Input/HidProtocol.cs)
 ///   Switch → PC  Bye         session over (the player went back to the menu)
 ///   PC → Switch  End         session over (the PC ended it - e.g. the game closed)
-///   PC → Switch  Video       MPEG-TS bytes, as ffmpeg sent them
+///   PC → Switch  Video       one video datagram (header + shard), as VideoSender sent it
 ///   PC → Switch  Audio       one RTP-like Opus datagram, as AudioCaptureSender sent it
 ///   PC → Switch  LibOffer    u32 offer id, u64 library hash, u8 button layout, u8[3] zero, u32 layout revision
 ///   Switch → PC  LibReply    u32 offer id, u8 1 = send the library, u8 button layout, u8[2] zero, u32 layout revision

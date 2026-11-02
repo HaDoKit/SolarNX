@@ -37,6 +37,13 @@ public sealed class AppOrchestrator : IDisposable
     private System.Threading.Timer? _contentWindowWatcher;
     private readonly AdaptiveBitrateController _adaptiveBitrate;
 
+    // What the Switch reports about the video link (HidPacket.VideoRecoveredPacketCount /
+    // VideoLostFrameCount), logged when it changed - the only view this side has of the parity working.
+    private static readonly TimeSpan VideoLinkLogInterval = TimeSpan.FromSeconds(10);
+    private DateTime _lastVideoLinkLogUtc = DateTime.MinValue;
+    private uint _loggedRecoveredPackets;
+    private uint _loggedLostFrames;
+
     // Host-side game library (Library/): edited from the UI, mirrored to the Switch by
     // _libraryPusher while armed, launched when the Switch picks an entry (AppTarget.Library).
     private readonly GameLibrary _library = GameLibrary.Load();
@@ -840,6 +847,20 @@ public sealed class AppOrchestrator : IDisposable
         }
     }
 
+    private void LogVideoLinkIfDue(HidPacket packet)
+    {
+        var now = DateTime.UtcNow;
+        if (now - _lastVideoLinkLogUtc < VideoLinkLogInterval) return;
+        var firstPacket = _lastVideoLinkLogUtc == DateTime.MinValue;
+        _lastVideoLinkLogUtc = now;
+        var recovered = packet.VideoRecoveredPacketCount - _loggedRecoveredPackets;
+        var lost = packet.VideoLostFrameCount - _loggedLostFrames;
+        _loggedRecoveredPackets = packet.VideoRecoveredPacketCount;
+        _loggedLostFrames = packet.VideoLostFrameCount;
+        if (firstPacket || (recovered == 0 && lost == 0)) return;
+        Logger.Log("VideoLink", $"Switch, last {VideoLinkLogInterval.TotalSeconds:0}s: {recovered} datagrams rebuilt from parity, {lost} frames lost (held until a keyframe)");
+    }
+
     private void OnPacketReceived(HidPacket packet)
     {
         try
@@ -859,6 +880,8 @@ public sealed class AppOrchestrator : IDisposable
         {
             Logger.Log("AppOrchestrator", $"touch inject failed: {ex}");
         }
+
+        LogVideoLinkIfDue(packet);
 
         try
         {

@@ -162,7 +162,7 @@ internal static class EncoderSelection
         EncoderKind.Nvenc =>
             $"-c:v h264_nvenc -gpu 0 -preset p4 -tune ll -rc cbr -zerolatency 1 -delay 0 -rc-lookahead 0 -bf 0 -profile:v high -g {keyframeInterval}",
         // header_spacing = the keyframe interval: SPS/PPS with every keyframe, so the Switch can start
-        // decoding mid-stream (MPEG-TS has no out-of-band headers). async_depth 1: AMF otherwise keeps
+        // decoding mid-stream (the stream has no out-of-band headers). async_depth 1: AMF otherwise keeps
         // up to 16 frames in flight.
         EncoderKind.Amf =>
             $"-c:v h264_amf -usage ultralowlatency -quality speed -rc cbr -latency 1 -async_depth 1 -preencode 0 -header_spacing {keyframeInterval} -bf 0 -profile:v high -g {keyframeInterval}",

@@ -6,7 +6,7 @@
 
 // Ports must exactly match SolarNX/Config.cs on the PC host - see
 // .claude/skills/solarnx-pc-architect/references/switch-protocol.md.
-#define SOLARNX_VIDEO_PORT 19000 // UDP, PC -> Switch, MPEG-TS/H264 (opened via libavformat, video.c)
+#define SOLARNX_VIDEO_PORT 19000 // UDP, PC -> Switch, H264 in SolarNX framing with RS parity (video/videowire.h)
 #define SOLARNX_AUDIO_PORT 19002 // UDP, PC -> Switch, custom RTP-ish framing (opened via avio, audio.c)
 #define SOLARNX_HID_PORT   19001 // TCP, Switch listens+accepts, PC dials in (this module)
 #define SOLARNX_LIBRARY_PORT 19003 // TCP, Switch listens+accepts, PC dials in to push its game library (library/library.c)
@@ -45,14 +45,14 @@ typedef struct {
 
 // Mirrors SolarNX.Input.HidPacket.Parse field-for-field (host repo, Input/HidProtocol.cs).
 // Must stay exactly SOLARNX_HID_PAYLOAD_SIZE (224) bytes - enforced by a _Static_assert in
-// network.c. touchX2/Y2 are on the wire but ignored by the host parser today; they're kept here
-// purely so every field after them lands at the offset the host expects.
+// network.c. videoLostFrameCount/videoRecoveredPacketCount sit where touchX2/Y2 used to be (never
+// read by the host), so the size and every other offset are unchanged.
 typedef struct {
     SolarNxControllerState controllers[4]; // 176 bytes
     uint32_t touchX1;
     uint32_t touchY1;
-    uint32_t touchX2; // unused by host, keep for offset alignment
-    uint32_t touchY2; // unused by host, keep for offset alignment
+    uint32_t videoLostFrameCount;       // videoGetLostFrameCount() - see the telemetry fields below
+    uint32_t videoRecoveredPacketCount; // videoGetRecoveredPacketCount()
     uint32_t libraryEntryId; // GameEntry.Id when appTarget is Library, else 0 (was the never-read frameRate slot)
     uint32_t controllerCount;
     SolarNxAppTarget appTarget; // u64 - see SolarNxAppTarget's doc comment above

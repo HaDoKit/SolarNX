@@ -228,7 +228,7 @@ static void handleUnit(const uint8_t *unit, int len, u32 *framesDecoded, bool *h
 // caller (audioStart) decides whether to reconnect.
 //
 // Plain BSD UDP socket, not libavformat/avio - this used to go through avio_open2/avio_read_partial
-// (matching video.c's pattern for its MPEG-TS input), but that combination was confirmed live to
+// (matching what video.c then did for its MPEG-TS input), but that combination was confirmed live to
 // crash the whole process after ~2s of running alongside the HID thread, consistently, regardless
 // of bsd session headroom or poll interval (both changed independently with zero effect on the
 // crash timing) or of unifying FFmpeg's av_log with logWrite()'s mutex (also no effect) - and the
@@ -266,7 +266,7 @@ static void runStreamSession(void)
     tv.tv_usec = AUDIO_RECV_TIMEOUT_US;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    // This socket has no userspace buffering of its own (unlike video.c's fifo_size) - it relies
+    // This socket has no userspace buffering of its own (as video.c's socket now too) - it relies
     // entirely on the OS's own receive buffer to absorb this thread being briefly scheduled late
     // (e.g. while video.c's decode/transfer is CPU-heavy on another thread). 64KB is ~4s of this
     // stream's audio (OpusBitrateBps=128000) - generous headroom against a transient stall without

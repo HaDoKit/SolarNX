@@ -8,7 +8,7 @@ both sides in the same commit.
 
 | Field | Default | Transport | Roles |
 |---|---|---|---|
-| `VideoPort` | 19000 | UDP | ffmpeg sends to `ClientIp:19000`; Switch listens |
+| `VideoPort` | 19000 | UDP | VideoSender sends to `ClientIp:19000`; Switch listens |
 | `HidPort` | 19001 | TCP | Switch binds/listens/accepts; `SessionController` dials out |
 | `AudioPort` | 19002 | UDP | `AudioCaptureSender` sends; Switch listens |
 | `LibraryPort` | 19003 | TCP | Switch listens from app start; `LibraryPusher` dials every 5s while armed |
@@ -33,7 +33,7 @@ both sides in the same commit.
 |---|---|
 | 0 | 4 × controller, 44 bytes each: `heldKeys` u32 (host reads low 16 bits), `lJoyX/Y`, `rJoyX/Y` i32, `accelX/Y/Z` f32 (g), `gyroX/Y/Z` f32 (rad/s) |
 | 176 | `touchX1`, `touchY1` u32 (1280×720 frame; 0,0 = no touch) |
-| 184 | `touchX2`, `touchY2` u32 — on the wire, unused |
+| 184 | `videoLostFrameCount`, `videoRecoveredPacketCount` u32 (were touchX2/Y2) — Switch video FEC counters, logged as "VideoLink", lost frames feed adaptive bitrate |
 | 192 | `libraryEntryId` u32 — `GameEntry.Id` when `appTarget` is Library, else 0 (was the never-read `frameRate`) |
 | 196 | `controllerCount` u32 |
 | 200 | `appTarget` u64 (`AppTarget`: 0 Big Picture, 1 shadPS4, 2 Library; unknown → Big Picture) |
@@ -96,7 +96,7 @@ against a byte-level fake client (send on hash change, skip when unchanged).
 
 ## Video
 
-Entirely owned by ffmpeg — `references/ffmpeg-pipeline.md`.
+ffmpeg encodes (RTP on loopback); `Capture/VideoSender` sends SolarNX framing with Reed-Solomon parity to `ClientIp:19000` (Internet: relay 19011) — format and FEC rules in `references/ffmpeg-pipeline.md` ("Video transport with FEC"), mirrored by `Client/video/videowire.h`.
 
 ## Internet mode (experimental) - `Session/InternetSession.cs` ↔ `Client/transport/transport.c`
 

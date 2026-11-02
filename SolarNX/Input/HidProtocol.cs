@@ -118,10 +118,17 @@ public sealed class HidPacket
     public required uint AudioReconnectCount { get; init; }
     public required uint AudioConcealedFrameCount { get; init; }
 
+    /// <summary>Video frames the Switch could not rebuild from the parity (it then waits for the
+    /// next keyframe) and datagrams it did rebuild - free-running counters from the client's video
+    /// reassembly (Client/video/reassembly.h). On the wire where touchX2/Y2 used to be.</summary>
+    public required uint VideoLostFrameCount { get; init; }
+    public required uint VideoRecoveredPacketCount { get; init; }
+
     /// <summary>
     /// Mirrors the client's SolarNxHidPacket (network.h) field-for-field: 4x controller blocks
     /// (HeldKeys u32, LJoyX/Y i32, RJoyX/Y i32, accelX/Y/Z f32, gyroX/Y/Z f32 - 44 bytes each),
-    /// touchX1,Y1,X2,Y2 (u32), libraryEntryId (u32, formerly frameRate), controllerCount (u32),
+    /// touchX1,Y1 (u32), videoLostFrameCount, videoRecoveredPacketCount (u32, formerly touchX2/Y2),
+    /// libraryEntryId (u32, formerly frameRate), controllerCount (u32),
     /// appTarget (u64), then the 4 telemetry u32 fields above (16 bytes).
     /// </summary>
     public static HidPacket Parse(ReadOnlySpan<byte> payload)
@@ -163,7 +170,8 @@ public sealed class HidPacket
 
         var touchX1 = BinaryPrimitives.ReadUInt32LittleEndian(payload[offset..]);
         var touchY1 = BinaryPrimitives.ReadUInt32LittleEndian(payload[(offset + 4)..]);
-        // TouchX2/Y2 (bytes offset+8..offset+15) are on the wire but unused - see TouchInjector.
+        var videoLostFrameCount = BinaryPrimitives.ReadUInt32LittleEndian(payload[(offset + 8)..]);
+        var videoRecoveredPacketCount = BinaryPrimitives.ReadUInt32LittleEndian(payload[(offset + 12)..]);
         offset += 16;
 
         var libraryEntryId = BinaryPrimitives.ReadUInt32LittleEndian(payload[offset..]);
@@ -195,6 +203,8 @@ public sealed class HidPacket
             VideoMeasuredBitrateKbps = videoMeasuredBitrateKbps,
             AudioReconnectCount = audioReconnectCount,
             AudioConcealedFrameCount = audioConcealedFrameCount,
+            VideoLostFrameCount = videoLostFrameCount,
+            VideoRecoveredPacketCount = videoRecoveredPacketCount,
         };
     }
 }
