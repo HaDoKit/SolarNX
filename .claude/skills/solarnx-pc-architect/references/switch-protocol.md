@@ -97,3 +97,22 @@ against a byte-level fake client (send on hash change, skip when unchanged).
 ## Video
 
 Entirely owned by ffmpeg — `references/ffmpeg-pipeline.md`.
+
+## Internet mode (experimental) - `Session/InternetSession.cs` ↔ `Client/transport/transport.c`
+
+`Config.ConnectionMode` = Wifi (everything above) | Internet. Internet: the PC listens on **UDP 19010**,
+the Switch sends first (Hello every 1s = keepalive), so only that port needs forwarding; replies go to
+the address the Switch's packets came from. Wire format in `Session/InternetWire.cs` (8-byte header
+"SNXU", type, version 1): Hello (nonce + 16-byte connection code) → Welcome (SessionConfig) | Reject;
+Input (the 224-byte HID packet, no marker); Bye (Switch left) / End (PC ended it); Video / Audio;
+LibOffer / LibReply (hash + button layout + revision, as library v2) and LibChunk / LibAck (go-back-N,
+1100-byte chunks, window 48, cumulative ack).
+
+Video and audio are produced exactly as in Wi-Fi mode but sent to loopback relays on the PC
+(127.0.0.1:19011 video, :19012 audio), which `InternetSession` forwards to the Switch; on the Switch
+`transport.c` forwards Video/Audio to 127.0.0.1:19000/19002 where `video.c`/`audio.c` already listen -
+neither side's media code knows the mode. `network.c` routes the HID calls (accept = wait for Welcome,
+send = Input, close = Bye) to the transport. A session starts on the first Input after a Welcome and
+ends on Bye/End or 3s without Input. Connection code: `Config.ConnectionCode`, 8 chars without 0/O/1/I,
+compared case-insensitively in constant time. **No encryption yet** - the next stage (pairing + crypto)
+replaces the code. The mode is chosen when streaming is armed (PC) and at app start (Switch).

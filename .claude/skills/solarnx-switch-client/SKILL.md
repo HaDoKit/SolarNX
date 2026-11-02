@@ -35,7 +35,8 @@ back.
 | `input/` | 4 pads, touch, per-player sixaxis → `SolarNxHidPacket`; hold-Minus back-to-menu gesture |
 | `menu/` | App-selection screen (own SDL window/renderer, shared system font, star animation) + library cover grid |
 | `library/` | Library receiver thread (port 19003), in-memory entries (id, name, JPEG cover) under a mutex |
-| `settings/` | Settings on the SD card (`sdmc:/switch/SolarNX/settings.cfg`): the A/B X/Y layout + its revision, toggled with Y in the menu, synced with the PC over the library channel (protocol v2, higher revision wins) |
+| `settings/` | Settings on the SD card (`sdmc:/switch/SolarNX/settings.cfg`): the A/B X/Y layout + its revision (Y in the menu, synced with the PC over the library channel, higher revision wins); connection mode, PC address and connection code (X → Connection screen, swkbd) |
+| `transport/` | Experimental Internet mode: one UDP socket to the PC (port 19010), Hello/Welcome with the connection code, Input/Bye, library chunks; forwards Video/Audio datagrams to 127.0.0.1:19000/19002 so `video.c`/`audio.c` are unchanged. `network.c` routes HID calls here when `settings` say Internet (read at startup). Mirrors `SolarNX/Session/InternetWire.cs` |
 | `common/logger/` | `logWrite()` (stdout under a mutex; nxlink in DEBUG builds), FFmpeg `av_log` bridge |
 | `common/fontcache/` | Third-party SDL_FontCache |
 | `romfs/icons/` | Menu tile icons |

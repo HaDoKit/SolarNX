@@ -9,7 +9,7 @@ namespace SolarNX.Session;
 /// and treat a successful connection as "session started" / its closure as "session stopped".
 /// This is the single component driving the rest of the app's lifecycle.
 /// </summary>
-public sealed class SessionController : IAsyncDisposable
+public sealed class SessionController : ISessionController
 {
     private readonly Config _config;
 
@@ -115,17 +115,7 @@ public sealed class SessionController : IAsyncDisposable
             // connect: log and retry from the top rather than proceeding into ReadLoopAsync.
             try
             {
-                var sessionConfig = new SessionConfig
-                {
-                    VideoBitrateKbps = (uint)_config.BitrateKbps,
-                    VideoWidth = (uint)_config.TargetWidth,
-                    VideoHeight = (uint)_config.TargetHeight,
-                    VideoFps = (uint)_config.Fps,
-                    AudioBitrateKbps = (uint)(AudioCaptureSender.OpusBitrateBps / 1000),
-                    AudioSampleRate = (uint)_config.AudioSampleRate,
-                    AudioChannels = (uint)_config.AudioChannels,
-                };
-                await client.GetStream().WriteAsync(sessionConfig.ToBytes(), ct);
+                await client.GetStream().WriteAsync(BuildSessionConfig(_config).ToBytes(), ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -176,6 +166,19 @@ public sealed class SessionController : IAsyncDisposable
             try { await Task.Delay(1000, ct); } catch (TaskCanceledException) { }
         }
     }
+
+    /// <summary>What the Switch needs to size its video/audio buffers - sent first on every session,
+    /// in both connection modes.</summary>
+    internal static SessionConfig BuildSessionConfig(Config config) => new()
+    {
+        VideoBitrateKbps = (uint)config.BitrateKbps,
+        VideoWidth = (uint)config.TargetWidth,
+        VideoHeight = (uint)config.TargetHeight,
+        VideoFps = (uint)config.Fps,
+        AudioBitrateKbps = (uint)(AudioCaptureSender.OpusBitrateBps / 1000),
+        AudioSampleRate = (uint)config.AudioSampleRate,
+        AudioChannels = (uint)config.AudioChannels,
+    };
 
     private async Task ReadLoopAsync(TcpClient client, CancellationToken ct, Action<HidPacket> onFirstPacket)
     {

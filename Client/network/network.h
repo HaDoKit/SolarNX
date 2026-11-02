@@ -107,6 +107,10 @@ bool networkAcceptHid(void);
 // (common/appstate) while it waits.
 bool networkWaitForSessionConfig(SolarNxSessionConfig *out);
 
+// Stores the session config the PC sent - networkAcceptHid() does it for the TCP handshake,
+// transport.c for the Internet mode's Welcome. Any thread.
+void networkSetSessionConfig(const SolarNxSessionConfig *config);
+
 // Sends the 8x0xFF marker followed by sizeof(SolarNxHidPacket) bytes of *pkt over the accepted
 // HID socket, as one framed unit. Returns false if the send failed (e.g. the PC closed the
 // connection) - the caller should then call networkCloseHidClient() and go back to

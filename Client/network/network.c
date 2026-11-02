@@ -10,6 +10,8 @@
 
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
+#include "../settings/settings.h"
+#include "../transport/transport.h"
 
 _Static_assert(sizeof(SolarNxHidPacket) == SOLARNX_HID_PAYLOAD_SIZE,
     "SolarNxHidPacket must stay exactly SOLARNX_HID_PAYLOAD_SIZE bytes - see network.h");
@@ -22,6 +24,10 @@ static const uint8_t s_hidMarker[SOLARNX_HID_MARKER_SIZE] = {
 
 static int s_listenSock = -1;
 static int s_clientSock = -1;
+
+// Experimental Internet mode (settings.h, read once at startup): the HID calls below go to
+// transport.c's UDP session instead of the TCP socket.
+static bool s_internet = false;
 
 // Guards the two fields below - written by networkAcceptHid() (network thread), read by
 // networkWaitForSessionConfig() (called from video.c on the main thread, and potentially audio.c
@@ -87,6 +93,7 @@ bool networkInit(void)
         return false;
 
     mutexInit(&s_sessionConfigMutex);
+    s_internet = settingsGetConnectionMode() == SettingsConnection_Internet;
 
     s_listenSock = socket(AF_INET, SOCK_STREAM, 0);
     if (s_listenSock < 0)
@@ -122,8 +129,22 @@ static bool connectionAlreadyClosed(int sock)
     return n < 0 && errno != EAGAIN && errno != EWOULDBLOCK;
 }
 
+void networkSetSessionConfig(const SolarNxSessionConfig *config)
+{
+    mutexLock(&s_sessionConfigMutex);
+    s_sessionConfig = *config;
+    s_sessionConfigReady = true;
+    mutexUnlock(&s_sessionConfigMutex);
+}
+
 bool networkAcceptHid(void)
 {
+    if (s_internet)
+    {
+        transportBeginSession();
+        return transportWaitWelcome();
+    }
+
     if (s_listenSock < 0)
         return false;
 
@@ -223,6 +244,9 @@ bool networkWaitForSessionConfig(SolarNxSessionConfig *out)
 
 bool networkSendHid(const SolarNxHidPacket *pkt)
 {
+    if (s_internet)
+        return transportSendInput(pkt);
+
     if (s_clientSock < 0)
         return false;
 
@@ -234,6 +258,12 @@ bool networkSendHid(const SolarNxHidPacket *pkt)
 
 void networkCloseHidClient(void)
 {
+    if (s_internet)
+    {
+        transportEndSession();
+        return;
+    }
+
     if (s_clientSock >= 0)
     {
         close(s_clientSock);

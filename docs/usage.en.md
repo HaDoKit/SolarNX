@@ -85,6 +85,36 @@ The gear button on the SolarNX main screen.
 The **«Показать экран»** (Show screen) toggle on the main window shows a preview of what the Switch
 sees.
 
+## Playing over the internet (experimental)
+
+> **Experimental feature.** Internet mode hasn't been tested on real networks yet, and the traffic is
+> **not encrypted** yet. Only the connection code keeps strangers out. The regular Wi-Fi mode works as
+> before and doesn't depend on this mode.
+
+In Internet mode the Switch connects to the PC over the internet on a single UDP port, **19010**.
+Everything goes through that one connection: input, video, audio and the library. There is no NAT hole
+punching yet, so the port has to be forwarded on the router by hand.
+
+**On the PC:**
+1. «Настройки» (Settings) → «Подключение» (Connection) → «Режим» (Mode) → **«Интернет
+   (экспериментально)»** (Internet, experimental). An 8-character connection code appears. «Новый
+   код» (New code) creates a new one, which then has to be entered on the Switch again.
+2. On the router, forward **UDP port 19010** to this PC. Allow SolarNX through Windows Firewall if it
+   asks.
+3. Turn streaming on. The status says it's waiting for the Switch over the internet.
+
+**On the Switch:**
+1. In the main menu, press **X** to open the Connection screen.
+2. **Mode** → Internet. **PC address**: the PC's public IP address or a domain; if the router uses a
+   different port, add it after a colon (`example.com:19010`). **Connection code**: the code from the PC.
+3. Restart SolarNX on the Switch: the mode is picked at startup.
+
+The bottom-right corner of the menu shows "X  Internet: …" with the state: "connected" (the PC
+answers), "waiting for the PC" (no answer: check the address and the port forwarding), "wrong
+connection code".
+
+To go back to Wi-Fi: choose «Wi-Fi» on the PC, Mode → Wi-Fi on the Switch, and restart the app.
+
 ## Stopping
 
 - On the Switch: hold − for 3 seconds to return to the menu, or close the app with HOME.

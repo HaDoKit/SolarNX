@@ -33,6 +33,7 @@ public partial class SettingsView : System.Windows.Controls.UserControl
 
         BackButton.Click += (_, _) => BackRequested?.Invoke();
 
+        InitConnectionSection();
         InitVideoSection();
         InitGamepadSection();
         InitShadPs4Section();
@@ -40,6 +41,35 @@ public partial class SettingsView : System.Windows.Controls.UserControl
 
         PortsCard.Visibility = devMode ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
         if (devMode) InitPortsSection();
+    }
+
+    private void InitConnectionSection()
+    {
+        ConnectionModeCombo.Items.Add("Wi-Fi (локальная сеть)");
+        ConnectionModeCombo.Items.Add("Интернет (экспериментально)");
+        ConnectionModeCombo.SelectedIndex = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet ? 1 : 0;
+        ConnectionModeCombo.SelectionChanged += (_, _) =>
+        {
+            _config.ConnectionMode = ConnectionModeCombo.SelectedIndex == 1 ? SolarNX.Session.ConnectionMode.Internet : SolarNX.Session.ConnectionMode.Wifi;
+            if (_config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet && string.IsNullOrWhiteSpace(_config.ConnectionCode))
+                _config.ConnectionCode = SolarNX.Session.InternetSession.NewCode();
+            _config.Save();
+            RefreshConnectionSection();
+        };
+        NewCodeButton.Click += (_, _) =>
+        {
+            _config.ConnectionCode = SolarNX.Session.InternetSession.NewCode();
+            _config.Save();
+            RefreshConnectionSection();
+        };
+        RefreshConnectionSection();
+    }
+
+    private void RefreshConnectionSection()
+    {
+        var internet = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet;
+        InternetPanel.Visibility = internet ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+        ConnectionCodeBox.Text = _config.ConnectionCode;
     }
 
     private void InitVideoSection()

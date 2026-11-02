@@ -67,11 +67,36 @@ static void freeEntries(LibraryEntry *entries, int count)
     free(entries);
 }
 
+// The payload arrives either straight from the TCP socket (Wi-Fi) or, in Internet mode, already
+// reassembled in memory from UDP chunks - the parser reads through one of these.
+typedef bool (*PayloadRead)(void *ctx, void *data, size_t len);
+
+static bool socketRead(void *ctx, void *data, size_t len)
+{
+    return recvAll(*(int *)ctx, data, len);
+}
+
+typedef struct {
+    const uint8_t *data;
+    size_t size;
+    size_t pos;
+} MemoryReader;
+
+static bool memoryRead(void *ctx, void *data, size_t len)
+{
+    MemoryReader *r = (MemoryReader *)ctx;
+    if (len > r->size - r->pos)
+        return false;
+    memcpy(data, r->data + r->pos, len);
+    r->pos += len;
+    return true;
+}
+
 // Reads the payload part. Returns the new array (count in *outCount), or NULL on any error.
-static LibraryEntry *receivePayload(int sock, int *outCount)
+static LibraryEntry *receivePayload(PayloadRead read, void *ctx, int *outCount)
 {
     uint32_t count;
-    if (!recvAll(sock, &count, sizeof(count)) || count > LIBRARY_MAX_ENTRIES)
+    if (!read(ctx, &count, sizeof(count)) || count > LIBRARY_MAX_ENTRIES)
         return NULL;
 
     LibraryEntry *entries = (LibraryEntry *)calloc(count > 0 ? count : 1, sizeof(LibraryEntry));
@@ -84,10 +109,10 @@ static LibraryEntry *receivePayload(int sock, int *outCount)
         uint16_t nameLength;
         uint32_t coverLength;
 
-        if (!recvAll(sock, &e->id, sizeof(e->id)) ||
-            !recvAll(sock, &nameLength, sizeof(nameLength)) || nameLength > LIBRARY_MAX_NAME_BYTES ||
-            !recvAll(sock, e->name, nameLength) ||
-            !recvAll(sock, &coverLength, sizeof(coverLength)) || coverLength > LIBRARY_MAX_COVER_BYTES)
+        if (!read(ctx, &e->id, sizeof(e->id)) ||
+            !read(ctx, &nameLength, sizeof(nameLength)) || nameLength > LIBRARY_MAX_NAME_BYTES ||
+            !read(ctx, e->name, nameLength) ||
+            !read(ctx, &coverLength, sizeof(coverLength)) || coverLength > LIBRARY_MAX_COVER_BYTES)
         {
             freeEntries(entries, (int)count);
             return NULL;
@@ -97,7 +122,7 @@ static LibraryEntry *receivePayload(int sock, int *outCount)
         if (coverLength > 0)
         {
             e->cover = (uint8_t *)malloc(coverLength);
-            if (e->cover == NULL || !recvAll(sock, e->cover, coverLength))
+            if (e->cover == NULL || !read(ctx, e->cover, coverLength))
             {
                 freeEntries(entries, (int)count);
                 return NULL;
@@ -109,6 +134,8 @@ static LibraryEntry *receivePayload(int sock, int *outCount)
     *outCount = (int)count;
     return entries;
 }
+
+static void storeLibrary(LibraryEntry *entries, int count, uint64_t hash);
 
 static void handleConnection(int sock)
 {
@@ -142,13 +169,18 @@ static void handleConnection(int sock)
         return;
 
     int count = 0;
-    LibraryEntry *entries = receivePayload(sock, &count);
+    LibraryEntry *entries = receivePayload(socketRead, &sock, &count);
     if (entries == NULL)
     {
         logWrite("library", "library transfer failed or malformed - keeping the previous one");
         return;
     }
+    storeLibrary(entries, count, hash);
+}
 
+// Swaps in a freshly received library (both modes).
+static void storeLibrary(LibraryEntry *entries, int count, uint64_t hash)
+{
     mutexLock(&s_mutex);
     LibraryEntry *old = s_entries;
     int oldCount = s_count;
@@ -182,6 +214,10 @@ static void libraryThreadFunc(void *arg)
 bool libraryStart(void)
 {
     mutexInit(&s_mutex);
+
+    // Internet mode: the library comes over transport.c's UDP channel instead (libraryUdp* below).
+    if (settingsGetConnectionMode() == SettingsConnection_Internet)
+        return true;
 
     s_listenSock = socket(AF_INET, SOCK_STREAM, 0);
     if (s_listenSock < 0)
@@ -238,4 +274,68 @@ const LibraryEntry *libraryEntries(int *count)
 void libraryUnlock(void)
 {
     mutexUnlock(&s_mutex);
+}
+
+// --- Internet mode (transport/transport.c): the same payload, sent in UDP chunks ---
+
+// A library bigger than this is refused rather than risking the app's memory; with 512KB covers
+// it still holds well over 50 games.
+#define LIBRARY_UDP_MAX_PAYLOAD (32u * 1024 * 1024)
+
+static uint8_t *s_udpBuffer = NULL;
+static uint64_t s_udpHash = 0;
+static uint32_t s_udpTotal = 0;
+static uint32_t s_udpReceived = 0;
+
+bool libraryUdpOffer(uint64_t hash)
+{
+    mutexLock(&s_mutex);
+    bool need = hash != s_hash;
+    mutexUnlock(&s_mutex);
+    return need;
+}
+
+uint32_t libraryUdpChunk(uint64_t hash, uint32_t total, uint32_t offset, const uint8_t *data, uint32_t length)
+{
+    if (total == 0 || total > LIBRARY_UDP_MAX_PAYLOAD)
+        return 0;
+
+    if (s_udpBuffer == NULL || hash != s_udpHash || total != s_udpTotal)
+    {
+        free(s_udpBuffer);
+        s_udpBuffer = (uint8_t *)malloc(total);
+        s_udpHash = hash;
+        s_udpTotal = total;
+        s_udpReceived = 0;
+        if (s_udpBuffer == NULL)
+        {
+            logWrite("library", "no memory for a %u-byte library", (unsigned)total);
+            return 0;
+        }
+    }
+
+    // Go-back-N: only the chunk that continues what we have is taken; the host resends the rest.
+    if (offset == s_udpReceived && length <= total - offset)
+    {
+        memcpy(s_udpBuffer + offset, data, length);
+        s_udpReceived += length;
+    }
+
+    uint32_t received = s_udpReceived;
+    if (received == total)
+    {
+        MemoryReader reader = {s_udpBuffer, total, 0};
+        int count = 0;
+        LibraryEntry *entries = receivePayload(memoryRead, &reader, &count);
+        if (entries != NULL)
+            storeLibrary(entries, count, hash);
+        else
+            logWrite("library", "library over UDP was malformed - keeping the previous one");
+        free(s_udpBuffer);
+        s_udpBuffer = NULL;
+        s_udpHash = 0;
+        s_udpTotal = 0;
+        s_udpReceived = 0;
+    }
+    return received;
 }

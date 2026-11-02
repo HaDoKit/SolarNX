@@ -111,7 +111,11 @@ public sealed class VideoEncoder : IDisposable
         // to stay under a standard 1500-byte-MTU LAN/Wi-Fi link's payload limit and avoid IP
         // fragmentation (a fragmented UDP datagram only needs to lose one fragment to lose the
         // whole packet, which defeats the point of switching off TCP for resilience).
-        var target = $"udp://{_config.ClientIp}:{_config.VideoPort}?pkt_size=1316";
+        // Internet mode: to the loopback relay, which forwards each datagram to the Switch over the
+        // session's one UDP port (Session/InternetSession).
+        var target = _config.ConnectionMode == Session.ConnectionMode.Internet
+            ? $"udp://127.0.0.1:{Session.InternetSession.VideoRelayPort}?pkt_size=1316"
+            : $"udp://{_config.ClientIp}:{_config.VideoPort}?pkt_size=1316";
         var encoder = EncoderSelection.Resolve(encoderOverride ?? _config.Encoder);
         ActiveEncoder = encoder;
         var pixelFormat = EncoderSelection.PixelFormat(encoder);
