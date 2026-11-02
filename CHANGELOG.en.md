@@ -6,6 +6,19 @@ Versions follow [Semantic Versioning](https://semver.org/). While the project is
 (`0.x.y-alpha`), settings, the library and the protocol are not guaranteed to be compatible between
 versions: install the same version on the PC and on the Switch.
 
+## [0.2.3-alpha] - 2026-11-02
+
+- Video is now protected against packet loss: each frame gets extra packets (a Reed–Solomon code,
+  about 20%), and the Switch rebuilds lost ones without asking the PC again. On Wi-Fi with random
+  losses of up to a few percent the picture stays clean.
+- If a frame still can't be rebuilt, instead of smeared artifacts ("water on glass") the last whole
+  frame stays on screen for a moment - until the next keyframe, at most half a second.
+- Video connects faster: the Switch no longer analyzes the stream before it starts showing it.
+- Lower input lag: the Switch sends the buttons and sticks about 120 times per second instead of 43.
+- Every 10 seconds the PC log shows how many packets the Switch rebuilt and how many frames it lost;
+  frequent frame losses now count towards adaptive bitrate.
+- The video format changed: install 0.2.3 on both the PC and the Switch.
+
 ## [0.2.2-alpha] - 2026-11-02
 
 No new features: on GitHub, versions 0.2.0-alpha and 0.2.1-alpha came out without files. This version
@@ -68,6 +81,7 @@ First public alpha.
 - Steam button with − and +, back to the menu by holding − for 3 seconds.
 - HOME menu tile (forwarder, built yourself).
 
+[0.2.3-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.3-alpha
 [0.2.2-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.2-alpha
 [0.2.1-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.1-alpha
 [0.2.0-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.0-alpha

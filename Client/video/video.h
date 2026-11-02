@@ -7,9 +7,9 @@
 // videoStart().
 bool videoInit(void);
 
-// Blocks: opens the H264/MPEG-TS UDP stream from the PC on SOLARNX_VIDEO_PORT (network/network.h),
-// decodes frames in software (no hardware/NVDEC acceleration yet - see the comment at the top of
-// video.c) and renders them via SDL2. Reconnects automatically if the stream drops. Also pumps
+// Blocks: receives the PC's video on SOLARNX_VIDEO_PORT (network/network.h) in SolarNX's own framing
+// (videowire.h), rebuilds lost datagrams from its Reed-Solomon parity, decodes with NVTEGRA (or in
+// software) and renders via SDL2 - see the comment at the top of video.c. Also pumps
 // appMainLoop() (common/appstate) and the SDL event queue, so this is meant to own the main thread - see main.c.
 // Returns false only if videoInit() wasn't called/didn't succeed first.
 bool videoStart(void);
@@ -23,3 +23,5 @@ void videoExit(void);
 // locking (plain word reads/writes - see network.h's telemetry field doc comment).
 uint32_t videoGetReconnectCount(void);
 uint32_t videoGetMeasuredBitrateKbps(void);
+uint32_t videoGetLostFrameCount(void);       // frames the parity could not save (reassembly.h)
+uint32_t videoGetRecoveredPacketCount(void); // datagrams rebuilt from parity

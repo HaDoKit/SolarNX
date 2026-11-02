@@ -1,38 +1,61 @@
 # Video decode pipeline
 
-File: `video/video.c` (FFmpeg portlib built with `--enable-nvtegra`; SDL2 output).
+Files: `video/video.c` (FFmpeg portlib built with `--enable-nvtegra`; SDL2 output),
+`video/reassembly.c` (frames from datagrams + Reed-Solomon recovery, `common/rs/rs.c`),
+`video/videowire.h` (the format - mirrors the PC's `Capture/VideoSender.cs`).
+
+No libavformat for video since 0.2.3: the PC sends its own framing with FEC instead of MPEG-TS
+(lost MPEG-TS datagrams smeared the picture until the next keyframe).
 
 ## Per stream round (`videoInit` → `videoStart` → `videoExit`, driven by `main.c`)
 
 - `videoInit`: SDL window/renderer (`ACCELERATED | PRESENTVSYNC`, 1280×720),
-  `avformat_network_init`, the decode→render handoff (mutex + `s_pendingFrame`), and
+  `reassemblyInit` (rs tables + frame buffer), the decode→render handoff (mutex + `s_pendingFrame`), and
   `av_hwdevice_ctx_create(AV_HWDEVICE_TYPE_NVTEGRA)` — failure just means software decode.
 - `videoExit`: tears all of it down (incl. `SDL_Quit`) so the menu can create its own SDL window
   when the player goes back to the menu; the next round re-inits.
-- `videoStart`: loop { wait for the host's `SessionConfig` (first time only) → build the URL (no
-  `fifo_size` - see network-protocol) → `runStreamSession` → 1s → retry } until exit or back-to-menu. A round
-  interrupted on purpose doesn't count as a reconnect (`s_videoReconnectCount` is host telemetry).
+- `videoStart`: loop { wait for the host's `SessionConfig` (first time only) → `runStreamSession`
+  → 1s → retry } until exit or back-to-menu. `runStreamSession` only returns early when setup or
+  the socket fails - that counts as a reconnect (`s_videoReconnectCount`, host telemetry); a round
+  interrupted on purpose doesn't.
 
 ## `runStreamSession`
 
-1. `avformat_alloc_context` + `interrupt_callback` **before** `avformat_open_input` (the open/probe
-   blocks until data arrives). The callback returns 1 on `s_decodeStop`, back-to-menu, or app exit;
-   from the main thread it also pumps `appMainLoop()` (rate-limited to every 50ms — it's IPC).
-2. `AVFMT_FLAG_NOBUFFER`, `probesize 65536`, `max_analyze_duration` 0.5s (single H.264 stream,
-   keyframe every ~0.5s).
-3. Decoder: `hw_device_ctx` + `get_format` preferring `AV_PIX_FMT_NVTEGRA`.
-4. Spawn the **decode thread**; the main thread becomes the render loop; on exit set
-   `s_decodeStop` (aborts a blocked read via the callback), join, free everything.
+1. Plain BSD UDP socket on 19000: `SO_RCVBUF` 256KB (= `udp_rx_buf_size`), `SO_RCVTIMEO` 50ms -
+   the decode thread checks `s_decodeStop`/`appIsRunning()` between timeouts, so nothing blocks
+   without an exit path. In Internet mode `transport.c` delivers the unsealed datagrams here on loopback.
+2. Decoder: `avcodec_find_decoder(AV_CODEC_ID_H264)`, `AV_CODEC_FLAG_LOW_DELAY`, `hw_device_ctx` +
+   `get_format` preferring `AV_PIX_FMT_NVTEGRA`. No extradata: SPS/PPS come in front of every
+   keyframe (PC: `dump_extra`).
+3. `reassemblyReset` (wait for a keyframe), spawn the **decode thread**; the main thread becomes the
+   render loop (pumps `appMainLoop()` every 50ms — it's IPC); on exit set `s_decodeStop`, join, close.
+
+## Reassembly (`reassembly.c`)
+
+- One frame at a time: a datagram of a newer frame means the current one got all it will get (the
+  PC paces a frame over ≤4ms, the next starts a frame interval later). Late datagrams of an older
+  frame are dropped. A frame-number jump of ≥1000 either way = new stream (VideoSender starts at a
+  random number), not loss.
+- Block done once K of its K+M shards are in; missing data shards rebuilt with `rsReconstruct`
+  (static scratch - decode thread only). Frame complete when all blocks are done; 64 zero bytes
+  follow it (`AV_INPUT_BUFFER_PADDING_SIZE`).
+- A lost frame (unrebuildable or never arrived) sets "need keyframe": complete frames are dropped
+  until a keyframe completes, so the decoder never sees a broken reference and the last good
+  picture stays on screen instead of smearing. `avcodec_send_packet` failing does the same.
+- Counters (`ReassemblyStats`, free-running): `framesLost` and `shardsRecovered` go to the host in
+  the HID packet (where touchX2/Y2 were); the heartbeat log also shows `framesSkipped`.
+- Rejected datagrams (wrong size/magic/version - e.g. an older PC app sending MPEG-TS) are logged
+  once.
 
 ## Decode thread / render thread split
 
 Confirmed live: with one thread doing read → decode → readback → upload → VSYNC present, games
 (heavier frames than menus) dropped it to ~43fps — present waited an extra vblank whenever a frame's
-work overran 16.7ms, nothing read the socket meanwhile, and libavformat logged ~100
+work overran 16.7ms, nothing read the socket meanwhile, and (then) libavformat logged ~100
 `Circular buffer overrun`/s: dropped datagrams, seen as smearing ("water running down glass") until
 the next keyframe. A bigger socket buffer only delayed it — the deficit was continuous.
 
-- Decode thread (core 1, prio `0x2D`): `av_read_frame` → send/receive → for NVTEGRA frames
+- Decode thread (core 1, prio `0x2D`): `recv` → `reassemblyPush` → when a frame completes, send/receive → for NVTEGRA frames
   `av_hwframe_transfer_data` into `swFrame` → move into `s_pendingFrame` under `s_frameMutex`,
   replacing any frame the display never got to. Every frame is decoded (references), not every
   frame is shown.
