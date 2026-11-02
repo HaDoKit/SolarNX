@@ -17,7 +17,7 @@
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
 
-// Wire format (see OrbitNX/Audio/RtpPacketizer.cs, RtpPacketizer.Wrap): a 12-byte RTP-like header
+// Wire format (see SolarNX/Audio/RtpPacketizer.cs, RtpPacketizer.Wrap): a 12-byte RTP-like header
 // (V=2,P=0,X=0,CC=0; PT; u16 BE seq; u32 BE timestamp; u32 BE SSRC), followed by a 2-byte
 // big-endian length prefix - NOT part of real RTP, a deliberate deviation the host's own comment
 // explains (it exists for a receiver that might see several units coalesced into one read) - then
@@ -250,11 +250,11 @@ static void runStreamSession(void)
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(ORBITNX_AUDIO_PORT);
+    addr.sin_port = htons(SOLARNX_AUDIO_PORT);
 
     if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) != 0)
     {
-        logWrite("audio", "bind() failed on port %d", ORBITNX_AUDIO_PORT);
+        logWrite("audio", "bind() failed on port %d", SOLARNX_AUDIO_PORT);
         close(sock);
         return;
     }
@@ -315,7 +315,7 @@ bool audioStart(void)
 
     while (appIsRunning())
     {
-        logWrite("audio", "waiting for audio stream on port %d...", ORBITNX_AUDIO_PORT);
+        logWrite("audio", "waiting for audio stream on port %d...", SOLARNX_AUDIO_PORT);
         runStreamSession();
         s_audioReconnectCount++;
         svcSleepThread(AUDIO_RECONNECT_DELAY_NS);

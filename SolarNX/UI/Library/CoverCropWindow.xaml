@@ -1,0 +1,61 @@
+<ui:FluentWindow x:Class="SolarNX.UI.Library.CoverCropWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Кадр обложки" Width="820" Height="620" MinWidth="640" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="None"
+        Background="#FF0B0B14">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Title="Кадр обложки" Height="42" Background="Transparent" Foreground="White"
+                     ShowMinimize="False" ShowMaximize="False" />
+
+        <Grid Grid.Row="1" Margin="20,8,20,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="200" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Stage: the whole image, letterboxed, with the 2:3 frame on top. -->
+            <Border Background="#FF14141C" CornerRadius="8" ClipToBounds="True" Margin="0,0,20,0">
+                <Grid x:Name="Stage">
+                    <Image x:Name="SourceImage" Stretch="Uniform" />
+                    <Canvas x:Name="Overlay" Background="Transparent" Cursor="SizeAll">
+                        <Rectangle x:Name="ShadeTop" Fill="#B0000000" IsHitTestVisible="False" />
+                        <Rectangle x:Name="ShadeBottom" Fill="#B0000000" IsHitTestVisible="False" />
+                        <Rectangle x:Name="ShadeLeft" Fill="#B0000000" IsHitTestVisible="False" />
+                        <Rectangle x:Name="ShadeRight" Fill="#B0000000" IsHitTestVisible="False" />
+                        <Rectangle x:Name="Frame" Stroke="#FFFFC83C" StrokeThickness="2" IsHitTestVisible="False" />
+                    </Canvas>
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="На Switch" Foreground="#AAAAAA" FontSize="12" Margin="0,0,0,6" />
+                <Border Width="160" Height="240" CornerRadius="8" Background="#FF2A2A36" ClipToBounds="True" HorizontalAlignment="Left">
+                    <Image x:Name="PreviewImage" Stretch="UniformToFill" />
+                </Border>
+
+                <TextBlock Text="Размер кадра" Foreground="#AAAAAA" FontSize="12" Margin="0,16,0,4" />
+                <Slider x:Name="SizeSlider" Minimum="0.1" Maximum="1" Value="1" SmallChange="0.02" LargeChange="0.1" />
+
+                <ui:Button x:Name="CenterButton" Content="По центру" Appearance="Secondary"
+                           HorizontalAlignment="Stretch" Margin="0,12,0,0" />
+                <TextBlock Foreground="#888888" FontSize="11" TextWrapping="Wrap" Margin="0,12,0,0"
+                           Text="Перетащите рамку мышью, колесо мыши или ползунок — размер. На Switch попадёт только область внутри рамки." />
+            </StackPanel>
+        </Grid>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="20">
+            <ui:Button x:Name="CancelButton" Content="Отмена" Appearance="Secondary" Margin="0,0,8,0" MinWidth="100" />
+            <ui:Button x:Name="OkButton" Content="Готово" Appearance="Primary" MinWidth="100" />
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

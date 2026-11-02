@@ -10,7 +10,7 @@
 bool logInit(void);
 
 // printf-style, category-tagged log line - deliberately mirrors the PC host's
-// Logger.Log(category, message) (OrbitNX/Logger.cs) so logs from both sides read the same way
+// Logger.Log(category, message) (SolarNX/Logger.cs) so logs from both sides read the same way
 // side by side. Safe to call from any thread (internally mutex-guarded).
 __attribute__((format(printf, 2, 3)))
 void logWrite(const char *category, const char *fmt, ...);

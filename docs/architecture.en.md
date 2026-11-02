@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart LR
-    subgraph PC["PC (Windows, OrbitNX/)"]
+    subgraph PC["PC (Windows, SolarNX/)"]
         cap["ffmpeg.exe: screen or window capture<br/>(Windows.Graphics.Capture)<br/>→ H.264 (NVENC or libx264)"]
         aud["WASAPI loopback → Opus"]
         inp["virtual gamepads (ViGEmBus),<br/>touch, game launching"]
@@ -28,7 +28,7 @@ The PC opens all TCP connections: the Switch only listens on its ports, so the P
 accept incoming connections. Video, audio and input are three independent streams with no shared
 synchronization.
 
-## PC: OrbitNX (`OrbitNX/`)
+## PC: SolarNX (`SolarNX/`)
 
 C#, .NET 10, WPF user interface.
 
@@ -46,8 +46,8 @@ C#, .NET 10, WPF user interface.
 - `ShadPs4/`: starting shadPS4.
 - `Native/`: Windows helpers: child processes, game process tracking, window geometry.
 
-OrbitNX doesn't inject anything into game processes or read their memory: games are only launched,
-and OrbitNX watches them with minimal access rights. This matters for games with anti-cheat.
+SolarNX doesn't inject anything into game processes or read their memory: games are only launched,
+and SolarNX watches them with minimal access rights. This matters for games with anti-cheat.
 
 ## Switch: client (`Client/`)
 
@@ -68,7 +68,7 @@ frame rate, audio parameters). From then on the Switch sends an input packet abo
 second: an 8-byte `0xFF` marker and 224 bytes of data, holding the state of up to 4 gamepads, touch,
 the selected mode, the library game number and link quality counters for adaptive bitrate.
 
-The formats are written by hand on both sides: `OrbitNX/Input/HidProtocol.cs` and
+The formats are written by hand on both sides: `SolarNX/Input/HidProtocol.cs` and
 `Client/network/network.h`. The PC and the Switch share no build, so any format change must be made
 in both parts at once.
 

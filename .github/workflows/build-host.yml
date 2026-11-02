@@ -5,7 +5,7 @@ on:
     branches:
       - master
     paths:
-      - "OrbitNX/**"
+      - "SolarNX/**"
       - "VERSION"
       - ".github/workflows/build-host.yml"
   workflow_dispatch:
@@ -33,14 +33,14 @@ jobs:
       - name: dotnet build (Release)
         shell: pwsh
         run: |
-          dotnet build OrbitNX/OrbitNX.csproj -c Release /property:GenerateFullPaths=true /consoleloggerparameters:NoSummary
+          dotnet build SolarNX/SolarNX.csproj -c Release /property:GenerateFullPaths=true /consoleloggerparameters:NoSummary
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload build output
         uses: actions/upload-artifact@v4
         with:
-          name: OrbitNX-host-${{ github.sha }}
-          path: OrbitNX/bin/Release/net10.0-windows10.0.18362.0/
+          name: SolarNX-host-${{ github.sha }}
+          path: SolarNX/bin/Release/net10.0-windows10.0.18362.0/
           if-no-files-found: error
 
       - name: Install Inno Setup
@@ -54,12 +54,12 @@ jobs:
       - name: Build installer (exe)
         shell: pwsh
         run: |
-          & "${{ github.workspace }}\OrbitNX\scripts\build-installer.ps1"
+          & "${{ github.workspace }}\SolarNX\scripts\build-installer.ps1"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: OrbitNX-installer-${{ github.sha }}
-          path: OrbitNX/Setup/OrbitNX-Setup.exe
+          name: SolarNX-installer-${{ github.sha }}
+          path: SolarNX/Setup/SolarNX-Setup.exe
           if-no-files-found: error

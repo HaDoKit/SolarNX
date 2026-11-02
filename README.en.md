@@ -1,6 +1,6 @@
 [Русский](README.md) | **English**
 
-# OrbitNX
+# SolarNX
 
 > **Alpha version 0.1.0-alpha.** The project is at an early stage: expect bugs, and settings and the
 > protocol may change between versions. Stable operation has so far been confirmed on a single setup
@@ -13,11 +13,11 @@ the PC.
 
 The project has two parts:
 
-- **OrbitNX**: the Windows app (`OrbitNX/`). It launches the game, captures video and audio, sends
+- **SolarNX**: the Windows app (`SolarNX/`). It launches the game, captures video and audio, sends
   them to the Switch, and turns button presses into a virtual gamepad.
-- **OrbitNX for Switch**: a homebrew app (`Client/`). It shows the stream and sends input.
+- **SolarNX for Switch**: a homebrew app (`Client/`). It shows the stream and sends input.
 
-![OrbitNX on the Switch](docs/images/client/menu.jpg)
+![SolarNX on the Switch](docs/images/client/menu.jpg)
 
 ## Features
 
@@ -34,7 +34,7 @@ The project has two parts:
 
 ## Documentation
 
-- [Features](docs/features.en.md): what the system looks like and everything OrbitNX can do, with screenshots
+- [Features](docs/features.en.md): what the system looks like and everything SolarNX can do, with screenshots
 - [Installation](docs/installation.en.md): what you need on the PC and on the Switch
 - [Usage](docs/usage.en.md): connecting, modes, controls, settings
 - [Game library](docs/library.en.md): your own games, covers, window capture
@@ -45,7 +45,7 @@ For developers, building from source: [DEVELOPMENT.en.md](DEVELOPMENT.en.md).
 
 ## Tested configuration
 
-Stable operation of version 0.1.0-alpha is confirmed on this setup. OrbitNX should work on other
+Stable operation of version 0.1.0-alpha is confirmed on this setup. SolarNX should work on other
 hardware too, but it hasn't been tested yet.
 
 | | |
@@ -59,8 +59,8 @@ hardware too, but it hasn't been tested yet.
 | **Switch** | Nintendo Switch OLED |
 | Switch network | 5 GHz Wi-Fi |
 
-If OrbitNX works (or doesn't) for you on other hardware, please report it in
-[Issues](https://github.com/HaDoKit/OrbitNX/issues); it helps grow this list.
+If SolarNX works (or doesn't) for you on other hardware, please report it in
+[Issues](https://github.com/HaDoKit/SolarNX/issues); it helps grow this list.
 
 ## Development
 

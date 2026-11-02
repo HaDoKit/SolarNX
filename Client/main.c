@@ -71,12 +71,12 @@ _Bool initNetwork() {
         return 0;
 
     // Debug build only (see Makefile's DEBUG=1 / `make debug`): connects back over the network
-    // to whichever PC sent this .nro via `nxlink -a <ip> OrbitNX-Switch-debug.nro -s` through
+    // to whichever PC sent this .nro via `nxlink -a <ip> SolarNX-Switch-debug.nro -s` through
     // hbmenu's netloader, so logWrite() streams there from here on - no separate step needed on
     // the console. Best-effort: not fatal if it fails (e.g. launched without -s, or launched
     // directly from hbmenu without nxlink at all) - the app should still run without it.
     logInit();
-    logWrite("network", "HID listen socket up on port %d", ORBITNX_HID_PORT);
+    logWrite("network", "HID listen socket up on port %d", SOLARNX_HID_PORT);
 
     // Before the first menu, so the host's library can arrive while it's on screen. Not fatal:
     // without it the "My games" tile just stays empty.
@@ -105,8 +105,8 @@ static void pauseHidWhileMenu(void) {
     atomic_store(&s_hidPaused, false);
 }
 
-// Blocks forever: accepts one HID client at a time on ORBITNX_HID_PORT (19001, matching
-// OrbitNX/Config.cs's HidPort) and keeps sending framed OrbitNxHidPacket payloads (real live
+// Blocks forever: accepts one HID client at a time on SOLARNX_HID_PORT (19001, matching
+// SolarNX/Config.cs's HidPort) and keeps sending framed SolarNxHidPacket payloads (real live
 // input state, read fresh from input.c every packet) until the send fails (PC disconnected) or the
 // player asks to go back to the menu, then goes back to waiting for a reconnect - mirrors the
 // host's SessionController reconnect-on-drop loop.
@@ -114,7 +114,7 @@ static void startNetwork(void) {
     while (1) {
         pauseHidWhileMenu();
 
-        logWrite("network", "waiting for PC to connect on HID port %d...", ORBITNX_HID_PORT);
+        logWrite("network", "waiting for PC to connect on HID port %d...", SOLARNX_HID_PORT);
 
         // Never give up on HID: this thread is the only thing that ever starts a session (and runs
         // the back-to-menu gesture). It used to return here on any failure and stay dead for the
@@ -127,7 +127,7 @@ static void startNetwork(void) {
 
         logWrite("network", "HID client connected");
 
-        OrbitNxHidPacket pkt;
+        SolarNxHidPacket pkt;
 
         u64 totalSent = 0;
         u32 sinceHeartbeat = 0;
@@ -150,7 +150,7 @@ static void startNetwork(void) {
                 // A library game's session is ended by the host when the game exits (or couldn't
                 // start) - that's the signal to bring the player back to the menu to pick the next
                 // one, instead of sitting on a frozen stream waiting for a reconnect.
-                if (inputGetAppTarget() == OrbitNxAppTarget_Library) {
+                if (inputGetAppTarget() == SolarNxAppTarget_Library) {
                     logWrite("network", "library session ended by the host - back to the menu");
                     appRequestMenu();
                 }

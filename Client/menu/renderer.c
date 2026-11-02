@@ -54,7 +54,7 @@ MenuContext *makeRenderer(void)
 
     MenuContext *context = malloc(sizeof(MenuContext));
 
-    context->window = SDL_CreateWindow("OrbitNX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+    context->window = SDL_CreateWindow("SolarNX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         MENU_RESX, MENU_RESY, SDL_WINDOW_SHOWN);
     if (context->window == NULL)
     {
@@ -152,7 +152,7 @@ void fillRoundedRect(MenuContext *context, int x, int y, int w, int h, int radiu
     roundedBoxRGBA(context->renderer, x, y, x + w, y + h, radius, colour.r, colour.g, colour.b, colour.a);
 }
 
-void drawOrbitNxTopBar(MenuContext *context)
+void drawSolarNxTopBar(MenuContext *context)
 {
     SDL_Color barColour = {150, 150, 150, 26}; // ~0.1 alpha
     draw_rect(context, 0, 0, MENU_RESX, 70, barColour);
@@ -163,14 +163,14 @@ void drawOrbitNxTopBar(MenuContext *context)
 
     int x = 24;
     int y = 14;
-    SDL_DrawText(context, x, y, white, "Orbit");
-    x += FC_GetWidth(context->font, "%s", "Orbit");
+    SDL_DrawText(context, x, y, white, "Solar");
+    x += FC_GetWidth(context->font, "%s", "Solar");
     SDL_DrawText(context, x, y, red, "N");
     x += FC_GetWidth(context->font, "%s", "N");
     SDL_DrawText(context, x, y, blue, "X");
 
     SDL_Color grey = {150, 150, 160, 255};
-    const char *version = "v" ORBITNX_VERSION;
+    const char *version = "v" SOLARNX_VERSION;
     int versionWidth = FC_GetWidth(context->font, "%s", version);
     SDL_DrawText(context, MENU_RESX - 24 - versionWidth, y, grey, version);
 }
@@ -197,7 +197,7 @@ void drawSplash(MenuContext *context, StarSystem *starSystem)
     starsystem_update(starSystem, dt);
     starsystem_draw(context, starSystem);
 
-    drawOrbitNxTopBar(context);
+    drawSolarNxTopBar(context);
     drawIpAddressLine(context);
 
     SDL_RenderPresent(context->renderer);

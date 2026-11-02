@@ -1,6 +1,6 @@
 [Русский](README.md) | **English**
 
-# OrbitNX documentation
+# SolarNX documentation
 
 0. [Features](features.en.md): what the system looks like (an example with screenshots) and the full feature list.
 1. [Installation](installation.en.md): PC, network and Switch requirements; installing both parts; the

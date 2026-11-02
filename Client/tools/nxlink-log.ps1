@@ -1,6 +1,6 @@
 # Sends a .nro to hbmenu's netloader and shows the app's logWrite() output live, while also
 # appending every line - stamped with this PC's HH:mm:ss.fff, the same format as the host's
-# OrbitNX.log - to <LogDir>/nxlink-<start time>.log.
+# SolarNX.log - to <LogDir>/nxlink-<start time>.log.
 #
 # Why not `nxlink -s ... | Tee-Object`: with its stdout redirected into a pipe, nxlink (a mingw
 # program) block-buffers its output, so lines showed up in neither the terminal nor the file until

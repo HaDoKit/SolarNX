@@ -8,7 +8,7 @@
 // startup, before audioStart().
 bool audioInit(void);
 
-// Blocks: opens the Opus/RTP-like UDP stream from the PC on ORBITNX_AUDIO_PORT (network/network.h),
+// Blocks: opens the Opus/RTP-like UDP stream from the PC on SOLARNX_AUDIO_PORT (network/network.h),
 // decodes frames and plays them via audout, concealing lost frames via Opus's own PLC. Reconnects
 // automatically if the stream drops. Returns once appIsRunning() goes false (common/appstate), so
 // it's safe to run this on its own thread - see main.c.
@@ -18,7 +18,7 @@ bool audioStart(void);
 // Tears down the Opus decoder, audout buffers, and the audout service. Call once at shutdown.
 void audioExit(void);
 
-// Link-quality telemetry for input.c to stamp onto the outgoing OrbitNxHidPacket (see network.h) -
+// Link-quality telemetry for input.c to stamp onto the outgoing SolarNxHidPacket (see network.h) -
 // consumed by the host's AdaptiveBitrateController. Free-running counters, no locking (plain word
 // reads/writes - see network.h's telemetry field doc comment).
 uint32_t audioGetReconnectCount(void);

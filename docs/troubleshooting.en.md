@@ -5,10 +5,10 @@
 ## No connection
 
 - Check that the **«IP клиента»** (Client IP) field contains the address shown at the bottom of the
-  OrbitNX menu on the Switch.
+  SolarNX menu on the Switch.
 - The PC and the Switch must be on the same network. Guest networks and the router's "client
   isolation" mode stop devices from seeing each other.
-- OrbitNX must be open on the Switch (menu or game), and «Включить трансляцию» (Start streaming)
+- SolarNX must be open on the Switch (menu or game), and «Включить трансляцию» (Start streaming)
   must be clicked on the PC.
 - After you pick a mode on the Switch, connecting can take a few seconds.
 
@@ -37,7 +37,7 @@ being lost.
 
 ## Controls don't work in the game
 
-- The game window must be active on the PC. OrbitNX activates it at launch, but if you click another
+- The game window must be active on the PC. SolarNX activates it at launch, but if you click another
   window on the PC, some games stop accepting the gamepad; click back into the game.
 - Make sure the ViGEmBus driver is installed («Настройки» (Settings) → «Драйверы» (Drivers)).
 - Buttons are swapped (A/B, X/Y): toggle the Switch layout option in the settings.
@@ -55,7 +55,7 @@ being lost.
 
 ## Logs
 
-- **PC:** `OrbitNX.log` next to `OrbitNX.exe`. It is overwritten each time the program starts.
+- **PC:** `SolarNX.log` next to `SolarNX.exe`. It is overwritten each time the program starts.
 - **Switch:** the console app does not save logs.
 
-When you report a problem, attach `OrbitNX.log` and describe what you were doing at the time.
+When you report a problem, attach `SolarNX.log` and describe what you were doing at the time.

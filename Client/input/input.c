@@ -12,16 +12,16 @@
 #define INPUT_MAX_CONTROLLERS 4
 
 static PadState s_pads[INPUT_MAX_CONTROLLERS];
-static OrbitNxAppTarget s_appTarget = OrbitNxAppTarget_BigPicture;
+static SolarNxAppTarget s_appTarget = SolarNxAppTarget_BigPicture;
 static uint32_t s_libraryEntryId = 0;
 
-void inputSetAppTarget(OrbitNxAppTarget target, uint32_t libraryEntryId)
+void inputSetAppTarget(SolarNxAppTarget target, uint32_t libraryEntryId)
 {
     s_appTarget = target;
-    s_libraryEntryId = target == OrbitNxAppTarget_Library ? libraryEntryId : 0;
+    s_libraryEntryId = target == SolarNxAppTarget_Library ? libraryEntryId : 0;
 }
 
-OrbitNxAppTarget inputGetAppTarget(void)
+SolarNxAppTarget inputGetAppTarget(void)
 {
     return s_appTarget;
 }
@@ -30,7 +30,7 @@ static const HidNpadIdType s_npadIds[INPUT_MAX_CONTROLLERS] = {
     HidNpadIdType_No1, HidNpadIdType_No2, HidNpadIdType_No3, HidNpadIdType_No4,
 };
 
-// Each controller carries its own motion reading (see network.h's OrbitNxControllerState), but a
+// Each controller carries its own motion reading (see network.h's SolarNxControllerState), but a
 // given controller only ever reports ONE style at a time (FullKey xor JoyDual-Left xor
 // JoyDual-Right) - starting all 3 possible handles per player regardless of which is actually
 // current was confirmed live to cause growing CPU pressure with even 1-2 controllers connected
@@ -191,7 +191,7 @@ static void updateSixaxisSlot(int i)
 // Reads player i's motion sensor into *pkt's per-controller accel/gyro fields, from whichever
 // handle updateSixaxisSlot (called just before this, in inputRead) determined is current. No-op
 // (leaves them zeroed) if nothing is connected/readable.
-static void readSixaxis(int i, OrbitNxControllerState *dst)
+static void readSixaxis(int i, SolarNxControllerState *dst)
 {
     HidSixAxisSensorState sixaxis = {0};
     bool got = false;
@@ -216,7 +216,7 @@ static void readSixaxis(int i, OrbitNxControllerState *dst)
     dst->gyroZ = sixaxis.angular_velocity.z;
 }
 
-void inputRead(OrbitNxHidPacket *pkt)
+void inputRead(SolarNxHidPacket *pkt)
 {
     memset(pkt, 0, sizeof(*pkt));
 
@@ -234,7 +234,7 @@ void inputRead(OrbitNxHidPacket *pkt)
 
         // libnx's HidNpadButton bit positions (A=0,B=1,X=2,Y=3,StickL=4,StickR=5,L=6,R=7,ZL=8,
         // ZR=9,Plus=10,Minus=11,Left=12,Up=13,Right=14,Down=15) match the wire format's heldKeys
-        // bit-for-bit (see OrbitNX/Input/HidProtocol.cs's ControllerState.IsSet) - no remapping,
+        // bit-for-bit (see SolarNX/Input/HidProtocol.cs's ControllerState.IsSet) - no remapping,
         // just mask to the low 16 bits the host actually reads (HeldKeys is a C# ushort).
         u64 buttons = padGetButtons(&s_pads[i]);
         pkt->controllers[i].heldKeys = (uint32_t)(buttons & 0xFFFFu);
@@ -260,7 +260,7 @@ void inputRead(OrbitNxHidPacket *pkt)
     {
         // The Switch's touch digitizer is natively 1280x720 (matches the console's screen
         // resolution), which already matches what the host expects - see
-        // .claude/skills/orbitnx-pc-architect/references/switch-protocol.md: "Touch coordinates
+        // .claude/skills/solarnx-pc-architect/references/switch-protocol.md: "Touch coordinates
         // arrive pre-normalized to a 1280x720 reference frame". No rescale needed.
         pkt->touchX1 = touch.touches[0].x;
         pkt->touchY1 = touch.touches[0].y;

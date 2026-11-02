@@ -60,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-nro
-          path: Client/OrbitNX-Switch.nro
+          path: Client/SolarNX-Switch.nro
           if-no-files-found: error
 
   release:
@@ -109,7 +109,7 @@ jobs:
       - name: Build host installer
         shell: pwsh
         run: |
-          & "${{ github.workspace }}\OrbitNX\scripts\build-installer.ps1" -Version "${{ needs.version.outputs.version }}"
+          & "${{ github.workspace }}\SolarNX\scripts\build-installer.ps1" -Version "${{ needs.version.outputs.version }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Download Switch client
@@ -124,10 +124,10 @@ jobs:
           tag_name: v${{ needs.version.outputs.version }}
           # Only used when the tag doesn't exist yet (manual run): tag the commit this run built.
           target_commitish: ${{ github.sha }}
-          name: OrbitNX ${{ needs.version.outputs.version }}
+          name: SolarNX ${{ needs.version.outputs.version }}
           body_path: ${{ runner.temp }}/release-notes.md
           # 0.1.0-alpha, 1.0.0-beta.2 ... are marked as pre-releases on GitHub.
           prerelease: ${{ contains(needs.version.outputs.version, '-') }}
           files: |
-            OrbitNX/Setup/OrbitNX-Setup.exe
-            Client/OrbitNX-Switch.nro
+            SolarNX/Setup/SolarNX-Setup.exe
+            Client/SolarNX-Switch.nro

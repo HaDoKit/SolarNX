@@ -7,7 +7,7 @@
 // videoStart().
 bool videoInit(void);
 
-// Blocks: opens the H264/MPEG-TS UDP stream from the PC on ORBITNX_VIDEO_PORT (network/network.h),
+// Blocks: opens the H264/MPEG-TS UDP stream from the PC on SOLARNX_VIDEO_PORT (network/network.h),
 // decodes frames in software (no hardware/NVDEC acceleration yet - see the comment at the top of
 // video.c) and renders them via SDL2. Reconnects automatically if the stream drops. Also pumps
 // appMainLoop() (common/appstate) and the SDL event queue, so this is meant to own the main thread - see main.c.
@@ -18,7 +18,7 @@ bool videoStart(void);
 // once at shutdown.
 void videoExit(void);
 
-// Link-quality telemetry for input.c to stamp onto the outgoing OrbitNxHidPacket (see network.h) -
+// Link-quality telemetry for input.c to stamp onto the outgoing SolarNxHidPacket (see network.h) -
 // consumed by the host's AdaptiveBitrateController. Free-running counters/last-known-values, no
 // locking (plain word reads/writes - see network.h's telemetry field doc comment).
 uint32_t videoGetReconnectCount(void);

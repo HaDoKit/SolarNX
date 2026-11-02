@@ -31,7 +31,7 @@
 // an NVDEC hardware channel isn't something to redo on every network hiccup). If it fails for any
 // reason, get_format() below just never gets offered AV_PIX_FMT_NVTEGRA and libavcodec falls back
 // to its normal software H264 decoder. The encoder sends High profile without B-frames (see
-// OrbitNX/Capture/VideoEncoder.cs) - CABAC makes that fallback somewhat more CPU-hungry than the
+// SolarNX/Capture/VideoEncoder.cs) - CABAC makes that fallback somewhat more CPU-hungry than the
 // baseline profile used previously, but the NVTEGRA path is the one that normally runs.
 
 #define VIDEO_RECONNECT_DELAY_NS 1000000000ULL // 1s between reconnect attempts
@@ -58,7 +58,7 @@ static int s_lastKnownBitrateKbps = VIDEO_DEFAULT_BITRATE_KBPS;
 
 // Bumped once per runStreamSession() return (stream dropped/failed to open) - see videoStart()'s
 // loop. Read by input.c via videoGetReconnectCount() to stamp onto the outgoing HID packet; the
-// host's AdaptiveBitrateController (OrbitNX/Session/AdaptiveBitrateController.cs) diffs this
+// host's AdaptiveBitrateController (SolarNX/Session/AdaptiveBitrateController.cs) diffs this
 // against its own last-seen value to detect video instability. Plain word, no locking - see
 // network.h's telemetry field doc comment.
 static uint32_t s_videoReconnectCount = 0;
@@ -100,7 +100,7 @@ bool videoInit(void)
         return false;
     }
 
-    s_window = SDL_CreateWindow("OrbitNX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+    s_window = SDL_CreateWindow("SolarNX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         1280, 720, SDL_WINDOW_SHOWN);
     if (s_window == NULL)
     {
@@ -534,7 +534,7 @@ bool videoStart(void)
         // BitrateKbps is known - see s_lastKnownBitrateKbps's doc comment. A false return only
         // happens if the app is exiting before any session ever connected, in which case the
         // loop condition below will also be false and this iteration's URL is never used.
-        OrbitNxSessionConfig sessionConfig;
+        SolarNxSessionConfig sessionConfig;
         if (networkWaitForSessionConfig(&sessionConfig) && sessionConfig.videoBitrateKbps > 0)
             s_lastKnownBitrateKbps = (int)sessionConfig.videoBitrateKbps;
 
@@ -542,10 +542,10 @@ bool videoStart(void)
         // buffer_size: SO_RCVBUF for the socket - must match network.c's udp_rx_buf_size, or
         // libavformat applies its own smaller default and the bigger BSD buffer goes unused.
         // fifo_size=0 turns libavformat's fifo thread off - see the comment at VIDEO_SOCKET_RCVBUF_BYTES.
-        snprintf(url, sizeof(url), "udp://0.0.0.0:%d?fifo_size=0&buffer_size=%d", ORBITNX_VIDEO_PORT, VIDEO_SOCKET_RCVBUF_BYTES);
+        snprintf(url, sizeof(url), "udp://0.0.0.0:%d?fifo_size=0&buffer_size=%d", SOLARNX_VIDEO_PORT, VIDEO_SOCKET_RCVBUF_BYTES);
 
         logWrite("video", "waiting for video stream on port %d (host bitrate %d kbps)...",
-            ORBITNX_VIDEO_PORT, s_lastKnownBitrateKbps);
+            SOLARNX_VIDEO_PORT, s_lastKnownBitrateKbps);
         runStreamSession(url);
         if (!appIsRunning() || appMenuRequested())
             break; // interrupted on purpose (exit / back to menu) - not a reconnect, and no point waiting 1s first

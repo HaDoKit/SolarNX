@@ -1,30 +1,30 @@
 [Русский](features.md) | **English**
 
-# OrbitNX features
+# SolarNX features
 
 ## What it looks like
 
-OrbitNX runs on two devices on the same network: the PC runs the game and sends video and audio; the
+SolarNX runs on two devices on the same network: the PC runs the game and sends video and audio; the
 Switch shows them and sends input back.
 
 ```mermaid
 flowchart LR
-    PC["<b>PC (Windows)</b><br/>OrbitNX<br/>• launches the game<br/>• captures the screen or a window<br/>• virtual gamepad<br/>• game library"]
-    NX["<b>Nintendo Switch</b><br/>OrbitNX for Switch<br/>• shows the picture<br/>• plays the audio<br/>• buttons, sticks, touch, gyro"]
+    PC["<b>PC (Windows)</b><br/>SolarNX<br/>• launches the game<br/>• captures the screen or a window<br/>• virtual gamepad<br/>• game library"]
+    NX["<b>Nintendo Switch</b><br/>SolarNX for Switch<br/>• shows the picture<br/>• plays the audio<br/>• buttons, sticks, touch, gyro"]
     PC -- "video + audio" --> NX
     NX -- "input" --> PC
 ```
 
 ### Example: launching a game from your library
 
-**1. On the PC**: the Switch's IP address is entered in OrbitNX and streaming is on.
+**1. On the PC**: the Switch's IP address is entered in SolarNX and streaming is on.
 
-![OrbitNX on the PC](images/app/home.png)
+![SolarNX on the PC](images/app/home.png)
 
-**2. On the Switch**: open OrbitNX and pick a mode. The console's IP address is shown at the bottom of
+**2. On the Switch**: open SolarNX and pick a mode. The console's IP address is shown at the bottom of
 the screen.
 
-![OrbitNX menu on the Switch](images/client/menu.jpg)
+![SolarNX menu on the Switch](images/client/menu.jpg)
 
 **3. My games**: pick a game from the library you put together on the PC.
 
@@ -44,7 +44,7 @@ PC, the Switch returns to the menu by itself.
 
 - The **«IP клиента»** (Client IP) field: the Switch's address (remembered).
 - **«Включить трансляцию»** / **«Выключить трансляцию»** (Start / Stop streaming): while streaming is
-  on, OrbitNX waits for the Switch and connects to it automatically, including after dropouts.
+  on, SolarNX waits for the Switch and connects to it automatically, including after dropouts.
 - **Status**: off / waiting for connection / streaming (with the mode name).
 - **«Показать экран»** (Show screen): a preview of what is being sent.
 - Buttons for the **game library** (gamepad) and **settings** (gear).
@@ -55,7 +55,7 @@ PC, the Switch returns to the menu by itself.
 ![Settings](images/app/settings.png)
 
 - **Video:** resolution (640×360 to 1920×1080), frame rate (24, 30, 45, 60), bitrate.
-- **Adaptive bitrate:** if packets are lost on the Switch, OrbitNX lowers the bitrate (no lower than
+- **Adaptive bitrate:** if packets are lost on the Switch, SolarNX lowers the bitrate (no lower than
   1500 kbps), and after 30 seconds of stable connection carefully raises it back to the configured
   value.
 - **Switch layout:** swaps A/B and X/Y.
@@ -86,23 +86,23 @@ A list of your games with covers. You can edit or delete each one; changes go to
 
 More in [Game library](library.en.md).
 
-### What OrbitNX does while streaming
+### What SolarNX does while streaming
 
 **Modes**
 - **Steam** starts Steam (if it isn't running) and opens Big Picture. It tracks games starting and
   closing; after you quit a game, Steam returns to Big Picture by itself. If Big Picture is closed on
   the PC, the session ends.
 - **shadPS4** starts the emulator in its gamepad mode.
-- **Your own game** is started the right way, and OrbitNX tracks its process, including processes the
+- **Your own game** is started the right way, and SolarNX tracks its process, including processes the
   launcher started. The game window gets focus, and capture switches to that window, even if it
   changes (launcher → game, resolution change).
-- When the Switch disconnects or goes back to the menu, OrbitNX closes the running game, exits
+- When the Switch disconnects or goes back to the menu, SolarNX closes the running game, exits
   Big Picture (Steam itself keeps running) or closes shadPS4.
 
 **Video**
 - Captures the primary monitor or the game window through Windows.Graphics.Capture.
 - Encodes H.264 on an NVIDIA graphics card (NVENC) with minimal latency; without NVIDIA, on the CPU.
-- If capture freezes (this happens when games switch fullscreen mode), OrbitNX restarts it by
+- If capture freezes (this happens when games switch fullscreen mode), SolarNX restarts it by
   itself.
 
 **Audio**
@@ -116,11 +116,11 @@ More in [Game library](library.en.md).
 - Gyro and accelerometer in DualShock 4 mode.
 
 **System**
-- While streaming, OrbitNX raises its priority and the system timer resolution so audio and video
+- While streaming, SolarNX raises its priority and the system timer resolution so audio and video
   don't stutter under game load.
 - Turns off the Xbox Game Bar popup that Windows shows when a gamepad connects.
 - Doesn't inject into game processes or read their memory; this matters for games with anti-cheat.
-- If OrbitNX crashes, the video encoding process exits with it.
+- If SolarNX crashes, the video encoding process exits with it.
 
 ## The Switch app
 

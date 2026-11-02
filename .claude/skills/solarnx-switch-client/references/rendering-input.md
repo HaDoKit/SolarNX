@@ -1,0 +1,48 @@
+# Rendering, menu and input
+
+## Stream output (`video/video.c`)
+
+SDL2 (not deko3d): one window 1280×720, renderer `ACCELERATED | PRESENTVSYNC`, one streaming
+texture (NV12 or IYUV, recreated on size/format change), `RenderClear` → `RenderCopy` (full
+window) → `RenderPresent`. Presentation is on the main thread only; decoding is on its own thread
+(see `decode-pipeline.md`). No docked/handheld resolution switching.
+
+## Menu (`menu/`)
+
+- `makeRenderer` (`renderer.c`): `SDL_Init`, its own window/renderer (1280×720 `MENU_RESX/RESY` in
+  `context.h`), `plInitialize` + the shared system fonts (Standard + NintendoExt) via SDL_FontCache,
+  `chdir("romfs:/")`. `freeRenderer` tears it all down incl. `SDL_Quit` — the menu and the stream
+  window never coexist.
+- `runAppSelectMenu` (`menu.c`): three tiles — Steam, shadPS4 (icons from `romfs:/icons/`) and
+  "My games" (icon = first library cover, or a placeholder) — star field background (`starsystem.c`,
+  dt from `rendererTick`), IP address line, ~70fps loop. "My games" opens `runLibraryScreen`: a
+  6-column grid of 160×240 covers (decoded from the library's JPEGs with `IMG_Load_RW`) with names
+  fitted by `fitText` (UTF-8-safe ellipsis), 2 visible rows with scrolling, A = play (target Library +
+  the entry id), B = back to the tiles; the copy is rebuilt whenever `libraryVersion()` changes. It calls
+  `padConfigureInput(1, ...)` with its own `PadState`, so after a mid-session menu `main.c` calls
+  `inputReconfigure()` to restore the 4-player setup. A on a tile → `inputSetAppTarget`. The loop
+  also ends when the app is asked to exit (`appMainLoop()` false) — callers must check
+  `appIsRunning()`.
+- SDL2_gfx rounded-rect primitives reset the blend mode to NONE after an opaque draw;
+  `SDL_ClearScreen` restores `BLEND` at the start of every frame.
+
+## Input capture (`input/input.c`)
+
+- Pads: `padConfigureInput(4, NpadStandard)`; player 1 = `No1` + `Handheld` in one `PadState`,
+  players 2-4 = `No2..No4`. Buttons masked to 16 bits (libnx bit order = wire order), sticks sent
+  raw (±0x7FFF, what the host's `ConvertAnalog` expects).
+- Touch: first contact of `hidGetTouchScreenStates`, native 1280×720 = the host's reference frame.
+- Sixaxis: handheld handle always running for player 1; for each other player exactly **one**
+  handle (FullKey, JoyDual-left or JoyDual-right) is started at a time, switched when the style
+  changes. Starting all three per player caused growing CPU pressure, near-continuous audio PLC and
+  a crash with only 1-2 controllers.
+- Telemetry getters from `video.c`/`audio.c` are stamped onto every packet.
+- Uses the standard `pad`/`hid` APIs, not `hidbus`.
+
+## Gestures (the Home/Capture buttons never reach the app)
+
+- **Minus+Plus** is just sent as two buttons; the host turns it into Guide (Steam button) / PS
+  (`SolarNX/Input/GuideButtonChord.cs`).
+- **Hold Minus alone for 3s** (`INPUT_MENU_HOLD_NS`): `inputRead` raises `appRequestMenu()`; it must
+  be released before it can fire again (also after returning from the menu). Plus held at the same
+  time disarms it, so a long Guide chord never counts. Keep new gestures from overlapping these two.

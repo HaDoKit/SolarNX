@@ -1,26 +1,23 @@
-# --- PC host (OrbitNX/, C#) ---
-OrbitNX/bin/
-OrbitNX/obj/
-OrbitNX/publish/
-OrbitNX/Setup/*.exe
+# --- PC host (SolarNX/, C#) ---
+SolarNX/bin/
+SolarNX/obj/
+SolarNX/publish/
+SolarNX/Setup/*.exe
+# Leftover local build output from before the OrbitNX -> SolarNX rename
+OrbitNX/
 *.user
 
-# --- Switch client (OrbitNX Client/OrbitNX/, C) ---
+# --- Switch client (Client/, C) ---
 *.elf
 *.nro
 *.pfs0
 *.nacp
 *.nso
 *.nsp
-OrbitNX Client/OrbitNX/build/
-OrbitNX Client/OrbitNX/OrbitNX.zip
-OrbitNX Client/OrbitNX/switch-ip.txt
 Client/build/
 Client/build_debug/
 Client/logs/
 
-# Legacy Electron host, superseded - not carried into this repo's history
-OrbitNX Client/SkyNX-Streamer/
 
 # Console-unique cryptographic keys - never commit, never share
 prod.keys

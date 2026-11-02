@@ -1,0 +1,23 @@
+<ui:FluentWindow x:Class="SolarNX.UI.main.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:controls="clr-namespace:SolarNX.UI.Controls"
+        Title="SolarNX" MinWidth="480" MinHeight="360"
+        Icon="pack://application:,,,/Assets/icon.ico"
+        WindowStartupLocation="CenterScreen"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="None"
+        Background="#FF0B0B14">
+    <Grid>
+        <controls:AnimatedBackgroundControl />
+
+        <!-- Transparent so the animated background shows through the titlebar strip; TitleBar
+             supplies the drag region and app-styled minimize/maximize/close buttons since
+             ExtendsContentIntoTitleBar removes the native ones. -->
+        <ui:TitleBar x:Name="AppTitleBar" Title="SolarNX" Height="42" VerticalAlignment="Top"
+                     Background="Transparent" Foreground="White" />
+
+        <Grid x:Name="ViewHost" Margin="0,42,0,0" />
+    </Grid>
+</ui:FluentWindow>

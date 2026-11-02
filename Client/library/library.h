@@ -3,16 +3,16 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// The host's game library as last pushed over ORBITNX_LIBRARY_PORT (see library.c for the wire
-// format, mirrored from OrbitNX/Library/LibraryWire.cs). Kept in memory only - the host re-sends it
+// The host's game library as last pushed over SOLARNX_LIBRARY_PORT (see library.c for the wire
+// format, mirrored from SolarNX/Library/LibraryWire.cs). Kept in memory only - the host re-sends it
 // whenever it changes, and on every app start (the hash starts empty).
 
 #define LIBRARY_MAX_ENTRIES     256
 #define LIBRARY_MAX_NAME_BYTES  255
-#define LIBRARY_MAX_COVER_BYTES (512 * 1024) // == OrbitNX CoverImage.MaxBytes
+#define LIBRARY_MAX_COVER_BYTES (512 * 1024) // == SolarNX CoverImage.MaxBytes
 
 typedef struct {
-    uint32_t id;                              // GameEntry.Id - sent back in OrbitNxHidPacket.libraryEntryId
+    uint32_t id;                              // GameEntry.Id - sent back in SolarNxHidPacket.libraryEntryId
     char name[LIBRARY_MAX_NAME_BYTES + 1];    // UTF-8, NUL-terminated
     uint8_t *cover;                           // JPEG (240x360), NULL if none
     uint32_t coverSize;

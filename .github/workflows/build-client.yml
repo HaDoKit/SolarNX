@@ -33,6 +33,6 @@ jobs:
       - name: Upload .nro
         uses: actions/upload-artifact@v4
         with:
-          name: OrbitNX-switch-${{ github.sha }}
-          path: Client/OrbitNX-Switch.nro
+          name: SolarNX-switch-${{ github.sha }}
+          path: Client/SolarNX-Switch.nro
           if-no-files-found: error

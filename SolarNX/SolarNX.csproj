@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.18362.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF> <!-- 2. Включаем поддержку WPF -->
+    <!-- gfxcapture (VideoEncoder.cs) uses IGraphicsCaptureItemInterop::CreateForMonitor, which
+         Windows only added for unpackaged Win32 apps in version 1903 (build 18362) - 17763 (1809)
+         understated the real requirement and would let the app install on a system where screen
+         capture fails at runtime with no build-time/manifest-level warning. -->
+    <SupportedOSPlatformVersion>10.0.18362.0</SupportedOSPlatformVersion>
+    <Platforms>x64</Platforms>
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <AssemblyName>SolarNX</AssemblyName>
+    <RootNamespace>SolarNX</RootNamespace>
+    <Product>SolarNX</Product>
+    <AssemblyTitle>SolarNX</AssemblyTitle>
+    <!-- Single source of truth for the version: ../VERSION (also read by Client/Makefile and
+         installer.iss). -->
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\VERSION').Trim())</Version>
+    <!-- App.xaml's ApplicationDefinition build action auto-generates its own Main() - Program.cs
+         owns startup instead (has to build Config/AppOrchestrator/the tray icon before any window
+         exists), so this picks that one explicitly rather than leaving two candidate entry points. -->
+    <StartupObject>SolarNX.Program</StartupObject>
+    <LangVersion>latest</LangVersion>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UseWindowsForms + UseWPF together override Microsoft.NET.Sdk's default implicit usings
+         instead of extending them, so System.IO (File/Path/Directory/...) drops out even though
+         most of this codebase relies on it being implicit. -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ApplicationIcon (above) only embeds this as a native exe resource, not as something a WPF
+         pack URI can resolve - MainWindow's Icon="pack://application:,,,/Assets/icon.ico" needs
+         this separate Resource entry to find it. -->
+    <Resource Include="Assets\icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Concentus" Version="2.2.2" />
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.106">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Nefarius.ViGEm.Client" Version="1.21.256" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="Tomlyn" Version="2.3.2" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Link flattens the destination to the output root (next to the exe) - DllImport only
+         searches the app's base directory, not subfolders, and our ffmpeg path lookups assume
+         the same flat layout. -->
+    <None Include="lib\ffmpeg.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('lib\ffmpeg.exe')">
+      <Link>ffmpeg.exe</Link>
+    </None>
+    <None Include="Native\TouchHelper\touchhelper.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Native\TouchHelper\touchhelper.exe')">
+      <Link>touchhelper.exe</Link>
+    </None>
+    <None Include="lib\vigembus-setup.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('lib\vigembus-setup.exe')">
+      <Link>vigembus-setup.exe</Link>
+    </None>
+  </ItemGroup>
+
+</Project>

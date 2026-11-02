@@ -7,7 +7,7 @@ $(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/de
 endif
 
 TOPDIR ?= $(CURDIR)
-# Single source of truth for the version: ../VERSION (also read by OrbitNX.csproj and installer.iss).
+# Single source of truth for the version: ../VERSION (also read by SolarNX.csproj and installer.iss).
 # Set before switch_rules, which falls back to 1.0.0 when APP_VERSION is empty.
 APP_VERSION	:=	$(strip $(shell cat "$(TOPDIR)/../VERSION"))
 include $(DEVKITPRO)/libnx/switch_rules
@@ -22,16 +22,16 @@ include $(DEVKITPRO)/libnx/switch_rules
 #---------------------------------------------------------------------------------
 # DEBUG=1 (or `make debug`) builds a separate -debug.nro with -Og and -DDEBUG, isolated in its own
 # build_debug/ object directory so debug/release object files never mix on an incremental build.
-# With DEBUG defined, common/logger's orbitnxLoggerInit() calls nxlinkStdio() so orbitnxLog()
+# With DEBUG defined, common/logger's solarnxLoggerInit() calls nxlinkStdio() so solarnxLog()
 # output streams back to the PC live when launched via `nxlink -s` through hbmenu's netloader -
 # see common/logger/logger.c.
 DEBUG ?= 0
 
 ifeq ($(DEBUG),1)
-	TARGET	:=	OrbitNX-Switch-debug
+	TARGET	:=	SolarNX-Switch-debug
 	BUILD	:=	build_debug
 else
-	TARGET	:=	OrbitNX-Switch
+	TARGET	:=	SolarNX-Switch
 	BUILD	:=	build
 endif
 
@@ -41,8 +41,8 @@ INCLUDES	:=	.
 # App-selection menu icons (menu.c) - see romfs/icons/.
 ROMFS		:=	romfs
 
-APP_TITLE	:=	OrbitNX
-APP_AUTHOR	:=	OrbitNX
+APP_TITLE	:=	SolarNX
+APP_AUTHOR	:=	SolarNX
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -50,7 +50,7 @@ APP_AUTHOR	:=	OrbitNX
 ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 
 CFLAGS	:=	-g -Wall -ffunction-sections \
-			$(ARCH) $(DEFINES) -DORBITNX_VERSION=\"$(APP_VERSION)\" \
+			$(ARCH) $(DEFINES) -DSOLARNX_VERSION=\"$(APP_VERSION)\" \
 			`$(PREFIX)pkg-config --cflags sdl2 SDL2_ttf SDL2_image SDL2_gfx libavformat libavcodec libavutil libswresample libswscale opusfile`
 
 ifeq ($(DEBUG),1)
@@ -168,8 +168,8 @@ $(BUILD):
 clean:
 	@echo clean ...
 	@rm -fr build build_debug \
-		OrbitNX-Switch.nro OrbitNX-Switch.nacp OrbitNX-Switch.elf OrbitNX-Switch.nso OrbitNX-Switch.npdm OrbitNX-Switch.nsp \
-		OrbitNX-Switch-debug.nro OrbitNX-Switch-debug.nacp OrbitNX-Switch-debug.elf OrbitNX-Switch-debug.nso OrbitNX-Switch-debug.npdm OrbitNX-Switch-debug.nsp
+		SolarNX-Switch.nro SolarNX-Switch.nacp SolarNX-Switch.elf SolarNX-Switch.nso SolarNX-Switch.npdm SolarNX-Switch.nsp \
+		SolarNX-Switch-debug.nro SolarNX-Switch-debug.nacp SolarNX-Switch-debug.elf SolarNX-Switch-debug.nso SolarNX-Switch-debug.npdm SolarNX-Switch-debug.nsp
 
 #---------------------------------------------------------------------------------
 else
@@ -182,8 +182,8 @@ DEPENDS	:=	$(OFILES:.o=.d)
 #---------------------------------------------------------------------------------
 # .nro only. The raw exefs .nsp that switch_rules can also build (APP_JSON/exheader.json below) is
 # NOT an installable package - no content meta - so DBI rejects it with "Content meta not found";
-# confirmed live, it got mistaken for the HOME-menu tile. The tile is OrbitNX-Forwarder.nsp from
-# tools/build-forwarder.ps1. `make OrbitNX-Switch.nsp` still builds the exefs image on demand.
+# confirmed live, it got mistaken for the HOME-menu tile. The tile is SolarNX-Forwarder.nsp from
+# tools/build-forwarder.ps1. `make SolarNX-Switch.nsp` still builds the exefs image on demand.
 all	:	$(OUTPUT).nro
 
 ifeq ($(strip $(NO_NACP)),)

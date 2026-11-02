@@ -1,14 +1,14 @@
 # Third-Party Notices
 
-OrbitNX uses and, in its distributed builds, includes the third-party software listed below. Each
+SolarNX uses and, in its distributed builds, includes the third-party software listed below. Each
 component remains under its own license; these notices are reproduced as those licenses require.
 
-## PC host (`OrbitNX/`)
+## PC host (`SolarNX/`)
 
 ### Bundled executables
 
 **FFmpeg** (`ffmpeg.exe`) - GPL-3.0. Unmodified "essentials" build from https://www.gyan.dev/ffmpeg/builds/,
-configured with `--enable-gpl --enable-version3`. It runs as a separate program that OrbitNX starts
+configured with `--enable-gpl --enable-version3`. It runs as a separate program that SolarNX starts
 for screen capture and video encoding. Copyright (c) the FFmpeg developers. Source code:
 https://ffmpeg.org/download.html and https://github.com/GyanD/codexffmpeg (build scripts).
 License text: https://www.gnu.org/licenses/gpl-3.0.html

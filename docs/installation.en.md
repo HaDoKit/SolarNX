@@ -8,8 +8,8 @@
 
 - Windows 10 version 1903 (build 18362) or later, 64-bit.
 - An NVIDIA graphics card with driver 610 or later, for hardware encoding (NVENC). Without one,
-  OrbitNX encodes video on the CPU (libx264). That works, but puts a noticeable load on the CPU.
-- The **ViGEmBus** virtual gamepad driver. The OrbitNX installer offers to install it for you.
+  SolarNX encodes video on the CPU (libx264). That works, but puts a noticeable load on the CPU.
+- The **ViGEmBus** virtual gamepad driver. The SolarNX installer offers to install it for you.
 - For Steam mode, Steam installed. For shadPS4 mode, [shadPS4](https://shadps4.net).
 
 ### Nintendo Switch
@@ -33,9 +33,9 @@ used (details in [How it works](architecture.en.md)):
 
 ## Installing on the PC
 
-1. Download `OrbitNX-Setup.exe` from the [releases](https://github.com/HaDoKit/OrbitNX/releases) and run it.
+1. Download `SolarNX-Setup.exe` from the [releases](https://github.com/HaDoKit/SolarNX/releases) and run it.
 2. At the drivers step, select **ViGEmBus** if it isn't installed yet.
-3. After installation, start OrbitNX. Closing the window minimizes it to the tray; to quit completely,
+3. After installation, start SolarNX. Closing the window minimizes it to the tray; to quit completely,
    use the tray icon menu → «Выход» (Exit).
 
 You can reinstall the driver later: «Настройки» (Settings) → «Драйверы» (Drivers) →
@@ -43,21 +43,21 @@ You can reinstall the driver later: «Настройки» (Settings) → «Др
 
 ## Installing on the Switch
 
-1. Download `OrbitNX-Switch.nro` from the [releases](https://github.com/HaDoKit/OrbitNX/releases).
-2. Copy it to the Switch SD card into `/switch/OrbitNX/`, so the path is
-   `/switch/OrbitNX/OrbitNX-Switch.nro`.
-3. Start OrbitNX from the Homebrew Menu.
+1. Download `SolarNX-Switch.nro` from the [releases](https://github.com/HaDoKit/SolarNX/releases).
+2. Copy it to the Switch SD card into `/switch/SolarNX/`, so the path is
+   `/switch/SolarNX/SolarNX-Switch.nro`.
+3. Start SolarNX from the Homebrew Menu.
 
 ### HOME menu tile (optional)
 
-To start OrbitNX from the HOME menu instead of the Homebrew Menu, you can install a forwarder: a small
+To start SolarNX from the HOME menu instead of the Homebrew Menu, you can install a forwarder: a small
 title that launches the `.nro` from the SD card. You build it on the PC for your own console, using
 keys dumped from that console. Instructions are in
 [DEVELOPMENT.en.md → HOME menu tile](../DEVELOPMENT.en.md#home-menu-tile-forwarder). Install the
-resulting `OrbitNX-Forwarder.nsp` with DBI.
+resulting `SolarNX-Forwarder.nsp` with DBI.
 
-> Install `OrbitNX-Forwarder.nsp` specifically. The installer rejects other files with
+> Install `SolarNX-Forwarder.nsp` specifically. The installer rejects other files with
 > "Content meta not found".
 
-The forwarder only launches the `.nro`, so to update OrbitNX you just replace the `.nro` on the SD
+The forwarder only launches the `.nro`, so to update SolarNX you just replace the `.nro` on the SD
 card. There's no need to reinstall the tile.

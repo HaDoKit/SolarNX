@@ -7,7 +7,7 @@ on the Switch, with covers, in the **My games** tile.
 
 ## Adding a game
 
-On the OrbitNX main window, click the gamepad button (next to settings) → **«Добавить игру»**
+On the SolarNX main window, click the gamepad button (next to settings) → **«Добавить игру»**
 (Add game).
 
 ![Game library](images/app/library.png)
@@ -24,7 +24,7 @@ On the OrbitNX main window, click the gamepad button (next to settings) → **«
 | **Custom script (cmd)** | commands, one per line | through `cmd.exe`, for anything the other methods don't cover |
 
 If the game starts through a launcher (the launcher opens the game and then closes itself), that's
-fine: OrbitNX also tracks processes started by the launcher.
+fine: SolarNX also tracks processes started by the launcher.
 
 ### Gamepad
 
@@ -61,11 +61,11 @@ This is how the library looks on the Switch:
 
 - Library changes reach the Switch automatically while streaming is on, even if the Switch is in the
   menu at that moment.
-- When a game starts, OrbitNX gives its window focus so that input goes to the game. If the game
+- When a game starts, SolarNX gives its window focus so that input goes to the game. If the game
   switches windows (for example, launcher → the game itself), focus and capture move to the new
   window.
 - When the game closes on the PC, the Switch returns to the menu.
-- If you go back to the menu on the Switch (by holding − for 3 seconds), OrbitNX closes the game on
+- If you go back to the menu on the Switch (by holding − for 3 seconds), SolarNX closes the game on
   the PC.
 
-The library is stored in `library.json` next to OrbitNX, and covers in the `covers` folder.
+The library is stored in `library.json` next to SolarNX, and covers in the `covers` folder.

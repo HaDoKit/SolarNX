@@ -34,5 +34,5 @@ void fillRoundedRect(MenuContext *context, int x, int y, int w, int h, int radiu
 
 // Shared between the app-selection menu and the post-selection waiting screen, so both look like
 // the same app instead of the top bar/IP line being drawn differently per screen.
-void drawOrbitNxTopBar(MenuContext *context);
+void drawSolarNxTopBar(MenuContext *context);
 void drawIpAddressLine(MenuContext *context);

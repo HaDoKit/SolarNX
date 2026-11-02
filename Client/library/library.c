@@ -14,7 +14,7 @@
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
 
-// Wire format - mirrors OrbitNX/Library/LibraryWire.cs, little-endian, one exchange per connection
+// Wire format - mirrors SolarNX/Library/LibraryWire.cs, little-endian, one exchange per connection
 // (the host dials in, same direction as HID):
 //   host -> here   u32 magic "ONXL", u32 version (1), u64 content hash
 //   here -> host   u8 1 = send it / 0 = already have this hash
@@ -184,7 +184,7 @@ bool libraryStart(void)
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(ORBITNX_LIBRARY_PORT);
+    addr.sin_port = htons(SOLARNX_LIBRARY_PORT);
 
     if (bind(s_listenSock, (struct sockaddr *)&addr, sizeof(addr)) != 0 || listen(s_listenSock, 1) != 0)
     {
@@ -202,7 +202,7 @@ bool libraryStart(void)
         return false;
     }
 
-    logWrite("library", "library listener up on port %d", ORBITNX_LIBRARY_PORT);
+    logWrite("library", "library listener up on port %d", SOLARNX_LIBRARY_PORT);
     return true;
 }
 

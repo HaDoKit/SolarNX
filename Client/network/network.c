@@ -11,12 +11,12 @@
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
 
-_Static_assert(sizeof(OrbitNxHidPacket) == ORBITNX_HID_PAYLOAD_SIZE,
-    "OrbitNxHidPacket must stay exactly ORBITNX_HID_PAYLOAD_SIZE bytes - see network.h");
-_Static_assert(sizeof(OrbitNxSessionConfig) == ORBITNX_SESSION_CONFIG_SIZE,
-    "OrbitNxSessionConfig must stay exactly ORBITNX_SESSION_CONFIG_SIZE bytes - see network.h");
+_Static_assert(sizeof(SolarNxHidPacket) == SOLARNX_HID_PAYLOAD_SIZE,
+    "SolarNxHidPacket must stay exactly SOLARNX_HID_PAYLOAD_SIZE bytes - see network.h");
+_Static_assert(sizeof(SolarNxSessionConfig) == SOLARNX_SESSION_CONFIG_SIZE,
+    "SolarNxSessionConfig must stay exactly SOLARNX_SESSION_CONFIG_SIZE bytes - see network.h");
 
-static const uint8_t s_hidMarker[ORBITNX_HID_MARKER_SIZE] = {
+static const uint8_t s_hidMarker[SOLARNX_HID_MARKER_SIZE] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 };
 
@@ -27,7 +27,7 @@ static int s_clientSock = -1;
 // networkWaitForSessionConfig() (called from video.c on the main thread, and potentially audio.c
 // on its own thread).
 static Mutex s_sessionConfigMutex;
-static OrbitNxSessionConfig s_sessionConfig;
+static SolarNxSessionConfig s_sessionConfig;
 static bool s_sessionConfigReady = false;
 
 static bool sendAll(int sock, const void *data, size_t len)
@@ -99,7 +99,7 @@ bool networkInit(void)
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(ORBITNX_HID_PORT);
+    addr.sin_port = htons(SOLARNX_HID_PORT);
 
     if (bind(s_listenSock, (struct sockaddr *)&addr, sizeof(addr)) != 0)
         return false;
@@ -163,14 +163,14 @@ bool networkAcceptHid(void)
         setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &sendTimeout, sizeof(sendTimeout));
 
         // The host (SessionController.cs) writes this immediately after connecting, before any
-        // OrbitNxHidPacket traffic starts the other way - block reading it now, before this accept is
+        // SolarNxHidPacket traffic starts the other way - block reading it now, before this accept is
         // considered successful. A failure here (connection dropped mid-handshake, etc.) is treated
         // exactly like a failed accept - the caller goes back to waiting for a fresh connection.
         // A connection that drops mid-handshake is skipped, not fatal: this used to return false,
         // and the caller then ended the HID thread for good - confirmed live: one failed handshake
         // right after a library game was picked left no HID session at all (black screen, and the
         // hold-Minus menu gesture - detected in the HID loop - dead too).
-        OrbitNxSessionConfig config;
+        SolarNxSessionConfig config;
         if (!recvAll(sock, &config, sizeof(config)))
         {
             logWrite("network", "HID handshake failed (errno %d) - waiting for the next connection", errno);
@@ -202,7 +202,7 @@ bool networkAcceptHid(void)
     }
 }
 
-bool networkWaitForSessionConfig(OrbitNxSessionConfig *out)
+bool networkWaitForSessionConfig(SolarNxSessionConfig *out)
 {
     while (appMainLoop()) // main thread only - see network.h
     {
@@ -221,7 +221,7 @@ bool networkWaitForSessionConfig(OrbitNxSessionConfig *out)
     return false;
 }
 
-bool networkSendHid(const OrbitNxHidPacket *pkt)
+bool networkSendHid(const SolarNxHidPacket *pkt)
 {
     if (s_clientSock < 0)
         return false;

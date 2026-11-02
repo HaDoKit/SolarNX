@@ -237,7 +237,7 @@ static void drawMenuFrame(MenuContext *context, StarSystem *starSystem, int sele
     SDL_ClearScreen(context, bg);
     starsystem_draw(context, starSystem);
 
-    drawOrbitNxTopBar(context);
+    drawSolarNxTopBar(context);
 
     const int blockW = 320;
     const int blockH = 420;
@@ -265,7 +265,7 @@ static void drawLibraryFrame(MenuContext *context, StarSystem *starSystem, const
     SDL_Color bg = {5, 5, 8, 255};
     SDL_ClearScreen(context, bg);
     starsystem_draw(context, starSystem);
-    drawOrbitNxTopBar(context);
+    drawSolarNxTopBar(context);
 
     const char *title = "My games";
     SDL_DrawText(context, MENU_RESX - 24 - FC_GetWidth(context->font, "%s", title), 14, kWhite, title);
@@ -273,7 +273,7 @@ static void drawLibraryFrame(MenuContext *context, StarSystem *starSystem, const
     if (lib->count == 0)
     {
         const char *line1 = lib->version == 0 ? "Waiting for the library from your PC..." : "Your library is empty";
-        const char *line2 = "Add games in OrbitNX on the PC (Library button) with streaming enabled";
+        const char *line2 = "Add games in SolarNX on the PC (Library button) with streaming enabled";
         SDL_DrawText(context, MENU_RESX / 2 - FC_GetWidth(context->font, "%s", line1) / 2, 300, kWhite, line1);
         drawScaledText(context, MENU_RESX / 2 - scaledWidth(context, 0.55f, line2) / 2, 360, 0.55f, kDim, line2);
     }
@@ -373,7 +373,7 @@ static bool runLibraryScreen(MenuContext *context, StarSystem *starSystem, PadSt
     return false;
 }
 
-OrbitNxAppTarget runAppSelectMenu(MenuContext *context, StarSystem *starSystem)
+SolarNxAppTarget runAppSelectMenu(MenuContext *context, StarSystem *starSystem)
 {
     // padConfigureInput must run before any padInitialize/padUpdate call. On first start this menu
     // runs before input.c's inputInit(); mid-session main.c calls inputReconfigure() afterwards to
@@ -391,7 +391,7 @@ OrbitNxAppTarget runAppSelectMenu(MenuContext *context, StarSystem *starSystem)
 
     MenuLibrary lib = {0};
     int selectedIndex = 0;
-    OrbitNxAppTarget chosen = OrbitNxAppTarget_BigPicture;
+    SolarNxAppTarget chosen = SolarNxAppTarget_BigPicture;
     uint32_t chosenLibraryId = 0;
     bool picked = false;
 
@@ -416,12 +416,12 @@ OrbitNxAppTarget runAppSelectMenu(MenuContext *context, StarSystem *starSystem)
             {
                 if (runLibraryScreen(context, starSystem, &menuPad, &lib, &chosenLibraryId))
                 {
-                    chosen = OrbitNxAppTarget_Library;
+                    chosen = SolarNxAppTarget_Library;
                     picked = true;
                 }
                 continue; // B on the library screen comes back to the tiles
             }
-            chosen = selectedIndex == 0 ? OrbitNxAppTarget_BigPicture : OrbitNxAppTarget_ShadPs4;
+            chosen = selectedIndex == 0 ? SolarNxAppTarget_BigPicture : SolarNxAppTarget_ShadPs4;
             picked = true;
             continue;
         }

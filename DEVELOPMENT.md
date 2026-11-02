@@ -1,18 +1,18 @@
 **Русский** | [English](DEVELOPMENT.en.md)
 
-# Разработка OrbitNX
+# Разработка SolarNX
 
-Как собрать OrbitNX из исходников и проверить изменения на консоли. Как система
+Как собрать SolarNX из исходников и проверить изменения на консоли. Как система
 устроена внутри — в [docs/architecture.md](docs/architecture.md).
 
 ## Структура репозитория
 
 | Папка | Что внутри |
 |---|---|
-| `OrbitNX/` | приложение для ПК: C#, .NET 10, WPF |
-| `OrbitNX/lib/` | готовые программы, которые идут в комплекте: `ffmpeg.exe`, `vigembus-setup.exe` |
-| `OrbitNX/Native/TouchHelper/` | маленькая программа на C для касаний (`touchhelper.c` и собранный `touchhelper.exe`) |
-| `OrbitNX/scripts/`, `OrbitNX/installer.iss` | сборка установщика |
+| `SolarNX/` | приложение для ПК: C#, .NET 10, WPF |
+| `SolarNX/lib/` | готовые программы, которые идут в комплекте: `ffmpeg.exe`, `vigembus-setup.exe` |
+| `SolarNX/Native/TouchHelper/` | маленькая программа на C для касаний (`touchhelper.c` и собранный `touchhelper.exe`) |
+| `SolarNX/scripts/`, `SolarNX/installer.iss` | сборка установщика |
 | `Client/` | приложение для Switch: C, devkitPro / libnx |
 | `Client/tools/` | сборка форвардера и просмотр логов Switch через nxlink |
 | `docs/` | документация для пользователей |
@@ -37,19 +37,19 @@
 ### Сборка и запуск
 
 ```
-dotnet build OrbitNX/OrbitNX.csproj -c Release
+dotnet build SolarNX/SolarNX.csproj -c Release
 ```
 
-Результат — `OrbitNX/bin/Release/net10.0-windows10.0.18362.0/OrbitNX.exe`. При сборке рядом с ним
+Результат — `SolarNX/bin/Release/net10.0-windows10.0.18362.0/SolarNX.exe`. При сборке рядом с ним
 копируются `ffmpeg.exe`, `vigembus-setup.exe` и `touchhelper.exe`.
 
-- Настройки (`config.json`), библиотека (`library.json`, `covers/`) и лог (`OrbitNX.log`) хранятся
+- Настройки (`config.json`), библиотека (`library.json`, `covers/`) и лог (`SolarNX.log`) хранятся
   рядом с exe. Время в логе — `HH:mm:ss.fff`, так же как в логе Switch.
 - Для виртуальных геймпадов нужен драйвер ViGEmBus. Если он не установлен, его можно поставить из
   настроек приложения («Драйверы»).
-- Одновременно может работать только одна копия OrbitNX.
+- Одновременно может работать только одна копия SolarNX.
 
-### Готовые программы в `OrbitNX/lib/`
+### Готовые программы в `SolarNX/lib/`
 
 - **`ffmpeg.exe`** — сборка «essentials» с [gyan.dev](https://www.gyan.dev/ffmpeg/builds/), сейчас
   8.1. Нужна версия 8.0 или новее: в ней появился фильтр `gfxcapture` (Windows.Graphics.Capture),
@@ -66,18 +66,18 @@ dotnet build OrbitNX/OrbitNX.csproj -c Release
 репозитории. Если вы изменили исходник, пересоберите его через MinGW:
 
 ```
-gcc -O2 OrbitNX/Native/TouchHelper/touchhelper.c -o OrbitNX/Native/TouchHelper/touchhelper.exe
+gcc -O2 SolarNX/Native/TouchHelper/touchhelper.c -o SolarNX/Native/TouchHelper/touchhelper.exe
 ```
 
 ### Установщик
 
 ```
-powershell -ExecutionPolicy Bypass -File OrbitNX/scripts/build-installer.ps1
+powershell -ExecutionPolicy Bypass -File SolarNX/scripts/build-installer.ps1
 ```
 
 Скрипт выполняет `dotnet publish` (win-x64, self-contained), затем собирает `installer.iss` через
 `ISCC.exe` — его он ищет в PATH и в стандартной папке установки Inno Setup. Результат —
-`OrbitNX/Setup/OrbitNX-Setup.exe`. Установщик ставит драйвер ViGEmBus, если его нет, и кладёт рядом
+`SolarNX/Setup/SolarNX-Setup.exe`. Установщик ставит драйвер ViGEmBus, если его нет, и кладёт рядом
 с приложением THIRD-PARTY-NOTICES.md.
 
 ## Клиент для Switch
@@ -85,8 +85,8 @@ powershell -ExecutionPolicy Bypass -File OrbitNX/scripts/build-installer.ps1
 ### Сборка
 
 ```
-make -C Client            # OrbitNX-Switch.nro
-make -C Client DEBUG=1    # OrbitNX-Switch-debug.nro: -Og и лог через nxlink
+make -C Client            # SolarNX-Switch.nro
+make -C Client DEBUG=1    # SolarNX-Switch-debug.nro: -Og и лог через nxlink
 ```
 
 Обычная и отладочная сборки хранят объектные файлы раздельно (`build/` и `build_debug/`), поэтому
@@ -103,12 +103,12 @@ make -C Client DEBUG=1    # OrbitNX-Switch-debug.nro: -Og и лог через n
 ### Проверка на консоли
 
 1. Откройте Homebrew Menu на Switch.
-2. Отправьте приложение: `nxlink -a <IP Switch> Client/OrbitNX-Switch.nro`.
+2. Отправьте приложение: `nxlink -a <IP Switch> Client/SolarNX-Switch.nro`.
 
 Обычная сборка ничего не пишет в лог. Чтобы видеть лог, используйте отладочную сборку:
 
 ```
-powershell -ExecutionPolicy Bypass -File Client/tools/nxlink-log.ps1 -SwitchIp <IP Switch> -Nro Client/OrbitNX-Switch-debug.nro -LogDir Client/logs
+powershell -ExecutionPolicy Bypass -File Client/tools/nxlink-log.ps1 -SwitchIp <IP Switch> -Nro Client/SolarNX-Switch-debug.nro -LogDir Client/logs
 ```
 
 Скрипт отправляет `.nro`, сам принимает подключение лога от приложения, выводит строки на экран и
@@ -117,11 +117,11 @@ powershell -ExecutionPolicy Bypass -File Client/tools/nxlink-log.ps1 -SwitchIp <
 
 ### Плитка на главном экране (форвардер)
 
-`Client/tools/build-forwarder.ps1` собирает `Client/OrbitNX-Forwarder.nsp`. Это устанавливаемая
-программа: она добавляет плитку OrbitNX на главный экран Switch и запускает
-`sdmc:/switch/OrbitNX/OrbitNX-Switch.nro`.
+`Client/tools/build-forwarder.ps1` собирает `Client/SolarNX-Forwarder.nsp`. Это устанавливаемая
+программа: она добавляет плитку SolarNX на главный экран Switch и запускает
+`sdmc:/switch/SolarNX/SolarNX-Switch.nro`.
 
-1. Соберите клиент и скопируйте `OrbitNX-Switch.nro` на SD-карту в `/switch/OrbitNX/`.
+1. Соберите клиент и скопируйте `SolarNX-Switch.nro` на SD-карту в `/switch/SolarNX/`.
 2. Установите [nton](https://pypi.org/project/nton/): `python -m pip install nton`.
 3. Положите ключи **своей** консоли в `%USERPROFILE%\.switch\prod.keys`. Ключи нельзя коммитить и
    передавать кому-либо — `prod.keys` и `title.keys` уже есть в `.gitignore`.
@@ -135,16 +135,16 @@ Title ID закреплён (`01E7E36C3EA40000`), поэтому новая сб
 
 ## Прежде чем менять код
 
-- В `.claude/skills/` описаны обе части: `orbitnx-pc-architect` (ПК) и `orbitnx-switch-client`
+- В `.claude/skills/` описаны обе части: `solarnx-pc-architect` (ПК) и `solarnx-switch-client`
   (Switch). Там же перечислены подходы, которые уже пробовали и отвергли, — прочитайте раздел про
   ту часть, которую меняете, чтобы не повторять тупиковые варианты.
-  - `orbitnx-pc-architect/references/`: `switch-protocol.md`, `ffmpeg-pipeline.md`,
+  - `solarnx-pc-architect/references/`: `switch-protocol.md`, `ffmpeg-pipeline.md`,
     `steam-bigpicture.md`, `native-interop.md`.
-  - `orbitnx-switch-client/references/`: `network-protocol.md`, `decode-pipeline.md`,
+  - `solarnx-switch-client/references/`: `network-protocol.md`, `decode-pipeline.md`,
     `audio-pipeline.md`, `rendering-input.md`, `platform-constraints.md`.
-- **Протокол описан в коде дважды** — на C# в `OrbitNX/` и на C в `Client/`. Меняйте обе стороны в
+- **Протокол описан в коде дважды** — на C# в `SolarNX/` и на C в `Client/`. Меняйте обе стороны в
   одном коммите.
-- OrbitNX не должен внедряться в процессы игр и читать их память: это важно для игр с античитом.
+- SolarNX не должен внедряться в процессы игр и читать их память: это важно для игр с античитом.
   Процессы открываются только с минимальными правами.
 - **Документация** ведётся на двух языках: русская версия — `X.md`, английская — `X.en.md` в той же
   папке. Меняя одну, обновите и другую.
