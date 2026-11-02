@@ -41,6 +41,17 @@ cover it.
 Clear the checkbox if the picture is black; this happens with some games in exclusive fullscreen
 mode. The whole primary monitor is then sent instead.
 
+### Rights
+
+The **«Запускать от имени администратора»** (Run as administrator) checkbox is off by default. Without it
+the game starts as an ordinary user, the same as a double-click in Explorer, even though SolarNX itself
+runs as administrator. Turn it on for games and programs that need administrator rights. A game that
+itself requires administrator rights gets them either way. Steam games don't have the checkbox: Steam
+starts them.
+
+If User Account Control (UAC) is turned off in Windows, every program runs as administrator anyway, and
+the checkbox changes nothing.
+
 ## Covers
 
 Click **«Выбрать…»** (Choose…) under the cover and pick any image. On the Switch, covers are shown

@@ -1,0 +1,20 @@
+# systemd unit for the SolarNX rendezvous server - see docs/server.md.
+# Put the program in /opt/solarnx-rendezvous, then:
+#   sudo cp solarnx-rendezvous.service /etc/systemd/system/
+#   sudo systemctl enable --now solarnx-rendezvous
+[Unit]
+Description=SolarNX rendezvous server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/opt/solarnx-rendezvous/solarnx-rendezvous
+WorkingDirectory=/opt/solarnx-rendezvous
+DynamicUser=yes
+Restart=on-failure
+# Settings: /opt/solarnx-rendezvous/rendezvous.json, or environment variables, e.g.:
+# Environment=SOLARNX_RV_ACCESS_KEY=your-key
+# Environment=SOLARNX_RV_RELAY=true
+
+[Install]
+WantedBy=multi-user.target

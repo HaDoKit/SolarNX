@@ -51,17 +51,22 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         ConnectionModeCombo.SelectionChanged += (_, _) =>
         {
             _config.ConnectionMode = ConnectionModeCombo.SelectedIndex == 1 ? SolarNX.Session.ConnectionMode.Internet : SolarNX.Session.ConnectionMode.Wifi;
-            if (_config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet && string.IsNullOrWhiteSpace(_config.ConnectionCode))
-                _config.ConnectionCode = SolarNX.Session.InternetSession.NewCode();
             _config.Save();
             RefreshConnectionSection();
         };
-        NewCodeButton.Click += (_, _) =>
+        PairButton.Click += (_, _) => OpenPairing();
+        ServerBox.Text = _config.RendezvousServer;
+        ServerKeyBox.Text = _config.RendezvousKey;
+        ServerBox.LostFocus += (_, _) => { _config.RendezvousServer = ServerBox.Text.Trim(); _config.Save(); };
+        ServerKeyBox.LostFocus += (_, _) => { _config.RendezvousKey = ServerKeyBox.Text; _config.Save(); };
+        ForgetDevicesButton.Click += (_, _) =>
         {
-            _config.ConnectionCode = SolarNX.Session.InternetSession.NewCode();
-            _config.Save();
-            RefreshConnectionSection();
+            var answer = System.Windows.MessageBox.Show(System.Windows.Window.GetWindow(this),
+                "Забыть все привязанные Switch? Им придётся привязаться заново.", "SolarNX",
+                System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question);
+            if (answer == System.Windows.MessageBoxResult.Yes) SolarNX.Session.PairedDevices.RemoveAll();
         };
+        SolarNX.Session.PairedDevices.Changed += () => Dispatcher.BeginInvoke(RefreshConnectionSection);
         RefreshConnectionSection();
     }
 
@@ -69,7 +74,30 @@ public partial class SettingsView : System.Windows.Controls.UserControl
     {
         var internet = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet;
         InternetPanel.Visibility = internet ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
-        ConnectionCodeBox.Text = _config.ConnectionCode;
+        ServerPanel.Visibility = InternetPanel.Visibility;
+        if (internet && string.IsNullOrWhiteSpace(_config.HostId))
+        {
+            _config.HostId = SolarNX.Session.InternetSession.NewId();
+            _config.Save();
+        }
+        HostIdBox.Text = _config.HostId;
+        var devices = SolarNX.Session.PairedDevices.All;
+        PairedDevicesText.Text = devices.Count == 0
+            ? "Нет — привяжите Switch, чтобы подключаться через интернет."
+            : string.Join(", ", devices.Select(d => $"{d.Name} ({d.PairedUtc.ToLocalTime():d})"));
+    }
+
+    private void OpenPairing()
+    {
+        var session = _orchestrator.Internet;
+        if (session is null)
+        {
+            System.Windows.MessageBox.Show(System.Windows.Window.GetWindow(this),
+                "Сначала включите трансляцию в режиме «Интернет» — привязка идёт через его соединение.", "SolarNX",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            return;
+        }
+        new PairingWindow(session) { Owner = System.Windows.Window.GetWindow(this) }.ShowDialog();
     }
 
     private void InitVideoSection()

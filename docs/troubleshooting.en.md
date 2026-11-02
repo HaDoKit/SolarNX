@@ -15,12 +15,13 @@
 ## Internet mode doesn't connect (experimental)
 
 - The "X  Internet: …" line in the Switch menu tells why: "PC address not found", "waiting for the
-  PC" (the PC doesn't answer), "wrong connection code".
+  PC" (the PC doesn't answer), "not paired" (the Switch isn't paired with this PC, or the PC forgot it),
+  "pairing - open it on the PC first" (open «Привязать Switch…» on the PC).
 - Check that **UDP** port 19010 (not TCP) is forwarded on the PC's router and that Windows Firewall lets
   SolarNX through.
 - The mode on the Switch takes effect after restarting the app.
-- If your provider gives you a shared address (CGNAT), port forwarding won't help - wait for the mode
-  with a rendezvous server.
+- If your provider gives you a shared address (CGNAT), port forwarding won't help - use your own
+  [rendezvous server](server.en.md) with relaying.
 
 ## Black screen on the Switch
 

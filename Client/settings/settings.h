@@ -14,12 +14,12 @@
 // stores and shows the setting.
 //
 // Connection: Wi-Fi (default - the PC finds this console on the local network) or the experimental
-// Internet mode (this console dials the PC at pcAddress over UDP, see transport/transport.c, and
-// presents connectionCode, shown in the PC's settings). The mode is read at startup - a change
-// applies after restarting the app.
+// Internet mode (this console dials the PC at pcAddress over UDP, see transport/transport.c). Internet
+// mode needs pairing once: it leaves a 32-byte pairing key and the PC's host id here, next to this
+// console's random device id. The mode is read at startup - a change applies after restarting the app.
 
 #define SETTINGS_ADDRESS_MAX 128
-#define SETTINGS_CODE_MAX    16
+#define SETTINGS_HOST_ID_SIZE 8
 
 typedef enum {
     SettingsConnection_Wifi = 0,
@@ -44,5 +44,19 @@ void settingsSetConnectionMode(SettingsConnectionMode mode);
 void settingsGetPcAddress(char *out, size_t size);
 void settingsSetPcAddress(const char *address);
 
-void settingsGetConnectionCode(char *out, size_t size);
-void settingsSetConnectionCode(const char *code);
+// This console's id for pairing - 16 random bytes, made on first use.
+void settingsGetDeviceId(uint8_t out[16]);
+
+// The pairing with the PC: false if not paired. hostId gets SETTINGS_HOST_ID_SIZE chars + NUL.
+bool settingsGetPairing(uint8_t key[32], char hostId[SETTINGS_HOST_ID_SIZE + 1]);
+void settingsSetPairing(const uint8_t key[32], const char *hostId);
+
+// Optional rendezvous server ("host" or "host:port", default port 19020) and its access key: with a
+// server set, the PC is found by its id (settingsGetPcId) instead of pcAddress.
+void settingsGetServer(char *out, size_t size);
+void settingsSetServer(const char *server);
+void settingsGetServerKey(char *out, size_t size);
+void settingsSetServerKey(const char *key);
+// The PC's id on the server: typed in before the first pairing, the paired PC's host id afterwards.
+void settingsGetPcId(char out[SETTINGS_HOST_ID_SIZE + 1]);
+void settingsSetPcId(const char *id);

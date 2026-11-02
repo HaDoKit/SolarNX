@@ -139,13 +139,21 @@ public sealed class Config
     }
 
     /// <summary>Wi-Fi (default): the PC dials the Switch at <see cref="ClientIp"/>. Internet
-    /// (experimental): the Switch dials the PC on UDP <see cref="Session.InternetSession.Port"/> and
-    /// must present <see cref="ConnectionCode"/>. Applied the next time streaming is turned on.</summary>
+    /// (experimental): a paired Switch dials the PC on UDP <see cref="Session.InternetSession.Port"/>,
+    /// encrypted (Session/PairedDevices, InternetCrypto). Applied the next time streaming is turned on.</summary>
     public Session.ConnectionMode ConnectionMode { get; set; } = Session.ConnectionMode.Wifi;
 
-    /// <summary>What a Switch must send to be accepted in Internet mode - generated on first use,
-    /// shown in the settings, typed once on the Switch.</summary>
-    public string ConnectionCode { get; set; } = "";
+    /// <summary>This PC's id in Internet mode (8 characters, generated on first use) - a paired Switch
+    /// learns it, and a rendezvous server will use it to find this PC.</summary>
+    public string HostId { get; set; } = "";
+
+    /// <summary>Optional rendezvous server ("host" or "host:port", default port 19020) - with it the
+    /// Switch finds this PC by <see cref="HostId"/> and no port forwarding is needed (UDP hole punching,
+    /// or the server's relay if it allows it). Empty = the Switch dials the PC's address directly.</summary>
+    public string RendezvousServer { get; set; } = "";
+
+    /// <summary>The server's access key, if it has one.</summary>
+    public string RendezvousKey { get; set; } = "";
 
     /// <summary>Wi-Fi needs the Switch's address; in Internet mode the Switch finds the PC itself.</summary>
     public bool IsValid() => ConnectionMode == Session.ConnectionMode.Internet || !string.IsNullOrWhiteSpace(ClientIp);

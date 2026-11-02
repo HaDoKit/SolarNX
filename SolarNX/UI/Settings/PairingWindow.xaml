@@ -1,0 +1,35 @@
+<ui:FluentWindow x:Class="SolarNX.UI.Settings.PairingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Привязка Switch" Width="520" Height="400" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="None"
+        Background="#FF08090D">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Title="Привязка Switch" Height="42" Background="Transparent" Foreground="White"
+                     ShowMinimize="False" ShowMaximize="False" />
+
+        <StackPanel Grid.Row="1" Margin="28,8,28,0" VerticalAlignment="Center">
+            <TextBlock x:Name="StatusText" Foreground="White" FontSize="14" TextWrapping="Wrap" TextAlignment="Center"
+                       Text="Ожидание запроса со Switch…" />
+            <TextBlock x:Name="CodeText" Foreground="#FFFFD68C" FontSize="44" FontWeight="SemiBold" FontFamily="Consolas"
+                       HorizontalAlignment="Center" Margin="0,18,0,8" Visibility="Collapsed" />
+            <TextBlock x:Name="HintText" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0"
+                       Text="На Switch: главное меню → X → Pair with this PC. Привязка открыта 2 минуты." />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="20">
+            <ui:Button x:Name="RejectButton" Content="Отклонить" Appearance="Secondary" Margin="0,0,8,0" Visibility="Collapsed" />
+            <ui:Button x:Name="AcceptButton" Content="Коды совпадают — привязать" Appearance="Primary" Margin="0,0,8,0" Visibility="Collapsed" />
+            <ui:Button x:Name="CloseButton" Content="Закрыть" Appearance="Secondary" />
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

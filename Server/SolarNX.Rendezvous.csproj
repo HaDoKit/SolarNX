@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The rendezvous server for the Internet mode - runs on the user's own VPS (Linux or Windows),
+       independent of the WPF app. See docs/server.md. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>solarnx-rendezvous</AssemblyName>
+    <RootNamespace>SolarNX.Rendezvous</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The repository's VERSION when built inside it; a copy of just this folder (e.g. on the VPS,
+         or the Docker build) builds too, as 0.0.0-dev. -->
+    <Version Condition="Exists('$(MSBuildThisFileDirectory)../VERSION')">$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../VERSION').Trim())</Version>
+    <Version Condition="!Exists('$(MSBuildThisFileDirectory)../VERSION')">0.0.0-dev</Version>
+  </PropertyGroup>
+
+</Project>

@@ -56,6 +56,7 @@ public partial class GameEditWindow : Wpf.Ui.Controls.FluentWindow
         ScriptBox.Text = _entry.Script;
         ControllerCombo.SelectedIndex = Math.Max(0, Array.FindIndex(Controllers, c => c.Mode == _entry.Controller));
         CaptureWindowCheck.IsChecked = _entry.CaptureGameWindow;
+        RunAsAdminCheck.IsChecked = _entry.RunAsAdmin;
         _coverSourcePath = GameLibrary.CoverPath(_entry);
         _coverCrop = _entry.CoverCrop?.Clone();
         ShowCover();
@@ -87,6 +88,7 @@ public partial class GameEditWindow : Wpf.Ui.Controls.FluentWindow
         EmulatorPanel.Visibility = type == GameEntryType.Emulator ? Visibility.Visible : Visibility.Collapsed;
         ScriptPanel.Visibility = type == GameEntryType.Script ? Visibility.Visible : Visibility.Collapsed;
         WorkingDirRow.Visibility = type is GameEntryType.Native or GameEntryType.Script ? Visibility.Visible : Visibility.Collapsed;
+        RunAsAdminRow.Visibility = type == GameEntryType.Steam ? Visibility.Collapsed : Visibility.Visible; // Steam starts its games itself
     }
 
     private void LoadSteamGames()
@@ -205,6 +207,7 @@ public partial class GameEditWindow : Wpf.Ui.Controls.FluentWindow
         _entry.Script = ScriptBox.Text;
         _entry.Controller = Controllers[Math.Max(0, ControllerCombo.SelectedIndex)].Mode;
         _entry.CaptureGameWindow = CaptureWindowCheck.IsChecked == true;
+        _entry.RunAsAdmin = RunAsAdminCheck.IsChecked == true;
         _entry.CoverCrop = _coverSourcePath is null ? null : _coverCrop?.Clone();
 
         try

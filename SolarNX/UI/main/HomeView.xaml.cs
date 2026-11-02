@@ -41,20 +41,21 @@ public partial class HomeView : System.Windows.Controls.UserControl
     }
 
     /// <summary>Wi-Fi: the editable client IP. Internet (experimental): the Switch finds this PC
-    /// itself, so the same field shows the connection code to type on the Switch, read-only.
+    /// itself, so the same field shows how many Switches are paired, read-only.
     /// Called on start and whenever the settings screen closes.</summary>
     public void RefreshMode()
     {
         var internet = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet;
-        IpLabel.Text = internet ? $"Код подключения — Интернет, UDP {SolarNX.Session.InternetSession.Port} (эксперимент)" : "IP клиента";
-        IpBox.Text = internet ? _config.ConnectionCode : _config.ClientIp;
+        var paired = SolarNX.Session.PairedDevices.All.Count;
+        IpLabel.Text = internet ? $"Интернет, UDP {SolarNX.Session.InternetSession.Port} (эксперимент)" : "IP клиента";
+        IpBox.Text = internet ? (paired == 0 ? "Нет привязанных Switch — см. Настройки" : $"Привязано Switch: {paired}") : _config.ClientIp;
         IpBox.IsReadOnly = internet;
         RefreshStatus();
     }
 
     private void SaveClientIp()
     {
-        if (_config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet) return; // the field shows the code
+        if (_config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet) return; // the field shows the pairing state
         var ip = IpBox.Text.Trim();
         if (ip == _config.ClientIp) return;
         _config.ClientIp = ip;

@@ -43,6 +43,11 @@
          pack URI can resolve - MainWindow's Icon="pack://application:,,,/Assets/icon.ico" needs
          this separate Resource entry to find it. -->
     <Resource Include="Assets\icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The rendezvous protocol is defined once, in the server project. -->
+    <Compile Include="..\Server\RendezvousWire.cs" Link="Session\RendezvousWire.cs" />
     <!-- Branding art from tools/branding/make_branding.py (main-window background, home logo). -->
     <Resource Include="Assets\background.png" />
     <Resource Include="Assets\wordmark.png" />

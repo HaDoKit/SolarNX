@@ -101,18 +101,45 @@ Entirely owned by ffmpeg — `references/ffmpeg-pipeline.md`.
 ## Internet mode (experimental) - `Session/InternetSession.cs` ↔ `Client/transport/transport.c`
 
 `Config.ConnectionMode` = Wifi (everything above) | Internet. Internet: the PC listens on **UDP 19010**,
-the Switch sends first (Hello every 1s = keepalive), so only that port needs forwarding; replies go to
-the address the Switch's packets came from. Wire format in `Session/InternetWire.cs` (8-byte header
-"SNXU", type, version 1): Hello (nonce + 16-byte connection code) → Welcome (SessionConfig) | Reject;
-Input (the 224-byte HID packet, no marker); Bye (Switch left) / End (PC ended it); Video / Audio;
-LibOffer / LibReply (hash + button layout + revision, as library v2) and LibChunk / LibAck (go-back-N,
-1100-byte chunks, window 48, cumulative ack).
+the Switch sends first, so only that port needs forwarding; replies go to the address the Switch's
+packets came from. Wire format v2 in `Session/InternetWire.cs` (8-byte header "SNXU", type, version 2).
 
-Video and audio are produced exactly as in Wi-Fi mode but sent to loopback relays on the PC
-(127.0.0.1:19011 video, :19012 audio), which `InternetSession` forwards to the Switch; on the Switch
-`transport.c` forwards Video/Audio to 127.0.0.1:19000/19002 where `video.c`/`audio.c` already listen -
-neither side's media code knows the mode. `network.c` routes the HID calls (accept = wait for Welcome,
-send = Input, close = Bye) to the transport. A session starts on the first Input after a Welcome and
-ends on Bye/End or 3s without Input. Connection code: `Config.ConnectionCode`, 8 chars without 0/O/1/I,
-compared case-insensitively in constant time. **No encryption yet** - the next stage (pairing + crypto)
-replaces the code. The mode is chosen when streaming is armed (PC) and at app start (Switch).
+**Crypto** (`Session/InternetCrypto.cs` ↔ `Client/transport/crypto.c`, verified byte-for-byte against
+each other and Python `cryptography`): X25519 = TweetNaCl `crypto_scalarmult` ported to both sides
+(.NET has no X25519; checked with the RFC 7748 vector), HKDF-SHA256, packets = header (AAD) + counter
+u64 LE + AES-256-CTR (IV = counter BE in the high 8 bytes, block index low) + HMAC-SHA256 truncated to
+16 bytes; 64-packet replay window per direction. libnx provides AES-CTR/HMAC/SHA-256 on the Switch.
+
+**Pairing** (numeric comparison, only while the PC's PairingWindow is open, 2 min): PairStart (device
+id, X25519 pub, nickname) → PairKey (PC pub + commit = SHA256(pcPub||swPub||nP)) → PairNonceS (nS, sent
+only after the commit) → PairNonceP (nP) → both show code = SHA256("SolarNX pair code"||swPub||pcPub||nS
+||nP)[0..4] LE % 1e6 → player confirms on the PC → PairResult (host id + HMAC proof). Pairing key =
+HKDF(shared, nS||nP, "SolarNX pair key"). PC stores it DPAPI-encrypted in `paired-devices.json`
+(`Session/PairedDevices`), the Switch in `settings.cfg` (device_id, pair_key, host_id).
+
+**Session**: Hello (device id, nS) → Welcome (nP, host id, SessionConfig sealed at counter 1 with
+header+nP+hostId as AAD); keys = HKDF(pairKey, nS||nP, "SolarNX session") → enc/mac S→P, enc/mac P→S.
+Unknown device → Reject NotPaired. A repeated Hello with the same nS gets the cached Welcome; a new nS
+means new keys (and ends an active session). Then everything is sealed: Input, Bye/End, Video/Audio
+(the PC relays 127.0.0.1:19011/19012 → sealed; the Switch decrypts and forwards to 127.0.0.1:19000/
+19002, so the media code is unchanged), LibOffer/LibReply + LibChunk/LibAck (go-back-N, 1100-byte
+chunks, window 48), Keepalive/KeepaliveAck once a second; 3s without a valid packet → the Switch
+starts over with a new Hello. A session starts on the first Input, ends on Bye/End or 3s without Input.
+The mode is chosen when streaming is armed (PC) and at app start (Switch).
+
+## Rendezvous server (experimental) - `Server/` (`solarnx-rendezvous`), wire format `Server/RendezvousWire.cs`
+
+A separate .NET console app the user self-hosts on a VPS (UDP 19020; Linux/Windows single-file, Docker,
+systemd unit; settings file/env/CLI - `docs/server.md`). `RendezvousWire.cs` is compiled into the PC app
+too (linked in `SolarNX.csproj`). Header "SNXR", version 1. The PC (`InternetSession.RendezvousLoopAsync`)
+sends Register (host id + access key) every 15s **from the session socket 19010**, so the server learns
+the public mapping of exactly that socket. The Switch (`transport.c`) sends Lookup (PC id + key) → Peer
+(status, PC public endpoint, relay allowed); at the same time the server sends the PC Introduce (Switch
+endpoint) and the PC fires 3 `InternetWire.Type.Punch` packets towards it (hole punching). The session
+then runs directly. If the Switch hears nothing valid for 5s after Peer and relaying is allowed, it wraps
+everything in RelayUp → server → RelayDown to the PC (with the Switch endpoint); the PC answers with
+RelayBack → RelayFrom (the PC keeps a set of relayed endpoints in `InternetSession.Send`). Relay is off by
+default, rate-limited per Switch (token bucket); RelayBack is accepted only from a registered PC towards a
+Switch that relayed to it recently. The server never sees plaintext - the Internet-mode crypto is end to
+end. Verified locally: lookup with wrong/right key, punch, pairing + encrypted session + library entirely
+through the relay.
