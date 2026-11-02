@@ -35,6 +35,7 @@ back.
 | `input/` | 4 pads, touch, per-player sixaxis → `SolarNxHidPacket`; hold-Minus back-to-menu gesture |
 | `menu/` | App-selection screen (own SDL window/renderer, shared system font, star animation) + library cover grid |
 | `library/` | Library receiver thread (port 19003), in-memory entries (id, name, JPEG cover) under a mutex |
+| `settings/` | Settings on the SD card (`sdmc:/switch/SolarNX/settings.cfg`): the A/B X/Y layout + its revision, toggled with Y in the menu, synced with the PC over the library channel (protocol v2, higher revision wins) |
 | `common/logger/` | `logWrite()` (stdout under a mutex; nxlink in DEBUG builds), FFmpeg `av_log` bridge |
 | `common/fontcache/` | Third-party SDL_FontCache |
 | `romfs/icons/` | Menu tile icons |

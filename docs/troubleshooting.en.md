@@ -40,7 +40,8 @@ being lost.
 - The game window must be active on the PC. SolarNX activates it at launch, but if you click another
   window on the PC, some games stop accepting the gamepad; click back into the game.
 - Make sure the ViGEmBus driver is installed («Настройки» (Settings) → «Драйверы» (Drivers)).
-- Buttons are swapped (A/B, X/Y): toggle the Switch layout option in the settings.
+- Buttons are swapped (A/B, X/Y): press Y in the Switch main menu, or toggle the Switch layout option in
+  the PC settings.
 
 ## Steam
 

@@ -10,6 +10,7 @@
 #include "renderer.h"
 #include "../input/input.h"
 #include "../library/library.h"
+#include "../settings/settings.h"
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
 
@@ -230,6 +231,17 @@ static void drawCard(MenuContext *context, int blockX, int blockY, int blockW, i
     SDL_DrawText(context, blockX + blockW / 2 - labelWidth / 2, blockY + blockH - labelHeight + 14, labelColour, label);
 }
 
+// Bottom-right, opposite the version: the current A/B X/Y layout and the button that flips it.
+// Synced with the PC's setting (see settings.h).
+static void drawButtonLayoutHint(MenuContext *context)
+{
+    bool swapAbxy;
+    uint32_t revision;
+    settingsGetButtonLayout(&swapAbxy, &revision);
+    const char *text = swapAbxy ? "Y  Layout: Switch (A = A)" : "Y  Layout: Xbox (by position)";
+    drawScaledText(context, MENU_RESX - 24 - scaledWidth(context, 0.5f, text), MENU_RESY - 34, 0.5f, kDim, text);
+}
+
 static void drawMenuFrame(MenuContext *context, StarSystem *starSystem, int selectedIndex,
                           SDL_Texture *icons[MENU_OPTION_COUNT], const MenuLibrary *lib)
 {
@@ -254,6 +266,7 @@ static void drawMenuFrame(MenuContext *context, StarSystem *starSystem, int sele
     }
 
     drawIpAddressLine(context);
+    drawButtonLayoutHint(context);
 
     SDL_RenderPresent(context->renderer);
 }
@@ -409,6 +422,10 @@ SolarNxAppTarget runAppSelectMenu(MenuContext *context, StarSystem *starSystem)
         else if (down & HidNpadButton_AnyRight)
         {
             selectedIndex = (selectedIndex + 1) % MENU_OPTION_COUNT;
+        }
+        else if (down & HidNpadButton_Y)
+        {
+            settingsToggleButtonLayout();
         }
         else if (down & HidNpadButton_A)
         {

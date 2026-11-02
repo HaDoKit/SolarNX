@@ -35,7 +35,7 @@ else
 	BUILD	:=	build
 endif
 
-SOURCES		:=	. audio input network video menu common/logger common/fontcache common/appstate library
+SOURCES		:=	. audio input network video menu common/logger common/fontcache common/appstate library settings
 DATA		:=	data
 INCLUDES	:=	.
 # App-selection menu icons (menu.c) - see romfs/icons/.

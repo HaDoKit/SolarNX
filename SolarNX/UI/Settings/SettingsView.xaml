@@ -116,8 +116,14 @@
                                 <ColumnDefinition Width="170" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
                             <TextBlock Text="Раскладка Switch (A↔B, X↔Y)" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
                             <ui:ToggleSwitch x:Name="SwitchLayoutToggle" Grid.Column="1" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                       Text="Можно переключать и на Switch: кнопка Y в главном меню. Действует последнее изменение — на ПК или на Switch." />
                         </Grid>
                     </StackPanel>
                 </Border>

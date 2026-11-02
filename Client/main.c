@@ -13,6 +13,7 @@
 #include "common/logger/logger.h"
 #include "common/appstate/appstate.h"
 #include "library/library.h"
+#include "settings/settings.h"
 
 // HID (network.c) blocks forever on its own accept/send loop, and video (video.c) blocks forever
 // pumping appMainLoop()/SDL - they can't both run on one thread, so HID gets its own. 0x4000
@@ -219,6 +220,7 @@ void main() {
     // Mounts the embedded romfs (icons/etc for the menu below) - must happen before makeRenderer()
     // tries to load anything from "romfs:/...".
     romfsInit();
+    settingsInit(); // before initNetwork() starts the library thread, which syncs these
 
     if (!initNetwork())
         return;

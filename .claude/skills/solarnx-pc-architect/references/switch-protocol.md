@@ -70,10 +70,20 @@ independent by design.
 
 ## Library channel (PC → Switch, TCP 19003) — `Library/LibraryWire.cs` ↔ `Client/library/library.c`
 
+**Protocol v2 (button layout sync):** the host header is 24 bytes - magic, version 2, u64 hash, u8 button
+layout (1 = A/B X/Y by label), u8[3] zero, u32 layout revision - and the Switch replies 8 bytes - u8 need
+payload, u8 its layout, u8[2] zero, u32 its revision (after adopting the host's when newer; a tie goes to
+the host). The host adopts the Switch's value when its revision is higher (`AppOrchestrator
+.AdoptSwitchButtonLayout`, raises `ButtonLayoutChanged` for the settings toggle); a PC-side change bumps
+`Config.ButtonLayoutRevision` (`SetSwapAbxy`). This channel carries it because it is the only one open
+while the Switch is in its menu, where its Y toggle lives (`Client/settings/settings.c`, stored in
+`sdmc:/switch/SolarNX/settings.cfg`). The host still applies the swap itself; the HID packet is unchanged.
+
 One exchange per connection, little-endian:
-1. host → Switch: `u32 magic "ONXL" (0x4C584E4F)`, `u32 version (1)`, `u64 hash` (first 8 bytes of
-   SHA-256 of the payload).
-2. Switch → host: `u8` 1 = send / 0 = already have this hash.
+1. host → Switch: `u32 magic "ONXL" (0x4C584E4F)`, `u32 version (2)`, `u64 hash` (first 8 bytes of
+   SHA-256 of the payload), `u8 button layout`, `u8[3]` zero, `u32 layout revision`.
+2. Switch → host: `u8` 1 = send / 0 = already have this hash, `u8 button layout`, `u8[2]` zero,
+   `u32 layout revision`.
 3. host → Switch (if 1): `u32 count` (≤256), per entry `u32 id`, `u16 nameLen` (≤255) + UTF-8 name,
    `u32 coverLen` (≤512KB) + JPEG (0 = none). Host closes.
 
