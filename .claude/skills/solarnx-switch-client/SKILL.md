@@ -19,7 +19,7 @@ back.
 | Stream | Transport | Port | This side |
 |---|---|---|---|
 | Video | UDP, MPEG-TS/H.264 High | 19000 | passive listener via libavformat (`video.c`) |
-| HID | TCP | 19001 | **listens + accepts** (`network.c`); PC dials in, sends a 28-byte `SessionConfig`, then this side sends marker + 224-byte packet at ~43Hz |
+| HID | TCP | 19001 | **listens + accepts** (`network.c`); PC dials in, sends a 28-byte `SessionConfig`, then this side sends marker + 224-byte packet at ~120Hz |
 | Audio | UDP, RTP-like + Opus | 19002 | raw BSD socket (`audio.c`) |
 | Library | TCP | 19003 | **listens** from app start (`library/library.c`); host pushes its game list + covers when it changes |
 
@@ -47,7 +47,7 @@ back.
 |---|---|---|---|---|
 | main | default | 0x2C | 1 (pinned) | menu, video render loop (SDL + VSYNC present), **only** caller of `appletMainLoop()` |
 | video decode (per stream session) | `0x100000` | `0x2D` | 1 | `av_read_frame` → decode → NVTEGRA readback → newest-frame slot |
-| HID | `0x4000` | 0x2C | 0 | accept, `inputRead()` + send every 23.3ms |
+| HID | `0x4000` | 0x2C | 0 | accept, `inputRead()` + send every 8.3ms (~120Hz) |
 | audio | `0x8000` | 0x2C | 2 | recv, Opus decode, `audout` |
 | library | `0x8000` | 0x2C | 0 | accept, receive library pushes (idle otherwise) |
 
