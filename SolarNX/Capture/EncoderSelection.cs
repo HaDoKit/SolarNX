@@ -45,14 +45,14 @@ internal static class EncoderSelection
 
     public static string DisplayName(EncoderKind kind) => kind switch
     {
-        EncoderKind.Auto => "Авто",
+        EncoderKind.Auto => Loc.T("Encoder.Auto"),
         EncoderKind.Nvenc => "NVIDIA NVENC",
         // Not tested on real AMD/Intel hardware yet (the dev machine is NVIDIA-only) - labelled
         // experimental until a working stream is confirmed there.
-        EncoderKind.Amf => "AMD AMF (экспериментально)",
-        EncoderKind.Qsv => "Intel Quick Sync (экспериментально)",
-        EncoderKind.MediaFoundation => "Media Foundation (любая видеокарта)",
-        EncoderKind.Software => "Процессор (x264)",
+        EncoderKind.Amf => Loc.T("Encoder.Amf"),
+        EncoderKind.Qsv => Loc.T("Encoder.Qsv"),
+        EncoderKind.MediaFoundation => Loc.T("Encoder.MediaFoundation"),
+        EncoderKind.Software => Loc.T("Encoder.Software"),
         _ => kind.ToString(),
     };
 

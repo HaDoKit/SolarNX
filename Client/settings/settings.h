@@ -26,6 +26,13 @@ typedef enum {
     SettingsConnection_Internet = 1,
 } SettingsConnectionMode;
 
+// Interface language (see common/lang): Auto follows the console's language.
+typedef enum {
+    SettingsLanguage_Auto = 0,
+    SettingsLanguage_Russian = 1,
+    SettingsLanguage_English = 2,
+} SettingsLanguage;
+
 // Loads the file (defaults if missing). Call once at startup, before the library thread starts.
 void settingsInit(void);
 
@@ -60,3 +67,7 @@ void settingsSetServerKey(const char *key);
 // The PC's id on the server: typed in before the first pairing, the paired PC's host id afterwards.
 void settingsGetPcId(char out[SETTINGS_HOST_ID_SIZE + 1]);
 void settingsSetPcId(const char *id);
+
+SettingsLanguage settingsGetLanguage(void);
+// Auto -> Russian -> English -> Auto, saved; applies at once.
+void settingsCycleLanguage(void);

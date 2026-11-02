@@ -97,15 +97,15 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         _homeView.RefreshStatus();
         _trayIcon.Text = _orchestrator.IsArmed
-            ? (_orchestrator.IsConnected ? "SolarNX — подключено" : "SolarNX — ожидание")
-            : "SolarNX — выключено";
+            ? Loc.T(_orchestrator.IsConnected ? "Tray.Connected" : "Tray.Waiting")
+            : Loc.T("Tray.Off");
     }
 
     private void PromptShadPs4NotConfigured()
     {
         var result = System.Windows.MessageBox.Show(
             this,
-            "shadPS4 не настроен или не найден по указанному пути. Открыть страницу загрузки?",
+            Loc.T("Main.ShadPs4Missing"),
             "SolarNX",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);

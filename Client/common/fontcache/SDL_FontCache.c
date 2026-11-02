@@ -942,7 +942,21 @@ Uint8 FC_LoadFontFromTTF(FC_Font* font, SDL_Renderer* renderer, TTF_Font* ttf, T
     font->last_glyph.rect.w = 0;
     font->last_glyph.rect.h = font->height;
 
-    // load standard glyphs
+    // load standard glyphs: ASCII plus Cyrillic and the punctuation of the interface texts (see
+    // common/lang). With ttf_ext set, FC_GetGlyphData can't add glyphs later - anything not loaded
+    // here would be drawn as a space (Russian game names too).
+    {
+        static const char extra[] = "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюяЁё«»—–…→↔·№";
+        char* ascii = FC_GetStringASCII();
+        char* all = (char*)malloc(strlen(ascii) + sizeof(extra));
+        strcpy(all, ascii);
+        strcat(all, extra);
+        // The default loading string is FC_GetStringASCII's static buffer - not ours to free.
+        if (font->loading_string == ascii)
+            font->loading_string = NULL;
+        FC_SetLoadingString(font, all);
+        free(all);
+    }
     FC_LoadGlyphsFromTTF(font, ttf, surfaces, &num_surfaces, w, h);
 
     // load system symbols

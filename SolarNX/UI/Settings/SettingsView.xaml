@@ -37,27 +37,42 @@
         </Grid.RowDefinitions>
 
         <StackPanel Orientation="Horizontal" Margin="20,20,20,0">
-            <ui:Button x:Name="BackButton" Appearance="Secondary" Margin="0,0,12,0" ToolTip="Назад">
+            <ui:Button x:Name="BackButton" Appearance="Secondary" Margin="0,0,12,0" ToolTip="{DynamicResource Common.Back}">
                 <ui:Button.Icon>
                     <ui:SymbolIcon Symbol="ArrowLeft24" />
                 </ui:Button.Icon>
             </ui:Button>
-            <TextBlock Text="Настройки" FontSize="24" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
+            <TextBlock Text="{DynamicResource Home.Settings}" FontSize="24" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
         </StackPanel>
 
         <ScrollViewer Grid.Row="1" Margin="20" VerticalScrollBarVisibility="Auto">
             <StackPanel>
 
+                <!-- Язык -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Settings.Language}" Style="{StaticResource CardHeader}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{DynamicResource Settings.LanguageLabel}" Style="{StaticResource FieldLabel}" />
+                            <ComboBox x:Name="LanguageCombo" Grid.Column="1" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
                 <!-- Подключение -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="Подключение" Style="{StaticResource CardHeader}" />
+                        <TextBlock Text="{DynamicResource Settings.Connection}" Style="{StaticResource CardHeader}" />
                         <Grid Style="{StaticResource Row}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="170" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Режим" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Settings.Mode}" Style="{StaticResource FieldLabel}" />
                             <ComboBox x:Name="ConnectionModeCombo" Grid.Column="1" />
                         </Grid>
                         <Grid x:Name="InternetPanel">
@@ -69,16 +84,16 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <TextBlock Text="Привязанные Switch" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Settings.PairedSwitches}" Style="{StaticResource FieldLabel}" />
                             <StackPanel Grid.Column="1">
                                 <TextBlock x:Name="PairedDevicesText" Foreground="White" FontSize="13" TextWrapping="Wrap" Margin="2,0,0,8" />
                                 <StackPanel Orientation="Horizontal">
-                                    <ui:Button x:Name="PairButton" Content="Привязать Switch…" Appearance="Primary" Margin="0,0,8,0" />
-                                    <ui:Button x:Name="ForgetDevicesButton" Content="Забыть все" Appearance="Secondary" />
+                                    <ui:Button x:Name="PairButton" Content="{DynamicResource Settings.PairButton}" Appearance="Primary" Margin="0,0,8,0" />
+                                    <ui:Button x:Name="ForgetDevicesButton" Content="{DynamicResource Settings.ForgetAll}" Appearance="Secondary" />
                                 </StackPanel>
                             </StackPanel>
                             <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,10,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
-                                       Text="Экспериментальный режим. Без сервера: пробросьте на роутере UDP-порт 19010 на этот компьютер, а на Switch (X в главном меню) выберите Internet и введите внешний адрес ПК. С сервером-посредником проброс не нужен: на Switch укажите сервер и ID этого ПК. Затем один раз привяжите Switch (Pair). Трафик шифруется. Режим применяется при следующем включении трансляции." />
+                                       Text="{DynamicResource Settings.InternetHint}" />
                         </Grid>
                         <Grid x:Name="ServerPanel" Margin="0,14,0,0">
                             <Grid.ColumnDefinitions>
@@ -91,14 +106,14 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <TextBlock Text="ID этого ПК" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Settings.HostId}" Style="{StaticResource FieldLabel}" />
                             <TextBox x:Name="HostIdBox" Grid.Column="1" IsReadOnly="True" FontFamily="Consolas" FontSize="15" Padding="8,4" Margin="0,0,0,10" />
-                            <TextBlock Grid.Row="1" Text="Сервер-посредник" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Grid.Row="1" Text="{DynamicResource Settings.Server}" Style="{StaticResource FieldLabel}" />
                             <TextBox x:Name="ServerBox" Grid.Row="1" Grid.Column="1" Padding="8,4" Margin="0,0,0,10" />
-                            <TextBlock Grid.Row="2" Text="Ключ сервера" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Grid.Row="2" Text="{DynamicResource Settings.ServerKey}" Style="{StaticResource FieldLabel}" />
                             <TextBox x:Name="ServerKeyBox" Grid.Row="2" Grid.Column="1" Padding="8,4" Margin="0,0,0,6" />
                             <TextBlock Grid.Row="3" Grid.Column="1" Margin="2,0,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
-                                       Text="Необязательно. Адрес вашего сервера SolarNX Rendezvous (адрес или адрес:порт, по умолчанию порт 19020) и его ключ доступа, если он задан. См. документацию «Сервер для игры через интернет»." />
+                                       Text="{DynamicResource Settings.ServerHint}" />
                         </Grid>
                     </StackPanel>
                 </Border>
@@ -106,14 +121,14 @@
                 <!-- Видео -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="Видео" Style="{StaticResource CardHeader}" />
+                        <TextBlock Text="{DynamicResource Settings.Video}" Style="{StaticResource CardHeader}" />
 
                         <Grid Style="{StaticResource Row}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="170" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Разрешение" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Settings.Resolution}" Style="{StaticResource FieldLabel}" />
                             <ComboBox x:Name="ResolutionCombo" Grid.Column="1" />
                         </Grid>
 
@@ -122,7 +137,7 @@
                                 <ColumnDefinition Width="170" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Кадров в секунду" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Settings.Fps}" Style="{StaticResource FieldLabel}" />
                             <ComboBox x:Name="FpsCombo" Grid.Column="1" />
                         </Grid>
 
@@ -131,7 +146,7 @@
                                 <ColumnDefinition Width="170" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Битрейт (кбит/с)" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Settings.Bitrate}" Style="{StaticResource FieldLabel}" />
                             <ui:NumberBox x:Name="BitrateBox" Grid.Column="1" Minimum="1000" Maximum="50000" SpinButtonPlacementMode="Compact" />
                         </Grid>
 
@@ -140,7 +155,7 @@
                                 <ColumnDefinition Width="170" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Адаптивный битрейт" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Settings.AdaptiveBitrate}" Style="{StaticResource FieldLabel}" />
                             <ui:ToggleSwitch x:Name="AdaptiveBitrateToggle" Grid.Column="1" HorizontalAlignment="Left" />
                         </Grid>
 
@@ -153,11 +168,11 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <TextBlock Text="Кодировщик" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Settings.Encoder}" Style="{StaticResource FieldLabel}" />
                             <ComboBox x:Name="EncoderCombo" Grid.Column="1" />
                             <TextBlock x:Name="EncoderInfoText" Grid.Row="1" Grid.Column="1" Margin="2,6,0,0"
                                        Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
-                                       Text="Проверка видеокарты…" />
+                                       Text="{DynamicResource Settings.EncoderChecking}" />
                         </Grid>
                     </StackPanel>
                 </Border>
@@ -165,7 +180,7 @@
                 <!-- Геймпад -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="Геймпад" Style="{StaticResource CardHeader}" />
+                        <TextBlock Text="{DynamicResource Settings.Gamepad}" Style="{StaticResource CardHeader}" />
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="170" />
@@ -175,10 +190,10 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <TextBlock Text="Раскладка Switch (A↔B, X↔Y)" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                            <TextBlock Text="{DynamicResource Settings.SwitchLayout}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
                             <ui:ToggleSwitch x:Name="SwitchLayoutToggle" Grid.Column="1" HorizontalAlignment="Left" />
                             <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
-                                       Text="Можно переключать и на Switch: кнопка Y в главном меню. Действует последнее изменение — на ПК или на Switch." />
+                                       Text="{DynamicResource Settings.SwitchLayoutHint}" />
                         </Grid>
                     </StackPanel>
                 </Border>
@@ -194,20 +209,20 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Путь к shadPS4.exe" Style="{StaticResource FieldLabel}" />
+                            <TextBlock Text="{DynamicResource Settings.ShadPs4Path}" Style="{StaticResource FieldLabel}" />
                             <TextBox x:Name="ShadPs4PathBox" Grid.Column="1" IsReadOnly="True" Padding="6" Margin="0,0,8,0" />
-                            <ui:Button x:Name="BrowseShadPs4Button" Grid.Column="2" Content="Обзор…" Appearance="Secondary" />
+                            <ui:Button x:Name="BrowseShadPs4Button" Grid.Column="2" Content="{DynamicResource Common.Browse}" Appearance="Secondary" />
                         </Grid>
 
-                        <ui:HyperlinkButton x:Name="DownloadShadPs4Link" Content="Скачать shadPS4" Padding="0" />
+                        <ui:HyperlinkButton x:Name="DownloadShadPs4Link" Content="{DynamicResource Settings.ShadPs4Download}" Padding="0" />
                     </StackPanel>
                 </Border>
 
                 <!-- Драйверы -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="Драйверы" Style="{StaticResource CardHeader}" />
-                        <ui:Button x:Name="DriversButton" Content="Переустановить драйвер геймпада (ViGEmBus)"
+                        <TextBlock Text="{DynamicResource Settings.Drivers}" Style="{StaticResource CardHeader}" />
+                        <ui:Button x:Name="DriversButton" Content="{DynamicResource Settings.ReinstallVigem}"
                                    Appearance="Secondary" HorizontalAlignment="Stretch" Height="36" />
                     </StackPanel>
                 </Border>
@@ -215,7 +230,7 @@
                 <!-- Порты: только в dev-режиме, не нужны для обычного использования -->
                 <Border x:Name="PortsCard" Style="{StaticResource Card}" Visibility="Collapsed">
                     <StackPanel>
-                        <TextBlock Text="Порты" Style="{StaticResource CardHeader}" />
+                        <TextBlock Text="{DynamicResource Settings.Ports}" Style="{StaticResource CardHeader}" />
 
                         <Grid Style="{StaticResource Row}">
                             <Grid.ColumnDefinitions>
@@ -223,11 +238,11 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                <TextBlock Text="Видео" Style="{StaticResource PortLabel}" />
+                                <TextBlock Text="{DynamicResource Settings.Video}" Style="{StaticResource PortLabel}" />
                                 <ui:NumberBox x:Name="VideoPortBox" Minimum="1" Maximum="65535" SpinButtonPlacementMode="Compact" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                                <TextBlock Text="Аудио" Style="{StaticResource PortLabel}" />
+                                <TextBlock Text="{DynamicResource Settings.PortAudio}" Style="{StaticResource PortLabel}" />
                                 <ui:NumberBox x:Name="AudioPortBox" Minimum="1" Maximum="65535" SpinButtonPlacementMode="Compact" />
                             </StackPanel>
                         </Grid>
@@ -242,7 +257,7 @@
                                 <ui:NumberBox x:Name="HidPortBox" Minimum="1" Maximum="65535" SpinButtonPlacementMode="Compact" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                                <TextBlock Text="Библиотека" Style="{StaticResource PortLabel}" />
+                                <TextBlock Text="{DynamicResource Settings.PortLibrary}" Style="{StaticResource PortLabel}" />
                                 <ui:NumberBox x:Name="LibraryPortBox" Minimum="1" Maximum="65535" SpinButtonPlacementMode="Compact" />
                             </StackPanel>
                         </Grid>

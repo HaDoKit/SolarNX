@@ -1,4 +1,5 @@
 #include "transport.h"
+#include "../common/lang/lang.h"
 
 #include <errno.h>
 #include <stdatomic.h>
@@ -836,25 +837,25 @@ const char *transportStatusText(TransportStatus status)
 {
     switch (status)
     {
-    case TransportStatus_Off: return "off";
-    case TransportStatus_NoAddress: return "no PC address set";
-    case TransportStatus_BadAddress: return "PC address not found";
-    case TransportStatus_NotPaired: return "not paired - X > Pair";
-    case TransportStatus_Waiting: return "waiting for the PC";
-    case TransportStatus_Connected: return "connected (encrypted)";
-    case TransportStatus_Busy: return "PC is busy with another Switch";
-    case TransportStatus_WrongVersion: return "PC runs another SolarNX version";
-    case TransportStatus_Pairing: return "pairing - waiting for the PC";
-    case TransportStatus_PairingClosed: return "pairing - open it on the PC first";
-    case TransportStatus_PairingCode: return "pairing - compare the code on the PC";
-    case TransportStatus_Paired: return "paired";
-    case TransportStatus_PairingRefused: return "pairing refused on the PC";
-    case TransportStatus_PairingFailed: return "pairing failed";
-    case TransportStatus_ServerNotFound: return "server address not found";
-    case TransportStatus_ServerNoAnswer: return "the server doesn't answer";
-    case TransportStatus_ServerBadKey: return "the server refused the key";
-    case TransportStatus_ServerNoPc: return "PC not on the server (is streaming on?)";
-    case TransportStatus_NoPcId: return "set the PC ID (shown on the PC)";
+    case TransportStatus_Off: return tr(Str_StatusOff);
+    case TransportStatus_NoAddress: return tr(Str_StatusNoAddress);
+    case TransportStatus_BadAddress: return tr(Str_StatusBadAddress);
+    case TransportStatus_NotPaired: return tr(Str_StatusNotPaired);
+    case TransportStatus_Waiting: return tr(Str_StatusWaiting);
+    case TransportStatus_Connected: return tr(Str_StatusConnected);
+    case TransportStatus_Busy: return tr(Str_StatusBusy);
+    case TransportStatus_WrongVersion: return tr(Str_StatusWrongVersion);
+    case TransportStatus_Pairing: return tr(Str_StatusPairing);
+    case TransportStatus_PairingClosed: return tr(Str_StatusPairingClosed);
+    case TransportStatus_PairingCode: return tr(Str_StatusPairingCode);
+    case TransportStatus_Paired: return tr(Str_StatusPaired);
+    case TransportStatus_PairingRefused: return tr(Str_StatusPairingRefused);
+    case TransportStatus_PairingFailed: return tr(Str_StatusPairingFailed);
+    case TransportStatus_ServerNotFound: return tr(Str_StatusServerNotFound);
+    case TransportStatus_ServerNoAnswer: return tr(Str_StatusServerNoAnswer);
+    case TransportStatus_ServerBadKey: return tr(Str_StatusServerBadKey);
+    case TransportStatus_ServerNoPc: return tr(Str_StatusServerNoPc);
+    case TransportStatus_NoPcId: return tr(Str_StatusNoPcId);
     }
     return "";
 }

@@ -1,4 +1,4 @@
-#define MyAppName "SolarNX"
+﻿#define MyAppName "SolarNX"
 #ifndef MyAppVersion
   ; Single source of truth for the version: ../VERSION (also read by SolarNX.csproj and Client/Makefile).
   #define VersionFile FileOpen(AddBackslash(SourcePath) + "..\VERSION")
@@ -37,6 +37,35 @@ CloseApplicationsFilter=*.exe
 [Languages]
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[CustomMessages]
+; Texts of the driver page and the messages in [Code] - one line per language, same names.
+russian.DriverPageTitle=Драйвер геймпада
+english.DriverPageTitle=Gamepad driver
+russian.DriverPageDescription=ViGEmBus нужен для эмуляции геймпада
+english.DriverPageDescription=ViGEmBus is needed to emulate the gamepad
+russian.DriverInstalled=Драйвер геймпада (ViGEmBus) — уже установлен
+english.DriverInstalled=Gamepad driver (ViGEmBus) — already installed
+russian.DriverMissing=Драйвер геймпада (ViGEmBus) — не найден
+english.DriverMissing=Gamepad driver (ViGEmBus) — not found
+russian.DriverLeave=Не трогать
+english.DriverLeave=Leave as is
+russian.DriverRepair=Восстановить/переустановить
+english.DriverRepair=Repair/reinstall
+russian.DriverInstall=Установить
+english.DriverInstall=Install
+russian.DriverRemove=Удалить
+english.DriverRemove=Remove
+russian.DriverName=драйвер геймпада (ViGEmBus)
+english.DriverName=the gamepad driver (ViGEmBus)
+russian.DriverInstallFailed=Не удалось запустить установку драйвера геймпада.
+english.DriverInstallFailed=Could not start the gamepad driver installation.
+russian.FileNotFound=Не найден: %1
+english.FileNotFound=Not found: %1
+russian.UninstallerNotFound=Не удалось найти установщик для удаления "%1". Удалите вручную через Параметры Windows -> Приложения.
+english.UninstallerNotFound=Could not find the uninstaller for "%1". Remove it by hand in Windows Settings -> Apps.
+russian.UninstallFailed=Не удалось запустить удаление: %1
+english.UninstallFailed=Could not start the removal: %1
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -152,7 +181,7 @@ var
 begin
   if not FileExists(ExePath) then
   begin
-    MsgBox('Не найден: ' + ExePath, mbError, MB_OK);
+    MsgBox(FmtMessage(CustomMessage('FileNotFound'), [ExePath]), mbError, MB_OK);
     Exit;
   end;
   if not Exec(ExePath, '', '', SW_SHOWNORMAL, ewWaitUntilTerminated, resultCode) then
@@ -166,10 +195,10 @@ begin
   uninstallStr := FindUninstallString(NameSubstring);
   if uninstallStr = '' then
   begin
-    MsgBox('Не удалось найти установщик для удаления "' + Description + '". Удалите вручную через Параметры Windows -> Приложения.', mbInformation, MB_OK);
+    MsgBox(FmtMessage(CustomMessage('UninstallerNotFound'), [Description]), mbInformation, MB_OK);
     Exit;
   end;
-  ExecCommandLine(uninstallStr, 'Не удалось запустить удаление: ' + Description);
+  ExecCommandLine(uninstallStr, FmtMessage(CustomMessage('UninstallFailed'), [Description]));
 end;
 
 function MakeRadio(Parent: TWinControl; ATop: Integer; ACaption: String): TNewRadioButton;
@@ -186,7 +215,7 @@ procedure CreateDriverPage;
 var
   inputActionCaption: String;
 begin
-  DriverPage := CreateCustomPage(wpSelectTasks, 'Драйвер геймпада', 'ViGEmBus нужен для эмуляции геймпада');
+  DriverPage := CreateCustomPage(wpSelectTasks, CustomMessage('DriverPageTitle'), CustomMessage('DriverPageDescription'));
 
   InputInstalled := DetectInputDriver();
 
@@ -197,9 +226,9 @@ begin
   InputHeader.AutoSize := True;
   InputHeader.Font.Style := [fsBold];
   if InputInstalled then
-    InputHeader.Caption := 'Драйвер геймпада (ViGEmBus) — уже установлен'
+    InputHeader.Caption := CustomMessage('DriverInstalled')
   else
-    InputHeader.Caption := 'Драйвер геймпада (ViGEmBus) — не найден';
+    InputHeader.Caption := CustomMessage('DriverMissing');
 
   InputGroup := TPanel.Create(DriverPage);
   InputGroup.Parent := DriverPage.Surface;
@@ -209,14 +238,14 @@ begin
   InputGroup.Height := 78;
   InputGroup.BevelOuter := bvNone;
 
-  InputNone := MakeRadio(InputGroup, 0, 'Не трогать');
+  InputNone := MakeRadio(InputGroup, 0, CustomMessage('DriverLeave'));
   InputNone.Checked := True;
 
-  if InputInstalled then inputActionCaption := 'Восстановить/переустановить'
-  else inputActionCaption := 'Установить';
+  if InputInstalled then inputActionCaption := CustomMessage('DriverRepair')
+  else inputActionCaption := CustomMessage('DriverInstall');
   InputAction := MakeRadio(InputGroup, 22, inputActionCaption);
 
-  InputRemove := MakeRadio(InputGroup, 44, 'Удалить');
+  InputRemove := MakeRadio(InputGroup, 44, CustomMessage('DriverRemove'));
   InputRemove.Visible := InputInstalled;
   InputRemove.Enabled := InputInstalled;
 end;
@@ -291,8 +320,8 @@ begin
     MigrateFromOrbitNx;
 
     if InputAction.Checked then
-      RunGuiInstaller(appDir + '\vigembus-setup.exe', 'Не удалось запустить установку драйвера геймпада.');
+      RunGuiInstaller(appDir + '\vigembus-setup.exe', CustomMessage('DriverInstallFailed'));
     if InputRemove.Checked then
-      RunUninstall('ViGEmBus', 'драйвер геймпада (ViGEmBus)');
+      RunUninstall('ViGEmBus', CustomMessage('DriverName'));
   end;
 end;

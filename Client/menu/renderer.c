@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include "../common/lang/lang.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -210,7 +211,7 @@ void drawIpAddressLine(MenuContext *context)
 {
     u32 ip = gethostid();
     char ipBuf[64];
-    snprintf(ipBuf, sizeof(ipBuf), "IP Address: %u.%u.%u.%u",
+    snprintf(ipBuf, sizeof(ipBuf), "%s%u.%u.%u.%u", tr(Str_IpAddressPrefix),
              ip & 0xFF, (ip >> 8) & 0xFF, (ip >> 16) & 0xFF, (ip >> 24) & 0xFF);
 
     SDL_Color white = {255, 255, 255, 255};

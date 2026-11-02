@@ -34,6 +34,7 @@ public partial class LibraryView : System.Windows.Controls.UserControl
         AddButton.Click += (_, _) => Edit(null);
         // Changed can come from any thread (GameLibrary is thread-safe) - rebuild on the UI thread.
         _library.Changed += () => Dispatcher.BeginInvoke(Rebuild);
+        Loc.Changed += Rebuild;
         Rebuild();
     }
 
@@ -78,12 +79,12 @@ public partial class LibraryView : System.Windows.Controls.UserControl
         grid.Children.Add(text);
 
         var buttons = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var edit = new Wpf.Ui.Controls.Button { Appearance = ControlAppearance.Secondary, ToolTip = "Изменить", Margin = new Thickness(0, 0, 8, 0), Icon = new SymbolIcon(SymbolRegular.Edit24) };
+        var edit = new Wpf.Ui.Controls.Button { Appearance = ControlAppearance.Secondary, ToolTip = Loc.T("Library.Edit"), Margin = new Thickness(0, 0, 8, 0), Icon = new SymbolIcon(SymbolRegular.Edit24) };
         edit.Click += (_, _) => Edit(game);
-        var delete = new Wpf.Ui.Controls.Button { Appearance = ControlAppearance.Danger, ToolTip = "Удалить", Icon = new SymbolIcon(SymbolRegular.Delete24) };
+        var delete = new Wpf.Ui.Controls.Button { Appearance = ControlAppearance.Danger, ToolTip = Loc.T("Library.Delete"), Icon = new SymbolIcon(SymbolRegular.Delete24) };
         delete.Click += (_, _) =>
         {
-            var answer = System.Windows.MessageBox.Show(Window.GetWindow(this), $"Удалить «{game.Name}» из библиотеки?", "SolarNX",
+            var answer = System.Windows.MessageBox.Show(Window.GetWindow(this), Loc.F("Library.DeleteConfirm", game.Name), "SolarNX",
                 MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (answer == MessageBoxResult.Yes) _library.Remove(game.Id);
         };
@@ -104,10 +105,10 @@ public partial class LibraryView : System.Windows.Controls.UserControl
 
     private static string Describe(GameEntry game) => game.Type switch
     {
-        GameEntryType.Native => $"Игра · {game.ExePath}",
+        GameEntryType.Native => Loc.F("Library.DescGame", game.ExePath),
         GameEntryType.Steam => $"Steam · AppID {game.SteamAppId}",
-        GameEntryType.Emulator => $"Эмулятор · {Path.GetFileName(game.EmulatorPath)} · {Path.GetFileName(game.RomPath)}",
-        GameEntryType.Script => "Свой скрипт запуска",
+        GameEntryType.Emulator => Loc.F("Library.DescEmulator", Path.GetFileName(game.EmulatorPath), Path.GetFileName(game.RomPath)),
+        GameEntryType.Script => Loc.T("Library.DescScript"),
         _ => "",
     } + (game.Controller == Input.ControllerMode.DualShock4 ? " · DualShock 4" : " · Xbox 360");
 }
