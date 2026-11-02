@@ -10,6 +10,10 @@ versions: install the same version on the PC and on the Switch.
 
 - The project is renamed: **OrbitNX → SolarNX**. The PC app is `SolarNX.exe`, the Switch app is
   `/switch/SolarNX/SolarNX-Switch.nro`.
+- **Experimental:** hardware video encoding on AMD (AMF) and Intel (Quick Sync) graphics cards, and through Media
+  Foundation on any graphics card - previously NVIDIA only. The encoder is picked automatically from the
+  detected graphics card; the settings show the card and the chosen encoder, which can be changed by hand.
+  Not tested on real AMD and Intel graphics cards yet.
 - New "eclipse" style: icon, background and the glowing SOLARNX wordmark on the PC and the Switch,
   gold accent in the PC interface. The version number on the Switch moved to the bottom-left corner.
 - The installer puts SolarNX in its own folder, carries over the settings, library and covers from

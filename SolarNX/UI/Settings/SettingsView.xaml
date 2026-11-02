@@ -80,13 +80,29 @@
                             <ui:NumberBox x:Name="BitrateBox" Grid.Column="1" Minimum="1000" Maximum="50000" SpinButtonPlacementMode="Compact" />
                         </Grid>
 
-                        <Grid>
+                        <Grid Style="{StaticResource Row}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="170" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Адаптивный битрейт" Style="{StaticResource FieldLabel}" />
                             <ui:ToggleSwitch x:Name="AdaptiveBitrateToggle" Grid.Column="1" HorizontalAlignment="Left" />
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Кодировщик" Style="{StaticResource FieldLabel}" />
+                            <ComboBox x:Name="EncoderCombo" Grid.Column="1" />
+                            <TextBlock x:Name="EncoderInfoText" Grid.Row="1" Grid.Column="1" Margin="2,6,0,0"
+                                       Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                       Text="Проверка видеокарты…" />
                         </Grid>
                     </StackPanel>
                 </Border>
