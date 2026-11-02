@@ -6,6 +6,12 @@ Versions follow [Semantic Versioning](https://semver.org/). While the project is
 (`0.x.y-alpha`), settings, the library and the protocol are not guaranteed to be compatible between
 versions: install the same version on the PC and on the Switch.
 
+## [0.2.2-alpha] - 2026-11-02
+
+No new features: on GitHub, versions 0.2.0-alpha and 0.2.1-alpha came out without files. This version
+contains everything from 0.2.0 and 0.2.1 (details in [CHANGELOG.en.md](https://github.com/HaDoKit/SolarNX/blob/master/CHANGELOG.en.md)): the installer, the Switch app and the rendezvous
+server.
+
 ## [0.2.1-alpha] - 2026-11-02
 
 - The PC app now speaks two languages, Russian and English: Settings → Language. By default it follows
@@ -62,6 +68,7 @@ First public alpha.
 - Steam button with − and +, back to the menu by holding − for 3 seconds.
 - HOME menu tile (forwarder, built yourself).
 
+[0.2.2-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.2-alpha
 [0.2.1-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.1-alpha
 [0.2.0-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.0-alpha
 [0.1.0-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.1.0-alpha

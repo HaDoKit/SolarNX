@@ -6,6 +6,11 @@
 (`0.x.y-alpha`), совместимость настроек, библиотеки и протокола между версиями не гарантируется:
 ставьте на ПК и на Switch одну и ту же версию.
 
+## [0.2.2-alpha] — 2026-11-02
+
+Новых функций нет: на GitHub версии 0.2.0-alpha и 0.2.1-alpha вышли без файлов. Эта версия содержит
+всё из 0.2.0 и 0.2.1 (подробно — в [CHANGELOG.md](https://github.com/HaDoKit/SolarNX/blob/master/CHANGELOG.md)) — установщик, приложение для Switch и сервер-посредник.
+
 ## [0.2.1-alpha] — 2026-11-02
 
 - Программа на ПК теперь на двух языках — русском и английском: «Настройки» → «Язык». По умолчанию
@@ -61,6 +66,7 @@
 - Кнопка Steam «−» + «+», возврат в меню удержанием «−» 3 секунды.
 - Плитка на главном экране (форвардер, собирается самостоятельно).
 
+[0.2.2-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.2-alpha
 [0.2.1-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.1-alpha
 [0.2.0-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.0-alpha
 [0.1.0-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.1.0-alpha
