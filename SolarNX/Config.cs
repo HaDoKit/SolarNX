@@ -17,6 +17,11 @@ public sealed class Config
     public int LibraryPort { get; set; } = 19003;
     public int TargetWidth { get; set; } = 1280;
     public int TargetHeight { get; set; } = 720;
+
+    /// <summary>Stream at the Switch's own screen resolution - 1280x720 handheld, 1920x1080 docked,
+    /// following it when the console goes in or out of the dock (AppOrchestrator restarts the
+    /// encoder). Off: always <see cref="TargetWidth"/> x <see cref="TargetHeight"/>.</summary>
+    public bool AutoResolution { get; set; } = true;
     public int Fps { get; set; } = 60;
 
     /// <summary>Confirmed live: at 8000-10000 the video stream's constant (CBR) bitrate was

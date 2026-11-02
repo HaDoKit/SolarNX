@@ -67,6 +67,8 @@ public partial class SettingsView : System.Windows.Controls.UserControl
     private void RefreshTexts()
     {
         ((System.Windows.Controls.ComboBoxItem)LanguageCombo.Items[0]).Content = Loc.T("Settings.LanguageAuto");
+        if (ResolutionCombo.Items.Count > 0)
+            ((System.Windows.Controls.ComboBoxItem)ResolutionCombo.Items[0]).Content = Loc.T("Settings.ResolutionAuto");
         if (ConnectionModeCombo.Items.Count == 2)
         {
             ((System.Windows.Controls.ComboBoxItem)ConnectionModeCombo.Items[0]).Content = Loc.T("Settings.ModeWifi");
@@ -139,16 +141,26 @@ public partial class SettingsView : System.Windows.Controls.UserControl
 
     private void InitVideoSection()
     {
-        foreach (var r in ResolutionOptions) ResolutionCombo.Items.Add($"{r.Width}x{r.Height}");
-        var closestResolution = ResolutionOptions
+        // Item 0 is "Auto" (Config.AutoResolution); its text is set in RefreshTexts.
+        ResolutionCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = Loc.T("Settings.ResolutionAuto") });
+        foreach (var r in ResolutionOptions)
+            ResolutionCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = $"{r.Width}x{r.Height}", Tag = r });
+        var closestResolution = Array.IndexOf(ResolutionOptions, ResolutionOptions
             .OrderBy(r => Math.Abs(r.Width - _config.TargetWidth) + Math.Abs(r.Height - _config.TargetHeight))
-            .First();
-        ResolutionCombo.SelectedItem = $"{closestResolution.Width}x{closestResolution.Height}";
+            .First());
+        ResolutionCombo.SelectedIndex = _config.AutoResolution ? 0 : closestResolution + 1;
         ResolutionCombo.SelectionChanged += (_, _) =>
         {
-            var parts = ((string)ResolutionCombo.SelectedItem).Split('x');
-            _config.TargetWidth = int.Parse(parts[0]);
-            _config.TargetHeight = int.Parse(parts[1]);
+            if (ResolutionCombo.SelectedItem is not System.Windows.Controls.ComboBoxItem item) return;
+            if (item.Tag is ValueTuple<int, int> size)
+            {
+                _config.AutoResolution = false;
+                (_config.TargetWidth, _config.TargetHeight) = size;
+            }
+            else
+            {
+                _config.AutoResolution = true;
+            }
             _config.Save();
         };
 

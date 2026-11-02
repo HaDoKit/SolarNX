@@ -56,6 +56,7 @@
     <sys:String x:Key="Settings.PairingNeedsStreaming">Сначала включите трансляцию в режиме «Интернет» — привязка идёт через его соединение.</sys:String>
     <sys:String x:Key="Settings.Video">Видео</sys:String>
     <sys:String x:Key="Settings.Resolution">Разрешение</sys:String>
+    <sys:String x:Key="Settings.ResolutionAuto">Авто: 720p в руках, 1080p в доке</sys:String>
     <sys:String x:Key="Settings.Fps">Кадров в секунду</sys:String>
     <sys:String x:Key="Settings.Bitrate">Битрейт (кбит/с)</sys:String>
     <sys:String x:Key="Settings.AdaptiveBitrate">Адаптивный битрейт</sys:String>
