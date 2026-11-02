@@ -72,6 +72,8 @@ public sealed class VideoEncoder : IDisposable
 
     /// <summary>The codec the running ffmpeg process streams, or null if none is running.</summary>
     public VideoCodec? ActiveCodec { get; private set; }
+    /// <summary>Stream size the running ffmpeg process encodes at, or null if none is running.</summary>
+    public (int Width, int Height)? ActiveSize { get; private set; }
 
     /// <summary>The window being captured instead of the monitor (IntPtr.Zero = whole primary
     /// monitor). Lets a restart (watchdog / adaptive bitrate) carry the same capture target over.</summary>
@@ -107,8 +109,13 @@ public sealed class VideoEncoder : IDisposable
     /// stream size with its aspect ratio kept, instead of the whole primary monitor. A game running
     /// in a small window - or behind the first user's own windows - then still fills the Switch
     /// screen. IntPtr.Zero (default) = monitor 0, as for Big Picture.</param>
-    public void Start(EncoderKind? encoderOverride = null, int? bitrateKbpsOverride = null, IntPtr captureWindow = default)
+    /// <param name="streamSize">Stream resolution - AppOrchestrator picks it (the Switch's screen with
+    /// automatic resolution); null (default) uses <see cref="Config.TargetWidth"/>/<see cref="Config.TargetHeight"/>.</param>
+    public void Start(EncoderKind? encoderOverride = null, int? bitrateKbpsOverride = null, IntPtr captureWindow = default,
+        (int Width, int Height)? streamSize = null)
     {
+        var (streamWidth, streamHeight) = streamSize ?? (_config.TargetWidth, _config.TargetHeight);
+        ActiveSize = (streamWidth, streamHeight);
         var ffmpegPath = Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe");
         var bitrateKbps = bitrateKbpsOverride ?? _config.BitrateKbps;
         var bitrate = $"{bitrateKbps}k";
@@ -157,17 +164,17 @@ public sealed class VideoEncoder : IDisposable
             // a resize mid-capture (content shrinks inside the fixed size instead of being cropped) until
             // AppOrchestrator notices the new size and restarts with a new fit. capture_cursor=0: the
             // first user's mouse pointer has no business in the Switch player's picture.
-            var fit = WindowGeometry.Fit(clientW, clientH, _config.TargetWidth, _config.TargetHeight);
+            var fit = WindowGeometry.Fit(clientW, clientH, streamWidth, streamHeight);
             filterChain =
                 $"gfxcapture=hwnd={(ulong)captureWindow.ToInt64()}:capture_border=0:capture_cursor=0:resize_mode=scale_aspect:max_framerate={_config.Fps}:width={fit.Width}:height={fit.Height}," +
-                $"hwdownload,format=bgra,pad={_config.TargetWidth}:{_config.TargetHeight}:{fit.OffsetX}:{fit.OffsetY}:black,fps={_config.Fps},format={pixelFormat}";
+                $"hwdownload,format=bgra,pad={streamWidth}:{streamHeight}:{fit.OffsetX}:{fit.OffsetY}:black,fps={_config.Fps},format={pixelFormat}";
             CaptureSize = (clientW, clientH);
         }
         else
         {
             if (captureWindow != IntPtr.Zero) Logger.Log("ffmpeg-video", $"window {captureWindow} has no client area - capturing the monitor instead");
             CaptureWindow = IntPtr.Zero;
-            filterChain = $"gfxcapture=monitor_idx=0:resize_mode=scale:max_framerate={_config.Fps}:width={_config.TargetWidth}:height={_config.TargetHeight},hwdownload,format=bgra,fps={_config.Fps},format={pixelFormat}";
+            filterChain = $"gfxcapture=monitor_idx=0:resize_mode=scale:max_framerate={_config.Fps}:width={streamWidth}:height={streamHeight},hwdownload,format=bgra,fps={_config.Fps},format={pixelFormat}";
         }
 
         var args = string.Join(' ', new[]
@@ -223,7 +230,7 @@ public sealed class VideoEncoder : IDisposable
             catch (Exception) { Logger.Log("ffmpeg-video", "process exited (exit code unavailable - already disposed)"); }
         };
         _ffmpeg.EnableRaisingEvents = true;
-        Logger.Log("ffmpeg-video", $"encoder: {EncoderSelection.DisplayName(encoder)}, {EncoderSelection.DisplayName(codec)}");
+        Logger.Log("ffmpeg-video", $"encoder: {EncoderSelection.DisplayName(encoder)}, {EncoderSelection.DisplayName(codec)}, {streamWidth}x{streamHeight}");
         Logger.Log("ffmpeg-video", $"starting: {ffmpegPath} {args}");
         _ffmpeg.Start();
         ChildProcessJob.Assign(_ffmpeg); // dies with this process even on a crash/debugger stop - see ChildProcessJob
@@ -249,6 +256,7 @@ public sealed class VideoEncoder : IDisposable
         ActiveBitrateKbps = null;
         ActiveEncoder = null;
         ActiveCodec = null;
+        ActiveSize = null;
         CaptureWindow = IntPtr.Zero;
         CaptureSize = default;
     }

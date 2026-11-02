@@ -117,8 +117,13 @@ bool videoInit(void)
         return false;
     }
 
+    // The screen's own resolution - 1920x1080 docked, 1280x720 handheld - so a 1080p stream (the
+    // host's automatic resolution when docked) isn't squeezed into 720p first. RESIZABLE: SDL's Switch
+    // backend then resizes the window itself when the console goes in or out of the dock (it does
+    // only for resizable windows); renderFrame stretches the picture over whatever size it is.
+    bool docked = appletGetOperationMode() == AppletOperationMode_Console;
     s_window = SDL_CreateWindow("SolarNX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        1280, 720, SDL_WINDOW_SHOWN);
+        docked ? 1920 : 1280, docked ? 1080 : 720, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (s_window == NULL)
     {
         logWrite("video", "SDL_CreateWindow failed: %s", SDL_GetError());

@@ -21,7 +21,7 @@
 // Mirrors SolarNX.Input.AppTarget (HidProtocol.cs) - which app the host should launch/focus,
 // picked in menu.c and sent unchanged on every packet of the session. Library = a game from the
 // host's own library (library/library.c); which one is in SolarNxHidPacket.libraryEntryId.
-typedef enum : uint64_t {
+typedef enum : uint32_t {
     SolarNxAppTarget_BigPicture = 0,
     SolarNxAppTarget_ShadPs4    = 1,
     SolarNxAppTarget_Library    = 2,
@@ -55,7 +55,10 @@ typedef struct {
     uint32_t videoRecoveredPacketCount; // videoGetRecoveredPacketCount()
     uint32_t libraryEntryId; // GameEntry.Id when appTarget is Library, else 0 (was the never-read frameRate slot)
     uint32_t controllerCount;
-    SolarNxAppTarget appTarget; // u64 - see SolarNxAppTarget's doc comment above
+    SolarNxAppTarget appTarget; // u32 - see SolarNxAppTarget's doc comment above
+    // This screen's height: 720 handheld, 1080 docked - the host streams at that size with automatic
+    // resolution. appTarget and this together are the former u64 appTarget (same offsets).
+    uint32_t displayHeight;
 
     // Link-quality telemetry, read by the host's AdaptiveBitrateController (Session/
     // AdaptiveBitrateController.cs) to decide whether to lower/raise the encoder bitrate. Each is a

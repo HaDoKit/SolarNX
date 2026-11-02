@@ -44,7 +44,8 @@ match `SolarNX/Config.cs`.
 | 184 | `videoLostFrameCount`, `videoRecoveredPacketCount` u32 (were touchX2/Y2) — from `reassembly.c` |
 | 192 | `libraryEntryId` u32 — picked `LibraryEntry.id` when `appTarget` is Library, else 0 (was `frameRate`) |
 | 196 | `controllerCount` u32 |
-| 200 | `appTarget` u64 (`SolarNxAppTarget`: 0 Big Picture, 1 shadPS4, 2 Library) |
+| 200 | `appTarget` u32 (`SolarNxAppTarget`: 0 Big Picture, 1 shadPS4, 2 Library) |
+| 204 | `displayHeight` u32 — `appletGetOperationMode()`: 1080 docked (Console), 720 handheld. Was the upper half of a u64 appTarget |
 | 208 | telemetry u32: `videoReconnectCount`, `videoMeasuredBitrateKbps` (currently the configured value, not a measurement), `audioReconnectCount`, `audioConcealedFrameCount` — free-running |
 
 `heldKeys` uses libnx `HidNpadButton` bit positions directly (A=0 … Down=15); the host's

@@ -78,7 +78,7 @@ The gear button on the SolarNX main screen.
 | Setting | What it does |
 |---|---|
 | Interface language | Same as Windows (the default), Russian or English. Changes at once, no restart needed |
-| Resolution | size of the streamed picture. The Switch screen is 1280×720; more is usually unnecessary |
+| Resolution | size of the streamed picture. Auto (the default) follows the Switch screen: 1280×720 handheld, 1920×1080 docked. If you put the Switch in the dock or take it out mid-game, the picture freezes for about a second and goes on at the new resolution. 1080p needs a higher bitrate, about twice as much. A fixed resolution can be chosen too |
 | Frames per second | 60 is smoother; 30 halves the network load and gives a sharper picture at the same bitrate |
 | Bitrate (kbps) | video quality. Higher is sharper but harder on Wi-Fi. Lower it if you see artifacts |
 | Adaptive bitrate | SolarNX lowers the bitrate when the connection has problems and raises it back once things are stable. The Bitrate value becomes the upper limit |

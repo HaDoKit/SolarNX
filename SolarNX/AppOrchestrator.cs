@@ -44,6 +44,16 @@ public sealed class AppOrchestrator : IDisposable
     private uint _loggedRecoveredPackets;
     private uint _loggedLostFrames;
 
+    // The Switch's screen height (720 handheld / 1080 docked) the stream size follows with
+    // Config.AutoResolution. A change must hold for DisplayChangeSettle before the encoder restarts:
+    // the dock reports the mode change once, but a console slid in and out quickly shouldn't restart
+    // ffmpeg twice.
+    private static readonly TimeSpan DisplayChangeSettle = TimeSpan.FromSeconds(1);
+    private volatile uint _switchDisplayHeight;
+    private uint _reportedDisplayHeight;
+    private DateTime _displayReportedUtc;
+    private volatile bool _resizePending;
+
     // Host-side game library (Library/): edited from the UI, mirrored to the Switch by
     // _libraryPusher while armed, launched when the Switch picks an entry (AppTarget.Library).
     private readonly GameLibrary _library = GameLibrary.Load();
@@ -185,8 +195,52 @@ public sealed class AppOrchestrator : IDisposable
     }
 
     [SupportedOSPlatform("windows8.0")]
+    /// <summary>Stream size for the Switch's current screen - see Config.AutoResolution. A client
+    /// that doesn't report its screen (0) gets the configured size.</summary>
+    private (int Width, int Height) CurrentStreamSize()
+    {
+        var height = _switchDisplayHeight;
+        if (!_config.AutoResolution || height == 0) return (_config.TargetWidth, _config.TargetHeight);
+        return height >= 1080 ? (1920, 1080) : (1280, 720);
+    }
+
+    // Network thread, every packet: notices the Switch going in or out of the dock and, once the new
+    // mode has held for DisplayChangeSettle, restarts the encoder at the matching size.
+    private void FollowSwitchDisplay(HidPacket packet)
+    {
+        var now = DateTime.UtcNow;
+        if (packet.DisplayHeight != _reportedDisplayHeight)
+        {
+            _reportedDisplayHeight = packet.DisplayHeight;
+            _displayReportedUtc = now;
+            return;
+        }
+        if (packet.DisplayHeight == _switchDisplayHeight || now - _displayReportedUtc < DisplayChangeSettle || _resizePending) return;
+
+        _switchDisplayHeight = packet.DisplayHeight;
+        if (!_config.AutoResolution) return;
+        _resizePending = true;
+        _ = Task.Run(async () =>
+        {
+            await _pipelineGate.WaitAsync();
+            try
+            {
+                var size = CurrentStreamSize();
+                if (_pipelineActive && _videoEncoder is { ActiveSize: { } active } && active != size)
+                    RestartVideoEncoder($"Switch screen is now {packet.DisplayHeight}p -> {size.Width}x{size.Height}");
+            }
+            finally
+            {
+                _resizePending = false;
+                _pipelineGate.Release();
+            }
+        });
+    }
+
     private async void OnSessionStarted(HidPacket firstPacket)
     {
+        _switchDisplayHeight = _reportedDisplayHeight = firstPacket.DisplayHeight;
+        _displayReportedUtc = DateTime.UtcNow;
         Logger.Log("AppOrchestrator", "OnSessionStarted: entered, waiting for pipeline gate");
         await _pipelineGate.WaitAsync();
         Logger.Log("AppOrchestrator", "OnSessionStarted: gate acquired");
@@ -329,7 +383,7 @@ public sealed class AppOrchestrator : IDisposable
             }
 
             _videoEncoder = new VideoEncoder(_config);
-            _videoEncoder.Start();
+            _videoEncoder.Start(streamSize: CurrentStreamSize());
             _adaptiveBitrate.Start(_config.BitrateKbps);
 
             // Captures whatever is currently playing on the first user's real default audio
@@ -404,7 +458,7 @@ public sealed class AppOrchestrator : IDisposable
             var carryOverWindow = captureWindowOverride ?? _videoEncoder?.CaptureWindow ?? IntPtr.Zero;
             _videoEncoder?.Stop();
             _videoEncoder = new VideoEncoder(_config);
-            _videoEncoder.Start(bitrateKbpsOverride: carryOverBitrate, captureWindow: carryOverWindow);
+            _videoEncoder.Start(bitrateKbpsOverride: carryOverBitrate, captureWindow: carryOverWindow, streamSize: CurrentStreamSize());
         }
         catch (Exception ex)
         {
@@ -882,6 +936,7 @@ public sealed class AppOrchestrator : IDisposable
         }
 
         LogVideoLinkIfDue(packet);
+        FollowSwitchDisplay(packet);
 
         try
         {

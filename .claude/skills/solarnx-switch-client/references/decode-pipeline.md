@@ -9,7 +9,9 @@ No libavformat for video since 0.2.3: the PC sends its own framing with FEC inst
 
 ## Per stream round (`videoInit` → `videoStart` → `videoExit`, driven by `main.c`)
 
-- `videoInit`: SDL window/renderer (`ACCELERATED | PRESENTVSYNC`, 1280×720),
+- `videoInit`: SDL window/renderer (`ACCELERATED | PRESENTVSYNC`; window 1920×1080 docked / 1280×720
+  handheld, `SDL_WINDOW_RESIZABLE` - SDL's Switch backend resizes only resizable windows on a dock
+  change, seen in its `SWITCH_PumpEvents`; `RenderCopy` stretches the texture over the window),
   `reassemblyInit` (rs tables + frame buffer), the decode→render handoff (mutex + `s_pendingFrame`), and
   `av_hwdevice_ctx_create(AV_HWDEVICE_TYPE_NVTEGRA)` — failure just means software decode.
 - `videoExit`: tears all of it down (incl. `SDL_Quit`) so the menu can create its own SDL window

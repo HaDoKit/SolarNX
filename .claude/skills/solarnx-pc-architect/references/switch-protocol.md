@@ -36,7 +36,8 @@ both sides in the same commit.
 | 184 | `videoLostFrameCount`, `videoRecoveredPacketCount` u32 (were touchX2/Y2) — Switch video FEC counters, logged as "VideoLink", lost frames feed adaptive bitrate |
 | 192 | `libraryEntryId` u32 — `GameEntry.Id` when `appTarget` is Library, else 0 (was the never-read `frameRate`) |
 | 196 | `controllerCount` u32 |
-| 200 | `appTarget` u64 (`AppTarget`: 0 Big Picture, 1 shadPS4, 2 Library; unknown → Big Picture) |
+| 200 | `appTarget` u32 (`AppTarget`: 0 Big Picture, 1 shadPS4, 2 Library; unknown → Big Picture) |
+| 204 | `displayHeight` u32 — Switch screen: 720 handheld, 1080 docked (0 = older client). With `Config.AutoResolution` the stream is 1280x720 / 1920x1080; `AppOrchestrator.FollowSwitchDisplay` restarts the encoder once a change has held 1s. Was the upper half of a u64 appTarget |
 | 208 | telemetry u32 ×4: video reconnects, video bitrate kbps (currently echoes the configured value, not a measurement), audio reconnects, audio concealed (PLC) frames — free-running counters |
 
 `heldKeys` bits = libnx `HidNpadButton` order: A=0 B=1 X=2 Y=3 LS=4 RS=5 L=6 R=7 ZL=8 ZR=9

@@ -154,7 +154,7 @@ More in [Game library](library.en.md).
 ## Limitations
 
 - Captures the PC's primary monitor (or the game window).
-- The Switch shows the picture at 1280×720; sending more is usually pointless.
+- By default the resolution follows the Switch screen: 1280×720 handheld, 1920×1080 docked.
 - A minimized game window sends no picture; some games in exclusive fullscreen mode are only visible
   when capturing the whole monitor.
 - The ZL/ZR triggers are sent as on/off presses, without pressure.
