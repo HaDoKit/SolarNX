@@ -6,12 +6,12 @@ Versions follow [Semantic Versioning](https://semver.org/). While the project is
 (`0.x.y-alpha`), settings, the library and the protocol are not guaranteed to be compatible between
 versions: install the same version on the PC and on the Switch.
 
-## [Unreleased]
+## [0.2.0-alpha] - 2026-11-02
 
 - The project is renamed: **OrbitNX → SolarNX**. The PC app is `SolarNX.exe`, the Switch app is
   `/switch/SolarNX/SolarNX-Switch.nro`.
 - **Experimental:** Internet mode - the Switch connects to the PC over the internet on a single UDP port,
-  19010 (no NAT hole punching yet; the port is forwarded by hand). Only a paired Switch can connect:
+  19010: through your own rendezvous server or with the port forwarded by hand. Only a paired Switch can connect:
   pairing is done once, comparing a 6-digit code on both screens. All traffic is encrypted (X25519,
   AES-256, HMAC-SHA256). Wi-Fi mode is unchanged.
 - **Experimental:** the SolarNX Rendezvous server for your own VPS (Linux, Windows, Docker): the PC and
@@ -52,4 +52,5 @@ First public alpha.
 - Steam button with − and +, back to the menu by holding − for 3 seconds.
 - HOME menu tile (forwarder, built yourself).
 
+[0.2.0-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.2.0-alpha
 [0.1.0-alpha]: https://github.com/HaDoKit/SolarNX/releases/tag/v0.1.0-alpha

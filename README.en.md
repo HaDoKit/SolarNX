@@ -2,7 +2,7 @@
 
 # SolarNX
 
-> **Alpha version 0.1.0-alpha.** The project is at an early stage: expect bugs, and settings and the
+> **Alpha version 0.2.0-alpha.** The project is at an early stage: expect bugs, and settings and the
 > protocol may change between versions. Stable operation has so far been confirmed on a single setup
 > only; see [Tested configuration](#tested-configuration). For what changed, see
 > [CHANGELOG.en.md](CHANGELOG.en.md).
@@ -45,7 +45,7 @@ For developers, building from source: [DEVELOPMENT.en.md](DEVELOPMENT.en.md).
 
 ## Tested configuration
 
-Stable operation of version 0.1.0-alpha is confirmed on this setup. SolarNX should work on other
+Stable operation of version 0.2.0-alpha is confirmed on this setup. SolarNX should work on other
 hardware too, but it hasn't been tested yet.
 
 | | |
