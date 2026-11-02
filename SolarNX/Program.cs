@@ -56,18 +56,24 @@ internal static class Program
         var app = new App();
         app.InitializeComponent();
         app.ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
+        Loc.Apply(config.Language);
 
         var mainWindow = new MainWindow(config, orchestrator, trayIcon, devMode);
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Открыть", null, (_, _) => mainWindow.RestoreFromTray());
+        var openItem = menu.Items.Add(Loc.T("Tray.Open"), null, (_, _) => mainWindow.RestoreFromTray());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Выход", null, (_, _) =>
+        var exitItem = menu.Items.Add(Loc.T("Tray.Exit"), null, (_, _) =>
         {
             mainWindow.AllowClose = true;
             mainWindow.Close();
             app.Shutdown();
         });
+        Loc.Changed += () =>
+        {
+            openItem.Text = Loc.T("Tray.Open");
+            exitItem.Text = Loc.T("Tray.Exit");
+        };
         trayIcon.ContextMenuStrip = menu;
         trayIcon.DoubleClick += (_, _) => mainWindow.RestoreFromTray();
 

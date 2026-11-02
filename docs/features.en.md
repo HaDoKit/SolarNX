@@ -42,13 +42,13 @@ PC, the Switch returns to the menu by itself.
 
 ### Main screen
 
-- The **«IP клиента»** (Client IP) field: the Switch's address (remembered).
-- **«Включить трансляцию»** / **«Выключить трансляцию»** (Start / Stop streaming): while streaming is
+- The **Client IP** field: the Switch's address (remembered).
+- **Start streaming** / **Stop streaming**: while streaming is
   on, SolarNX waits for the Switch and connects to it automatically, including after dropouts.
 - **Status**: off / waiting for connection / streaming (with the mode name).
-- **«Показать экран»** (Show screen): a preview of what is being sent.
+- **Show screen**: a preview of what is being sent.
 - Buttons for the **game library** (gamepad) and **settings** (gear).
-- Closing the window minimizes it to the tray; to quit completely, use the tray → «Выход» (Exit).
+- Closing the window minimizes it to the tray; to quit completely, use the tray → Exit.
 
 ### Settings
 

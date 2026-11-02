@@ -33,6 +33,7 @@ public partial class SettingsView : System.Windows.Controls.UserControl
 
         BackButton.Click += (_, _) => BackRequested?.Invoke();
 
+        InitLanguageSection();
         InitConnectionSection();
         InitVideoSection();
         InitGamepadSection();
@@ -43,10 +44,46 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         if (devMode) InitPortsSection();
     }
 
+    private static readonly UiLanguage[] LanguageOptions = { UiLanguage.Auto, UiLanguage.Russian, UiLanguage.English };
+
+    // Each language by its own name, so it can be found whatever the current one is.
+    private void InitLanguageSection()
+    {
+        LanguageCombo.Items.Add(new System.Windows.Controls.ComboBoxItem());
+        LanguageCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "Русский" });
+        LanguageCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "English" });
+        LanguageCombo.SelectedIndex = Math.Max(0, Array.IndexOf(LanguageOptions, _config.Language));
+        LanguageCombo.SelectionChanged += (_, _) =>
+        {
+            _config.Language = LanguageOptions[Math.Max(0, LanguageCombo.SelectedIndex)];
+            _config.Save();
+            Loc.Apply(_config.Language);
+        };
+        Loc.Changed += RefreshTexts;
+        RefreshTexts();
+    }
+
+    // Text set from code - XAML text follows the language through DynamicResource by itself.
+    private void RefreshTexts()
+    {
+        ((System.Windows.Controls.ComboBoxItem)LanguageCombo.Items[0]).Content = Loc.T("Settings.LanguageAuto");
+        if (ConnectionModeCombo.Items.Count == 2)
+        {
+            ((System.Windows.Controls.ComboBoxItem)ConnectionModeCombo.Items[0]).Content = Loc.T("Settings.ModeWifi");
+            ((System.Windows.Controls.ComboBoxItem)ConnectionModeCombo.Items[1]).Content = Loc.T("Settings.ModeInternet");
+            RefreshConnectionSection();
+        }
+        if (EncoderCombo.Items.Count > 0)
+        {
+            EncoderInfoText.Text = Loc.T("Settings.EncoderChecking");
+            _ = RefreshEncoderInfoAsync();
+        }
+    }
+
     private void InitConnectionSection()
     {
-        ConnectionModeCombo.Items.Add("Wi-Fi (локальная сеть)");
-        ConnectionModeCombo.Items.Add("Интернет (экспериментально)");
+        ConnectionModeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = Loc.T("Settings.ModeWifi") });
+        ConnectionModeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = Loc.T("Settings.ModeInternet") });
         ConnectionModeCombo.SelectedIndex = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet ? 1 : 0;
         ConnectionModeCombo.SelectionChanged += (_, _) =>
         {
@@ -62,7 +99,7 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         ForgetDevicesButton.Click += (_, _) =>
         {
             var answer = System.Windows.MessageBox.Show(System.Windows.Window.GetWindow(this),
-                "Забыть все привязанные Switch? Им придётся привязаться заново.", "SolarNX",
+                Loc.T("Settings.ForgetConfirm"), "SolarNX",
                 System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question);
             if (answer == System.Windows.MessageBoxResult.Yes) SolarNX.Session.PairedDevices.RemoveAll();
         };
@@ -83,7 +120,7 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         HostIdBox.Text = _config.HostId;
         var devices = SolarNX.Session.PairedDevices.All;
         PairedDevicesText.Text = devices.Count == 0
-            ? "Нет — привяжите Switch, чтобы подключаться через интернет."
+            ? Loc.T("Settings.NoPaired")
             : string.Join(", ", devices.Select(d => $"{d.Name} ({d.PairedUtc.ToLocalTime():d})"));
     }
 
@@ -93,7 +130,7 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         if (session is null)
         {
             System.Windows.MessageBox.Show(System.Windows.Window.GetWindow(this),
-                "Сначала включите трансляцию в режиме «Интернет» — привязка идёт через его соединение.", "SolarNX",
+                Loc.T("Settings.PairingNeedsStreaming"), "SolarNX",
                 System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
             return;
         }
@@ -185,15 +222,16 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         {
             if (item.Tag is not EncoderKind kind || kind == EncoderKind.Auto) continue;
             var ok = available[kind];
-            item.Content = ok ? EncoderSelection.DisplayName(kind) : $"{EncoderSelection.DisplayName(kind)} — недоступен";
+            item.Content = ok ? EncoderSelection.DisplayName(kind) : Loc.F("Settings.EncoderUnavailable", EncoderSelection.DisplayName(kind));
             item.Foreground = ok ? System.Windows.Media.Brushes.White : System.Windows.Media.Brushes.Gray;
         }
 
-        var gpuText = gpus.Count == 0 ? "не найдена" : string.Join(", ", gpus.Select(g => g.Name));
-        var fallbackNote = preference != EncoderKind.Auto && resolved != preference ? " (выбранный недоступен)" : "";
-        var cpuNote = resolved == EncoderKind.Software ? " Аппаратный кодировщик не найден — видео кодирует процессор, это заметно его нагружает." : "";
-        EncoderInfoText.Text = $"Видеокарта: {gpuText}. Будет использоваться: {EncoderSelection.DisplayName(resolved)}{fallbackNote}.{cpuNote} " +
-                               "Изменение применится при следующем подключении Switch.";
+        // Auto is the one entry the availability loop above skips.
+        ((System.Windows.Controls.ComboBoxItem)EncoderCombo.Items[0]).Content = EncoderSelection.DisplayName(EncoderKind.Auto);
+        var gpuText = gpus.Count == 0 ? Loc.T("Settings.GpuNotFound") : string.Join(", ", gpus.Select(g => g.Name));
+        var fallbackNote = preference != EncoderKind.Auto && resolved != preference ? Loc.T("Settings.EncoderFallback") : "";
+        var cpuNote = resolved == EncoderKind.Software ? Loc.T("Settings.EncoderCpuNote") : "";
+        EncoderInfoText.Text = Loc.F("Settings.EncoderInfo", gpuText, EncoderSelection.DisplayName(resolved), fallbackNote, cpuNote);
     }
 
     // AdaptiveBitrateController scales the actually-running bitrate on its own between a fixed
@@ -255,8 +293,8 @@ public partial class SettingsView : System.Windows.Controls.UserControl
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "shadPS4.exe|shadPS4.exe|Исполняемые файлы (*.exe)|*.exe",
-            Title = "Укажите shadPS4.exe",
+            Filter = Loc.T("Settings.ShadPs4Filter"),
+            Title = Loc.T("Settings.ShadPs4DialogTitle"),
         };
         if (dialog.ShowDialog(System.Windows.Window.GetWindow(this)) != true) return;
 

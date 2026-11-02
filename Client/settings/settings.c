@@ -25,6 +25,9 @@ static char s_hostId[SETTINGS_HOST_ID_SIZE + 1] = "";
 static char s_server[SETTINGS_ADDRESS_MAX] = "";
 static char s_serverKey[33] = "";
 static char s_pcId[SETTINGS_HOST_ID_SIZE + 1] = "";
+static SettingsLanguage s_language = SettingsLanguage_Auto;
+
+static const char *const kLanguageNames[] = {"auto", "ru", "en"};
 
 static void toHex(char *out, const uint8_t *data, size_t size)
 {
@@ -72,6 +75,7 @@ static void save(void)
         fprintf(f, "pair_key=%s\nhost_id=%s\n", hex, s_hostId);
     }
     fprintf(f, "server=%s\nserver_key=%s\npc_id=%s\n", s_server, s_serverKey, s_pcId);
+    fprintf(f, "language=%s\n", kLanguageNames[s_language]);
     fclose(f);
 }
 
@@ -113,6 +117,9 @@ void settingsInit(void)
         else if (readValue(line, "server", s_server, sizeof(s_server))) {}
         else if (readValue(line, "server_key", s_serverKey, sizeof(s_serverKey))) {}
         else if (readValue(line, "pc_id", s_pcId, sizeof(s_pcId))) {}
+        else if (readValue(line, "language", mode, sizeof(mode)))
+            s_language = strcmp(mode, "ru") == 0 ? SettingsLanguage_Russian
+                       : strcmp(mode, "en") == 0 ? SettingsLanguage_English : SettingsLanguage_Auto;
     }
     fclose(f);
     logWrite("settings", "button layout: %s (revision %u), connection: %s",
@@ -262,6 +269,22 @@ void settingsSetPcId(const char *id)
     for (char *c = s_pcId; *c; c++)
         if (*c >= 'a' && *c <= 'z')
             *c = (char)(*c - 32);
+    save();
+    mutexUnlock(&s_mutex);
+}
+
+SettingsLanguage settingsGetLanguage(void)
+{
+    mutexLock(&s_mutex);
+    SettingsLanguage language = s_language;
+    mutexUnlock(&s_mutex);
+    return language;
+}
+
+void settingsCycleLanguage(void)
+{
+    mutexLock(&s_mutex);
+    s_language = (SettingsLanguage)((s_language + 1) % 3);
     save();
     mutexUnlock(&s_mutex);
 }

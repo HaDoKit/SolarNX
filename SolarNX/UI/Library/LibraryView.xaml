@@ -14,13 +14,13 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <ui:Button x:Name="BackButton" Appearance="Secondary" Margin="0,0,12,0" ToolTip="Назад">
+            <ui:Button x:Name="BackButton" Appearance="Secondary" Margin="0,0,12,0" ToolTip="{DynamicResource Common.Back}">
                 <ui:Button.Icon>
                     <ui:SymbolIcon Symbol="ArrowLeft24" />
                 </ui:Button.Icon>
             </ui:Button>
-            <TextBlock Grid.Column="1" Text="Библиотека игр" FontSize="24" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
-            <ui:Button x:Name="AddButton" Grid.Column="2" Content="Добавить игру" Appearance="Primary">
+            <TextBlock Grid.Column="1" Text="{DynamicResource Home.Library}" FontSize="24" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
+            <ui:Button x:Name="AddButton" Grid.Column="2" Content="{DynamicResource Library.Add}" Appearance="Primary">
                 <ui:Button.Icon>
                     <ui:SymbolIcon Symbol="Add24" />
                 </ui:Button.Icon>
@@ -30,7 +30,7 @@
         <ScrollViewer Grid.Row="1" Margin="20" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <TextBlock x:Name="EmptyHint" Foreground="#AAAAAA" TextWrapping="Wrap" Margin="0,8,0,0"
-                           Text="Библиотека пуста. Добавьте игры — они появятся на Switch в плитке «My games» главного меню." />
+                           Text="{DynamicResource Library.Empty}" />
                 <StackPanel x:Name="EntryList" />
             </StackPanel>
         </ScrollViewer>

@@ -18,7 +18,7 @@ public static class ViGEmBusInstaller
         if (!File.Exists(installerPath))
         {
             Logger.Log("ViGEmBusInstaller", $"installer not found at {installerPath}");
-            MessageBox.Show($"Установщик не найден: {installerPath}", "SolarNX", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(Loc.F("Vigem.NotFound", installerPath), "SolarNX", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
@@ -30,7 +30,7 @@ public static class ViGEmBusInstaller
         catch (Exception ex)
         {
             Logger.Log("ViGEmBusInstaller", $"failed to launch installer: {ex}");
-            MessageBox.Show($"Не удалось запустить установщик: {ex.Message}", "SolarNX", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(Loc.F("Vigem.Failed", ex.Message), "SolarNX", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 }

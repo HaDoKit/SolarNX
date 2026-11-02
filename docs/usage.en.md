@@ -9,17 +9,16 @@
 
    ![Menu on the Switch](images/client/menu.jpg)
 
-2. On the PC, open SolarNX, enter that address in the **«IP клиента»** (Client IP) field and click
-   **«▶ Включить трансляцию»** (Start streaming). The address is remembered.
+2. On the PC, open SolarNX, enter that address in the **Client IP** field and click
+   **Start streaming**. The address is remembered.
 
    ![SolarNX on the PC](images/app/home.png)
 
 3. On the Switch, choose what to play (see below). The PC starts the right app, and the picture
    appears on the Switch within a few seconds.
 
-The status under the button shows what's happening: «выключено» (off), «ожидание подключения
-клиента…» (waiting for the client: the PC is waiting for the Switch) or «клиент подключён, идёт
-трансляция» (client connected, streaming), with the mode name.
+The status under the button shows what's happening: off, waiting for the client (the PC is waiting
+for the Switch) or client connected, streaming, with the mode name.
 
 ## Modes
 
@@ -28,7 +27,7 @@ The Switch menu has three tiles:
 - **Steam** opens Steam Big Picture on the PC. From there it's regular Big Picture: library, store,
   launching games. After you quit a game, Steam returns to Big Picture by itself.
 - **shadPS4** starts the PlayStation 4 emulator in its gamepad mode. The path to `shadPS4.exe` is set
-  in «Настройки» (Settings) → «shadPS4» (SolarNX tries to find it by itself). In this mode the gamepad
+  in Settings → SolarNX tries to find it by itself. In this mode the gamepad
   is a virtual DualShock 4 with gyro.
 - **My games** is your own game library with covers. How to fill it is described in
   [Game library](library.en.md). When the game closes on the PC, the Switch returns to the menu.
@@ -61,9 +60,14 @@ bottom-right corner:
 - **Layout: Switch (A = A)**: the buttons match the labels on the Switch; press A and the game gets A.
 - **Layout: Xbox (by position)**: the buttons match an Xbox gamepad by position; the right button is A.
 
-This is the same setting as «Раскладка Switch» (Switch layout) on the PC: the Switch and the PC exchange
+This is the same setting as Switch layout on the PC: the Switch and the PC exchange
 it while streaming is on, and the last change wins, wherever it was made. Syncing takes a few seconds.
 The Switch keeps the setting on the SD card in `/switch/SolarNX/settings.cfg`.
+
+### Language on the Switch
+
+The Switch app uses the console's language: Russian if the console is set to Russian, English
+otherwise. To change it, in the main menu press **X** → Language (Auto → Русский → English).
 
 ## PC settings
 
@@ -73,6 +77,7 @@ The gear button on the SolarNX main screen.
 
 | Setting | What it does |
 |---|---|
+| Interface language | Same as Windows (the default), Russian or English. Changes at once, no restart needed |
 | Resolution | size of the streamed picture. The Switch screen is 1280×720; more is usually unnecessary |
 | Frames per second | 60 is smoother; 30 halves the network load and gives a sharper picture at the same bitrate |
 | Bitrate (kbps) | video quality. Higher is sharper but harder on Wi-Fi. Lower it if you see artifacts |
@@ -82,7 +87,7 @@ The gear button on the SolarNX main screen.
 | shadPS4 | path to the emulator |
 | Drivers | reinstalls ViGEmBus |
 
-The **«Показать экран»** (Show screen) toggle on the main window shows a preview of what the Switch
+The **Show screen** toggle on the main window shows a preview of what the Switch
 sees.
 
 ## Playing over the internet (experimental)
@@ -96,23 +101,22 @@ Everything goes through that one connection: input, video, audio and the library
 the port has to be forwarded on the router by hand.
 
 **Setup (once):**
-1. **PC:** «Настройки» (Settings) → «Подключение» (Connection) → «Режим» (Mode) → **«Интернет
-   (экспериментально)»** (Internet, experimental). On the router, forward **UDP port 19010** to this
+1. **PC:** Settings → Connection → Mode → **Internet
+   (experimental)**. On the router, forward **UDP port 19010** to this
    PC. Turn streaming on; allow SolarNX through Windows Firewall if it asks.
-2. **Switch:** in the main menu press **X** to open the Connection screen. **Mode** → Internet,
+2. **Switch:** in the main menu press **X** to open the Settings screen. **Mode** → Internet,
    **PC address**: the PC's public IP address or a domain (if the router uses a different port, add it
    after a colon, `example.com:19010`). Restart SolarNX on the Switch: the mode is picked at startup.
-3. **Pairing.** On the PC: «Настройки» → «Подключение» → **«Привязать Switch…»** (Pair Switch); the
+3. **Pairing.** On the PC: Settings → Connection → **Pair Switch…**; the
    window waits 2 minutes for a request. On the Switch: X → **Pair with this PC**. Both screens show
-   the same 6-digit code. If the codes match, click **«Коды совпадают — привязать»** (Codes match -
-   pair) on the PC.
+   the same 6-digit code. If the codes match, click **Codes match — pair** on the PC.
 
 From then on the Switch connects by itself. The bottom-right corner of the menu shows "X  Internet: …":
 "connected (encrypted)" (all good), "waiting for the PC" (the PC doesn't answer: check the address and
 the port forwarding), "not paired" (pairing needed).
 
 > Pair only if the codes match. Different codes mean someone is sitting between the Switch and the PC.
-> The paired Switches are listed in the same Connection card; «Забыть все» (Forget all) removes every
+> The paired Switches are listed in the same Connection card; Forget all removes every
 > pairing.
 
 Don't want to forward a port, or your provider gives you a shared address? Run your own rendezvous
@@ -123,5 +127,5 @@ To go back to Wi-Fi: choose «Wi-Fi» on the PC, Mode → Wi-Fi on the Switch, a
 ## Stopping
 
 - On the Switch: hold − for 3 seconds to return to the menu, or close the app with HOME.
-- On the PC: «Выключить трансляцию» (Stop streaming). If a game was running, SolarNX closes it and
+- On the PC: Stop streaming. If a game was running, SolarNX closes it and
   exits Big Picture.

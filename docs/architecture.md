@@ -16,7 +16,7 @@ flowchart LR
         dec["декодирование (NVTEGRA)<br/>→ вывод через SDL2"]
         play["Opus → audout"]
         ctl["кнопки, стики, касания, гироскоп"]
-        menu["меню «My games» с обложками"]
+        menu["меню «Мои игры» с обложками"]
     end
     cap -- "UDP 19000 · MPEG-TS/H.264" --> dec
     aud -- "UDP 19002" --> play

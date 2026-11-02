@@ -4,11 +4,11 @@
 
 ## No connection
 
-- Check that the **«IP клиента»** (Client IP) field contains the address shown at the bottom of the
+- Check that the **Client IP** field contains the address shown at the bottom of the
   SolarNX menu on the Switch.
 - The PC and the Switch must be on the same network. Guest networks and the router's "client
   isolation" mode stop devices from seeing each other.
-- SolarNX must be open on the Switch (menu or game), and «Включить трансляцию» (Start streaming)
+- SolarNX must be open on the Switch (menu or game), and Start streaming
   must be clicked on the PC.
 - After you pick a mode on the Switch, connecting can take a few seconds.
 
@@ -16,7 +16,7 @@
 
 - The "X  Internet: …" line in the Switch menu tells why: "PC address not found", "waiting for the
   PC" (the PC doesn't answer), "not paired" (the Switch isn't paired with this PC, or the PC forgot it),
-  "pairing - open it on the PC first" (open «Привязать Switch…» on the PC).
+  "pairing - open it on the PC first" (open **Pair Switch…** on the PC).
 - Check that **UDP** port 19010 (not TCP) is forwarded on the PC's router and that Windows Firewall lets
   SolarNX through.
 - The mode on the Switch takes effect after restarting the app.
@@ -27,7 +27,7 @@
 
 - **The game is minimized on the PC.** A minimized window produces no picture; restore it.
 - **A library game is in exclusive fullscreen mode.** In its settings, clear the
-  «Показывать на Switch только окно игры» (Show only the game window on the Switch) checkbox, or
+  Show only the game window on the Switch checkbox, or
   switch the game to windowed or borderless mode.
 - **The picture is already cropped or shifted on the PC itself.** This is often caused by Windows
   compatibility flags: in the game exe's properties → Compatibility → Change high DPI settings, clear
@@ -50,7 +50,7 @@ being lost.
 
 - The game window must be active on the PC. SolarNX activates it at launch, but if you click another
   window on the PC, some games stop accepting the gamepad; click back into the game.
-- Make sure the ViGEmBus driver is installed («Настройки» (Settings) → «Драйверы» (Drivers)).
+- Make sure the ViGEmBus driver is installed (Settings → Drivers).
 - Buttons are swapped (A/B, X/Y): press Y in the Switch main menu, or toggle the Switch layout option in
   the PC settings.
 

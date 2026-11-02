@@ -88,13 +88,13 @@ variables or as command-line options. Command-line options win over variables, v
 
 ## Connecting the PC and the Switch
 
-1. **PC:** «Настройки» (Settings) → «Подключение» (Connection) → mode **«Интернет
-   (экспериментально)»** (Internet, experimental). In **«Сервер-посредник»** (Rendezvous server) enter
-   the server address (`example.com` or `example.com:19020`), in **«Ключ сервера»** (Server key) the
-   key. Note the **«ID этого ПК»** (This PC's ID). Turn streaming on; the PC registers on the server.
-2. **Switch:** main menu → **X** → Connection: **Mode** Internet, **Server** the server address,
+1. **PC:** Settings → Connection → mode **Internet
+   (experimental)**. In **Rendezvous server** enter
+   the server address (`example.com` or `example.com:19020`), in **Server key** the
+   key. Note the **This PC's ID**. Turn streaming on; the PC registers on the server.
+2. **Switch:** main menu → **X** → Settings: **Mode** Internet, **Server** the server address,
    **Server key** the key, **PC ID** the ID from the PC. Restart SolarNX on the Switch.
-3. **Pairing** (once): «Привязать Switch…» (Pair Switch) on the PC, "Pair with this PC" on the Switch,
+3. **Pairing** (once): Pair Switch on the PC, "Pair with this PC" on the Switch,
    compare the 6-digit code. After pairing the PC ID is remembered by itself.
 
 No port forwarding on the PC's router is needed in this setup. The Switch's "PC address" field isn't

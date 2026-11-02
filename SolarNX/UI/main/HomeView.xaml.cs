@@ -6,7 +6,7 @@ namespace SolarNX.UI.main;
 
 /// <summary>
 /// Home screen: connection/streaming controls ported from the old MainForm (same 3-state
-/// RefreshStatus logic/strings), plus the "Показать экран" live local preview and the button that
+/// RefreshStatus logic/strings), plus the "show screen" live local preview and the button that
 /// opens SettingsView.
 /// </summary>
 public partial class HomeView : System.Windows.Controls.UserControl
@@ -38,6 +38,7 @@ public partial class HomeView : System.Windows.Controls.UserControl
         IsVisibleChanged += (_, _) => { if (!IsVisible) StopPreview(); };
 
         RefreshMode();
+        Loc.Changed += RefreshMode;
     }
 
     /// <summary>Wi-Fi: the editable client IP. Internet (experimental): the Switch finds this PC
@@ -47,8 +48,8 @@ public partial class HomeView : System.Windows.Controls.UserControl
     {
         var internet = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet;
         var paired = SolarNX.Session.PairedDevices.All.Count;
-        IpLabel.Text = internet ? $"Интернет, UDP {SolarNX.Session.InternetSession.Port} (эксперимент)" : "IP клиента";
-        IpBox.Text = internet ? (paired == 0 ? "Нет привязанных Switch — см. Настройки" : $"Привязано Switch: {paired}") : _config.ClientIp;
+        IpLabel.Text = internet ? Loc.F("Home.InternetLabel", SolarNX.Session.InternetSession.Port) : Loc.T("Home.ClientIp");
+        IpBox.Text = internet ? (paired == 0 ? Loc.T("Home.NoPaired") : Loc.F("Home.PairedCount", paired)) : _config.ClientIp;
         IpBox.IsReadOnly = internet;
         RefreshStatus();
     }
@@ -75,7 +76,7 @@ public partial class HomeView : System.Windows.Controls.UserControl
             {
                 System.Windows.MessageBox.Show(
                     System.Windows.Window.GetWindow(this),
-                    "Сначала укажите IP клиента.",
+                    Loc.T("Home.EnterIpFirst"),
                     "SolarNX",
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Warning);
@@ -104,13 +105,13 @@ public partial class HomeView : System.Windows.Controls.UserControl
     {
         if (!_orchestrator.IsArmed)
         {
-            ToggleStreamingButton.Content = "▶  Включить трансляцию";
+            ToggleStreamingButton.Content = Loc.T("Home.Start");
             ApplyToggleButtonStyle("Start");
-            StatusLabel.Text = "Статус: выключено";
+            StatusLabel.Text = Loc.T("Home.StatusOff");
         }
         else if (_orchestrator.IsConnected)
         {
-            ToggleStreamingButton.Content = "■  Выключить трансляцию";
+            ToggleStreamingButton.Content = Loc.T("Home.Stop");
             ApplyToggleButtonStyle("Stop");
             var targetName = _orchestrator.ActiveTarget switch
             {
@@ -119,19 +120,19 @@ public partial class HomeView : System.Windows.Controls.UserControl
                 _ => null,
             };
             StatusLabel.Text = targetName is null
-                ? "Статус: клиент подключён, идёт трансляция"
-                : $"Статус: клиент подключён, идёт трансляция — {targetName}";
+                ? Loc.T("Home.StatusStreaming")
+                : Loc.F("Home.StatusStreamingTarget", targetName);
         }
         else
         {
-            ToggleStreamingButton.Content = "■  Выключить трансляцию";
+            ToggleStreamingButton.Content = Loc.T("Home.Stop");
             ApplyToggleButtonStyle("Stop");
             StatusLabel.Text = _config.ConnectionMode == SolarNX.Session.ConnectionMode.Internet
-                ? $"Статус: ожидание Switch через интернет (UDP {SolarNX.Session.InternetSession.Port})…"
-                : "Статус: ожидание подключения клиента…";
+                ? Loc.F("Home.StatusWaitingInternet", SolarNX.Session.InternetSession.Port)
+                : Loc.T("Home.StatusWaiting");
         }
 
-        // "Показать экран" only makes sense once a client is actually connected and streaming -
+        // "Show screen" only makes sense once a client is actually connected and streaming -
         // before that there is nothing real being transmitted to preview (user's own decision).
         ShowScreenToggle.IsEnabled = _orchestrator.IsConnected;
         if (!_orchestrator.IsConnected && ShowScreenToggle.IsChecked == true)

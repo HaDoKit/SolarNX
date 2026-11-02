@@ -45,10 +45,10 @@ has to be forwarded on the PC's router. See [Usage](usage.en.md#playing-over-the
 1. Download `SolarNX-Setup.exe` from the [releases](https://github.com/HaDoKit/SolarNX/releases) and run it.
 2. At the drivers step, select **ViGEmBus** if it isn't installed yet.
 3. After installation, start SolarNX. Closing the window minimizes it to the tray; to quit completely,
-   use the tray icon menu → «Выход» (Exit).
+   use the tray icon menu → Exit.
 
-You can reinstall the driver later: «Настройки» (Settings) → «Драйверы» (Drivers) →
-«Переустановить драйвер геймпада» (Reinstall gamepad driver).
+You can reinstall the driver later: Settings → Drivers →
+Reinstall gamepad driver.
 
 ## Installing on the Switch
 
