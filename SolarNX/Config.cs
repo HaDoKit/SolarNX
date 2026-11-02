@@ -70,6 +70,11 @@ public sealed class Config
     /// applied to the virtual Xbox 360 controller - see VirtualGamepadHub.</summary>
     public bool SwitchButtonLayout { get; set; } = true;
 
+    /// <summary>Bumped on every change of <see cref="SwitchButtonLayout"/>, here or on the Switch -
+    /// the side with the higher revision wins when the two sync over the library channel (see
+    /// LibraryWire), so the last change made on either side is the one that sticks.</summary>
+    public uint ButtonLayoutRevision { get; set; }
+
     /// <summary>Off by default: after a game exits, Steam returns to Big Picture by itself. When on,
     /// AppOrchestrator additionally sends Escape and fully closes/reopens Big Picture - an old
     /// workaround for the gamepad staying dead in Big Picture after a non-Steam-game shortcut (e.g.

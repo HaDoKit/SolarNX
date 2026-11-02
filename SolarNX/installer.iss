@@ -243,9 +243,9 @@ var
   resultCode: Integer;
 begin
   if FileExists(FromDir + '\config.json') and not FileExists(ToDir + '\config.json') then
-    FileCopy(FromDir + '\config.json', ToDir + '\config.json', True);
+    CopyFile(FromDir + '\config.json', ToDir + '\config.json', True);
   if FileExists(FromDir + '\library.json') and not FileExists(ToDir + '\library.json') then
-    FileCopy(FromDir + '\library.json', ToDir + '\library.json', True);
+    CopyFile(FromDir + '\library.json', ToDir + '\library.json', True);
   if DirExists(FromDir + '\covers') and not DirExists(ToDir + '\covers') then
     Exec(ExpandConstant('{sys}\robocopy.exe'), '"' + FromDir + '\covers" "' + ToDir + '\covers" /E /NFL /NDL /NJH /NJS',
          '', SW_HIDE, ewWaitUntilTerminated, resultCode);

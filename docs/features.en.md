@@ -59,7 +59,7 @@ PC, the Switch returns to the menu by itself.
 - **Adaptive bitrate:** if packets are lost on the Switch, SolarNX lowers the bitrate (no lower than
   1500 kbps), and after 30 seconds of stable connection carefully raises it back to the configured
   value.
-- **Switch layout:** swaps A/B and X/Y.
+- **Switch layout:** swaps A/B and X/Y. Can be changed both on the PC and on the Switch (Y in the menu).
 - **shadPS4:** path to the emulator (found automatically) and a download link.
 - **Drivers:** reinstalling ViGEmBus.
 
@@ -131,6 +131,7 @@ More in [Game library](library.en.md).
 **Menu**
 - Three tiles: Steam, shadPS4, My games. The console's IP address is shown at the bottom of the
   screen.
+- Y switches the A/B and X/Y layout; the current one is shown in the bottom-right corner.
 - My games is a grid of your library's covers: A to play, B to go back. The list comes from the PC
   automatically and updates by itself.
 

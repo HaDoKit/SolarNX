@@ -10,7 +10,7 @@ namespace SolarNX.Library;
 /// purpose: HID only exists during a session, and the menu needs the list before one starts.
 ///
 /// The payload (covers re-encoded as Switch-sized JPEGs) is built lazily and cached until the
-/// library changes, so an idle armed host costs one connect + 17 bytes per interval.
+/// library changes, so an idle armed host costs one connect + 32 bytes per interval.
 /// </summary>
 public sealed class LibraryPusher : IDisposable
 {
@@ -20,16 +20,20 @@ public sealed class LibraryPusher : IDisposable
 
     private readonly Config _config;
     private readonly GameLibrary _library;
+    private readonly Action<bool, uint> _onSwitchButtonLayout;
     private readonly object _payloadLock = new();
     private (byte[] Payload, ulong Hash)? _cached;
 
     private CancellationTokenSource? _runCts;
     private bool? _lastAttemptOk; // only log on transitions - the Switch being off is the normal case
 
-    public LibraryPusher(Config config, GameLibrary library)
+    /// <param name="onSwitchButtonLayout">Called (on the thread pool) with the Switch's button layout
+    /// and its revision after every exchange - the owner adopts it if it is newer.</param>
+    public LibraryPusher(Config config, GameLibrary library, Action<bool, uint> onSwitchButtonLayout)
     {
         _config = config;
         _library = library;
+        _onSwitchButtonLayout = onSwitchButtonLayout;
         _library.Changed += () => { lock (_payloadLock) _cached = null; };
     }
 
@@ -86,13 +90,14 @@ public sealed class LibraryPusher : IDisposable
         using var replyCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         replyCts.CancelAfter(ReplyTimeout);
 
-        await stream.WriteAsync(LibraryWire.BuildHeader(hash), replyCts.Token);
+        await stream.WriteAsync(LibraryWire.BuildHeader(hash, _config.SwitchButtonLayout, _config.ButtonLayoutRevision), replyCts.Token);
 
-        var reply = new byte[1];
-        if (await stream.ReadAsync(reply, replyCts.Token) != 1)
-            throw new IOException("Switch closed the library channel before replying");
+        var replyBytes = new byte[LibraryWire.ReplySize];
+        await stream.ReadExactlyAsync(replyBytes, replyCts.Token);
+        var reply = LibraryWire.ParseReply(replyBytes);
+        _onSwitchButtonLayout(reply.SwapAbxy, reply.LayoutRevision);
 
-        if (reply[0] != 1) return; // already has this exact library
+        if (!reply.NeedsPayload) return; // already has this exact library
 
         replyCts.CancelAfter(TimeSpan.FromSeconds(30)); // the payload itself can be a few MB with many covers
         await stream.WriteAsync(payload, replyCts.Token);

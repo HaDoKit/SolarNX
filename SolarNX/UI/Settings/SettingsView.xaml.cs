@@ -149,18 +149,27 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         _config.Save();
     }
 
+    // Set while the toggle is moved to show a change made on the Switch - that must not be saved
+    // back as a new PC-side change.
+    private bool _showingSwitchLayout;
+
     private void InitGamepadSection()
     {
         SwitchLayoutToggle.IsChecked = _config.SwitchButtonLayout;
         SwitchLayoutToggle.Checked += (_, _) => SetSwitchLayout(true);
         SwitchLayoutToggle.Unchecked += (_, _) => SetSwitchLayout(false);
+        _orchestrator.ButtonLayoutChanged += () => Dispatcher.BeginInvoke(() =>
+        {
+            _showingSwitchLayout = true;
+            SwitchLayoutToggle.IsChecked = _orchestrator.SwapAbxy;
+            _showingSwitchLayout = false;
+        });
     }
 
     private void SetSwitchLayout(bool enabled)
     {
-        _config.SwitchButtonLayout = enabled;
-        _orchestrator.SwapAbxy = enabled;
-        _config.Save();
+        if (_showingSwitchLayout) return;
+        _orchestrator.SetSwapAbxy(enabled);
     }
 
     private void InitShadPs4Section()

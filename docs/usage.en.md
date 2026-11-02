@@ -53,6 +53,18 @@ The Switch system keeps the HOME and Capture buttons for itself, so SolarNX uses
 A single − or + press is delayed by up to 0.1 seconds, while SolarNX waits to see whether the second
 button follows.
 
+### Button layout on the Switch
+
+In the Switch main menu, press **Y** to switch the A/B and X/Y layout. The current layout is shown in the
+bottom-right corner:
+
+- **Layout: Switch (A = A)**: the buttons match the labels on the Switch; press A and the game gets A.
+- **Layout: Xbox (by position)**: the buttons match an Xbox gamepad by position; the right button is A.
+
+This is the same setting as «Раскладка Switch» (Switch layout) on the PC: the Switch and the PC exchange
+it while streaming is on, and the last change wins, wherever it was made. Syncing takes a few seconds.
+The Switch keeps the setting on the SD card in `/switch/SolarNX/settings.cfg`.
+
 ## PC settings
 
 The gear button on the SolarNX main screen.
@@ -66,7 +78,7 @@ The gear button on the SolarNX main screen.
 | Bitrate (kbps) | video quality. Higher is sharper but harder on Wi-Fi. Lower it if you see artifacts |
 | Adaptive bitrate | SolarNX lowers the bitrate when the connection has problems and raises it back once things are stable. The Bitrate value becomes the upper limit |
 | Encoder | Auto (recommended): SolarNX picks the encoder for your graphics card itself. The line under the list shows the detected graphics card and the encoder that will be used. Choose one by hand only if the automatic one causes problems, such as artifacts. The AMD and Intel encoders are experimental. Takes effect the next time the Switch connects |
-| Switch layout (A↔B, X↔Y) | swaps A/B and X/Y so the buttons match the labels on the Switch |
+| Switch layout (A↔B, X↔Y) | swaps A/B and X/Y so the buttons match the labels on the Switch. The same setting can be changed on the Switch (see below); the last change wins |
 | shadPS4 | path to the emulator |
 | Drivers | reinstalls ViGEmBus |
 

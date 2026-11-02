@@ -13,16 +13,20 @@
 #include "../network/network.h"
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
+#include "../settings/settings.h"
 
 // Wire format - mirrors SolarNX/Library/LibraryWire.cs, little-endian, one exchange per connection
 // (the host dials in, same direction as HID):
-//   host -> here   u32 magic "ONXL", u32 version (1), u64 content hash
-//   here -> host   u8 1 = send it / 0 = already have this hash
+//   host -> here   u32 magic "ONXL", u32 version (2), u64 content hash,
+//                  u8 button layout (1 = A/B X/Y by label), u8[3] zero, u32 layout revision
+//   here -> host   u8 1 = send it / 0 = already have this hash,
+//                  u8 button layout, u8[2] zero, u32 layout revision - this side's, after syncing
+//                  with the host's (higher revision wins, a tie goes to the host; see settings.h)
 //   host -> here   (only if 1) u32 count, then per entry:
 //                  u32 id, u16 nameLength, name (UTF-8), u32 coverLength, cover (JPEG)
 // A malformed or oversized message is dropped whole; the previous library stays in place.
 #define LIBRARY_MAGIC   0x4C584E4Fu
-#define LIBRARY_VERSION 1u
+#define LIBRARY_VERSION 2u
 
 // Receiver thread: idle almost all the time (blocked in accept), short bursts while a library
 // arrives. Covers go to the heap, so a small stack is plenty. Shares core 0 with the HID thread,
@@ -113,7 +117,7 @@ static void handleConnection(int sock)
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
-    uint32_t header[4]; // magic, version, hash (2 words)
+    uint32_t header[6]; // magic, version, hash (2 words), layout flags, layout revision
     if (!recvAll(sock, header, sizeof(header)))
         return;
     if (header[0] != LIBRARY_MAGIC || header[1] != LIBRARY_VERSION)
@@ -123,12 +127,18 @@ static void handleConnection(int sock)
     }
     uint64_t hash = (uint64_t)header[2] | ((uint64_t)header[3] << 32);
 
+    settingsSyncButtonLayout((header[4] & 0xFF) != 0, header[5]);
+    bool swapAbxy;
+    uint32_t layoutRevision;
+    settingsGetButtonLayout(&swapAbxy, &layoutRevision);
+
     mutexLock(&s_mutex);
     bool need = hash != s_hash;
     mutexUnlock(&s_mutex);
 
-    uint8_t reply = need ? 1 : 0;
-    if (send(sock, &reply, 1, 0) != 1 || !need)
+    uint8_t reply[8] = {need ? 1 : 0, swapAbxy ? 1 : 0, 0, 0};
+    memcpy(&reply[4], &layoutRevision, sizeof(layoutRevision));
+    if (send(sock, reply, sizeof(reply), 0) != (ssize_t)sizeof(reply) || !need)
         return;
 
     int count = 0;
