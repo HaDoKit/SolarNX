@@ -26,7 +26,7 @@ static char s_server[SETTINGS_ADDRESS_MAX] = "";
 static char s_serverKey[33] = "";
 static char s_pcId[SETTINGS_HOST_ID_SIZE + 1] = "";
 static SettingsLanguage s_language = SettingsLanguage_Auto;
-static SettingsRumble s_rumble = SettingsRumble_Strong;
+static SettingsRumble s_rumble = SettingsRumble_All;
 
 static const char *const kLanguageNames[] = {"auto", "ru", "en"};
 
@@ -288,8 +288,8 @@ SettingsRumble settingsGetRumble(void)
 void settingsCycleRumble(void)
 {
     mutexLock(&s_mutex);
-    s_rumble = s_rumble == SettingsRumble_Strong ? SettingsRumble_All
-             : s_rumble == SettingsRumble_All ? SettingsRumble_Off : SettingsRumble_Strong;
+    s_rumble = s_rumble == SettingsRumble_All ? SettingsRumble_Strong
+             : s_rumble == SettingsRumble_Strong ? SettingsRumble_Off : SettingsRumble_All;
     save();
     mutexUnlock(&s_mutex);
 }

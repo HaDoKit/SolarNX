@@ -134,9 +134,19 @@ public sealed class AppOrchestrator : IDisposable
     private static readonly TimeSpan RumbleStopDelay = TimeSpan.FromMilliseconds(60);
     private readonly int[] _rumbleGeneration = new int[4];
 
-    // Debug mode: how many rumble commands a player got, logged every 5s.
-    private readonly int[] _rumbleEvents = new int[4];
-    private readonly int[] _rumbleStops = new int[4];
+    // Debug mode: what the game sends, per player, logged every 5s - to tell a game's background
+    // rumble (walking...) from its hits by numbers rather than by feel.
+    private sealed class RumbleWindow
+    {
+        public int Commands, Stops, MaxLarge, MaxSmall;
+        public TimeSpan OnTime;
+        public DateTime LastUtc;
+        public bool LastOn;
+        public readonly Dictionary<(byte, byte), int> Levels = new();
+        public readonly System.Text.StringBuilder Trace = new();
+        public int TraceCount;
+    }
+    private readonly RumbleWindow[] _rumbleWindows = Enumerable.Range(0, 4).Select(_ => new RumbleWindow()).ToArray();
     private DateTime _rumbleLogUtc = DateTime.UtcNow;
 
     private void OnGameRumble(int player, byte large, byte small)
@@ -178,22 +188,40 @@ public sealed class AppOrchestrator : IDisposable
 
     private void CountRumble(int player, byte large, byte small)
     {
-        string? line = null;
+        var lines = new List<string>();
         lock (_rumbleLock)
         {
-            _rumbleEvents[player]++;
-            if (large == 0 && small == 0) _rumbleStops[player]++;
             var now = DateTime.UtcNow;
-            if (now - _rumbleLogUtc >= TimeSpan.FromSeconds(5))
+            var w = _rumbleWindows[player];
+            if (w.LastOn && w.LastUtc != default) w.OnTime += now - w.LastUtc;
+            w.Commands++;
+            if (large == 0 && small == 0) w.Stops++;
+            w.MaxLarge = Math.Max(w.MaxLarge, large);
+            w.MaxSmall = Math.Max(w.MaxSmall, small);
+            w.Levels[(large, small)] = w.Levels.GetValueOrDefault((large, small)) + 1;
+            // The first commands of the window as "+ms large/small" - shows the rhythm (pulse lengths).
+            if (w.TraceCount++ < 40)
+                w.Trace.Append($" +{(now - _rumbleLogUtc).TotalMilliseconds:0}:{large}/{small}");
+            w.LastUtc = now;
+            w.LastOn = large != 0 || small != 0;
+
+            var span = now - _rumbleLogUtc;
+            if (span >= TimeSpan.FromSeconds(5))
             {
-                line = string.Join(", ", Enumerable.Range(0, 4).Where(i => _rumbleEvents[i] > 0)
-                    .Select(i => $"player {i + 1}: {_rumbleEvents[i]} commands ({_rumbleStops[i]} stops), now {_rumble[i * 2]}/{_rumble[i * 2 + 1]}"));
-                Array.Clear(_rumbleEvents);
-                Array.Clear(_rumbleStops);
+                for (var i = 0; i < 4; i++)
+                {
+                    var x = _rumbleWindows[i];
+                    if (x.Commands == 0) continue;
+                    if (x.LastOn) x.OnTime += now - x.LastUtc;
+                    var top = string.Join(" ", x.Levels.OrderByDescending(kv => kv.Value).Take(4).Select(kv => $"{kv.Key.Item1}/{kv.Key.Item2}x{kv.Value}"));
+                    lines.Add($"player {i + 1}: {x.Commands} commands, {x.Stops} stops, max {x.MaxLarge}/{x.MaxSmall}, " +
+                        $"on {100 * x.OnTime.TotalSeconds / span.TotalSeconds:0}% of the time, most often {top}; trace{x.Trace}");
+                    _rumbleWindows[i] = new RumbleWindow { LastOn = x.LastOn, LastUtc = now };
+                }
                 _rumbleLogUtc = now;
             }
         }
-        if (line is { Length: > 0 }) Logger.Log("Rumble", $"last 5s - {line}");
+        foreach (var line in lines) Logger.Log("Rumble", $"last 5s - {line}");
     }
 
     // The Switch said Hello: from now on it takes control messages - tell it the current options.
