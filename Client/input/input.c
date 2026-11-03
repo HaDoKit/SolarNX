@@ -87,8 +87,11 @@ static RumbleStyle s_rumbleStyle[INPUT_MAX_CONTROLLERS];
 // Phantom Blade Zero are the small motor alone, 0..134 every 20ms, which at full HD-rumble strength
 // on the high band felt like a constant tremor. Scaled down to match how it feels on the original.
 #define RUMBLE_SMALL_MOTOR_SCALE 0.35f
-#define RUMBLE_FREQ_LOW  160.0f // Hz - the Switch's own defaults for its two bands
-#define RUMBLE_FREQ_HIGH 320.0f
+// Hz. The Switch's own defaults for its two bands are 160/320 - at those the Joy-Con's actuator is
+// audible: with a game changing the level every 20ms (Phantom Blade Zero's footsteps) it whined.
+// An Xbox pad's motors spin far slower; down here it feels like them and stays quiet.
+#define RUMBLE_FREQ_LOW  80.0f
+#define RUMBLE_FREQ_HIGH 160.0f
 
 
 // Debug menu (debug mode only): the chord, the presses handed to the menu, and per player the
