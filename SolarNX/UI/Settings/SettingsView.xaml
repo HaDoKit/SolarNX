@@ -205,11 +205,17 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <TextBlock Text="{DynamicResource Settings.SwitchLayout}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
                             <ui:ToggleSwitch x:Name="SwitchLayoutToggle" Grid.Column="1" HorizontalAlignment="Left" />
                             <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
                                        Text="{DynamicResource Settings.SwitchLayoutHint}" />
+                            <TextBlock Grid.Row="2" Margin="0,14,0,0" Text="{DynamicResource Settings.Rumble}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                            <ui:ToggleSwitch x:Name="RumbleToggle" Grid.Row="2" Grid.Column="1" Margin="0,14,0,0" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                       Text="{DynamicResource Settings.RumbleHint}" />
                         </Grid>
                     </StackPanel>
                 </Border>

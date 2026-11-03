@@ -151,12 +151,14 @@ static void startNetwork(void) {
             if (appMenuRequested()) {
                 logWrite("network", "back to menu requested - closing the HID connection so the host ends the session");
                 networkCloseHidClient();
+                inputStopRumble();
                 break;
             }
 
             if (!networkSendHid(&pkt) || !networkFlushControl()) {
                 logWrite("network", "HID send failed after %lu packets - PC disconnected, waiting for reconnect", totalSent);
                 networkCloseHidClient();
+                inputStopRumble();
                 // A library game's session is ended by the host when the game exits (or couldn't
                 // start) - that's the signal to bring the player back to the menu to pick the next
                 // one, instead of sitting on a frozen stream waiting for a reconnect.
@@ -178,6 +180,7 @@ static void startNetwork(void) {
             if (!networkWaitForHost(HID_SEND_INTERVAL_NS)) {
                 logWrite("network", "the PC closed the HID connection after %lu packets", totalSent);
                 networkCloseHidClient();
+                inputStopRumble();
                 if (inputGetAppTarget() == SolarNxAppTarget_Library) {
                     logWrite("network", "library session ended by the host - back to the menu");
                     appRequestMenu();

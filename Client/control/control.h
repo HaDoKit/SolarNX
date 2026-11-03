@@ -30,6 +30,7 @@
 
 typedef enum {
     HostMessage_Hello = 1, // CONTROL_VERSION_WIRE_SIZE bytes: the PC's protocol and app version
+    HostMessage_Rumble = 2, // 8 bytes: per player 1-4, u8 large motor, u8 small motor (input.c)
 } HostMessage;
 
 typedef enum {

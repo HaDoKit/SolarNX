@@ -284,12 +284,22 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         SwitchLayoutToggle.IsChecked = _config.SwitchButtonLayout;
         SwitchLayoutToggle.Checked += (_, _) => SetSwitchLayout(true);
         SwitchLayoutToggle.Unchecked += (_, _) => SetSwitchLayout(false);
+        RumbleToggle.IsChecked = _config.Rumble;
+        RumbleToggle.Checked += (_, _) => SetRumble(true);
+        RumbleToggle.Unchecked += (_, _) => SetRumble(false);
         _orchestrator.ButtonLayoutChanged += () => Dispatcher.BeginInvoke(() =>
         {
             _showingSwitchLayout = true;
             SwitchLayoutToggle.IsChecked = _orchestrator.SwapAbxy;
             _showingSwitchLayout = false;
         });
+    }
+
+    private void SetRumble(bool enabled)
+    {
+        _config.Rumble = enabled;
+        _config.Save();
+        _orchestrator.RumbleSettingChanged();
     }
 
     private void SetSwitchLayout(bool enabled)

@@ -1,6 +1,7 @@
 #include "input.h"
 
 #include <string.h>
+#include <stdatomic.h>
 
 #include <switch.h>
 
@@ -61,6 +62,24 @@ static SixaxisSlot s_sixaxisSlot[INPUT_MAX_CONTROLLERS];
 #define INPUT_MENU_HOLD_NS 3000000000ULL
 static u64 s_minusHeldSinceTick = 0; // 0 = Minus not currently held alone
 static bool s_menuHoldNeedsRelease = false; // already fired - wait for a release before re-arming
+
+// Rumble (HD rumble): two vibration devices per controller style - left and right Joy-Con, or the
+// Pro Controller's two motors. Handles for every style are fetched once; inputRead() sends to the
+// style the player has right now. The levels arrive from the PC on another thread, so they sit in
+// atomics: (large << 8) | small per player.
+typedef enum { RumbleStyle_None, RumbleStyle_Handheld, RumbleStyle_FullKey, RumbleStyle_JoyDual } RumbleStyle;
+static HidVibrationDeviceHandle s_vibHandheld[2];
+static HidVibrationDeviceHandle s_vibFullKey[INPUT_MAX_CONTROLLERS][2];
+static HidVibrationDeviceHandle s_vibJoyDual[INPUT_MAX_CONTROLLERS][2];
+static bool s_vibReady = false;
+static atomic_uint s_rumbleTarget[INPUT_MAX_CONTROLLERS];
+static uint32_t s_rumbleApplied[INPUT_MAX_CONTROLLERS];
+static RumbleStyle s_rumbleStyle[INPUT_MAX_CONTROLLERS];
+
+// HD rumble at full amplitude is harsh on a Joy-Con; XInput's 255 is "full", so it is scaled to this.
+#define RUMBLE_MAX_AMPLITUDE 0.8f
+#define RUMBLE_FREQ_LOW  160.0f // Hz - the Switch's own defaults for its two bands
+#define RUMBLE_FREQ_HIGH 320.0f
 
 static void configurePads(void)
 {
@@ -130,8 +149,98 @@ bool inputInit(void)
         s_sixaxisJoyDualRight[i] = joyDualHandles[1];
     }
 
+    Result rc = hidInitializeVibrationDevices(s_vibHandheld, 2, HidNpadIdType_Handheld, HidNpadStyleTag_NpadHandheld);
+    for (int i = 0; i < INPUT_MAX_CONTROLLERS && R_SUCCEEDED(rc); i++)
+    {
+        rc = hidInitializeVibrationDevices(s_vibFullKey[i], 2, s_npadIds[i], HidNpadStyleTag_NpadFullKey);
+        if (R_SUCCEEDED(rc))
+            rc = hidInitializeVibrationDevices(s_vibJoyDual[i], 2, s_npadIds[i], HidNpadStyleTag_NpadJoyDual);
+    }
+    s_vibReady = R_SUCCEEDED(rc);
+    if (!s_vibReady)
+        logWrite("input", "vibration devices unavailable (0x%x) - no rumble", rc);
+
     logWrite("input", "pad/touch/sixaxis ready for up to %d controllers", INPUT_MAX_CONTROLLERS);
     return true;
+}
+
+void inputSetRumble(int player, uint8_t large, uint8_t small)
+{
+    if (player < 0 || player >= INPUT_MAX_CONTROLLERS)
+        return;
+    atomic_store(&s_rumbleTarget[player], ((unsigned)large << 8) | small);
+}
+
+static RumbleStyle currentRumbleStyle(int i)
+{
+    if (!padIsConnected(&s_pads[i]))
+        return RumbleStyle_None;
+    u64 styleSet = padGetStyleSet(&s_pads[i]);
+    if (i == 0 && (styleSet & HidNpadStyleTag_NpadHandheld))
+        return RumbleStyle_Handheld;
+    if (styleSet & HidNpadStyleTag_NpadFullKey)
+        return RumbleStyle_FullKey;
+    if (styleSet & HidNpadStyleTag_NpadJoyDual)
+        return RumbleStyle_JoyDual;
+    return RumbleStyle_None;
+}
+
+static const HidVibrationDeviceHandle *rumbleHandles(int i, RumbleStyle style)
+{
+    switch (style)
+    {
+    case RumbleStyle_Handheld: return s_vibHandheld;
+    case RumbleStyle_FullKey:  return s_vibFullKey[i];
+    case RumbleStyle_JoyDual:  return s_vibJoyDual[i];
+    default:                   return NULL;
+    }
+}
+
+static void sendRumble(int i, RumbleStyle style, uint32_t levels)
+{
+    const HidVibrationDeviceHandle *handles = rumbleHandles(i, style);
+    if (handles == NULL)
+        return;
+    HidVibrationValue value = {
+        .amp_low = (float)((levels >> 8) & 0xFF) / 255.0f * RUMBLE_MAX_AMPLITUDE,
+        .freq_low = RUMBLE_FREQ_LOW,
+        .amp_high = (float)(levels & 0xFF) / 255.0f * RUMBLE_MAX_AMPLITUDE,
+        .freq_high = RUMBLE_FREQ_HIGH,
+    };
+    HidVibrationValue values[2] = {value, value};
+    hidSendVibrationValues(handles, values, 2);
+}
+
+// Sends what changed: new levels from the PC, or a player whose controller changed style (e.g. the
+// Joy-Cons went into the console) - the old devices are stopped, the new ones get the current level.
+static void applyRumble(void)
+{
+    if (!s_vibReady)
+        return;
+    for (int i = 0; i < INPUT_MAX_CONTROLLERS; i++)
+    {
+        RumbleStyle style = currentRumbleStyle(i);
+        uint32_t target = atomic_load(&s_rumbleTarget[i]);
+        if (style != s_rumbleStyle[i])
+        {
+            if (s_rumbleApplied[i] != 0)
+                sendRumble(i, s_rumbleStyle[i], 0);
+            s_rumbleStyle[i] = style;
+            s_rumbleApplied[i] = 0;
+        }
+        if (target != s_rumbleApplied[i])
+        {
+            sendRumble(i, style, target);
+            s_rumbleApplied[i] = target;
+        }
+    }
+}
+
+void inputStopRumble(void)
+{
+    for (int i = 0; i < INPUT_MAX_CONTROLLERS; i++)
+        atomic_store(&s_rumbleTarget[i], 0);
+    applyRumble();
 }
 
 static HidSixAxisSensorHandle sixaxisHandleForSlot(int i, SixaxisSlot slot)
@@ -254,6 +363,7 @@ void inputRead(SolarNxHidPacket *pkt)
     }
     pkt->controllerCount = connectedCount;
     updateMenuHold(minusHeldAlone);
+    applyRumble();
 
     HidTouchScreenState touch = {0};
     if (hidGetTouchScreenStates(&touch, 1) && touch.count > 0)

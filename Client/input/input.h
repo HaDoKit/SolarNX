@@ -24,5 +24,12 @@ void inputRead(SolarNxHidPacket *pkt);
 // the HID thread is paused (not calling inputRead).
 void inputReconfigure(void);
 
+// The game's rumble from the PC (control message Rumble): motor levels 0-255 for player 0-3, XInput
+// meaning (large = low frequency, small = high frequency). Any thread - inputRead() applies it to
+// whatever controller the player has right now (Joy-Con pair, handheld, Pro Controller).
+void inputSetRumble(int player, uint8_t large, uint8_t small);
+// Stops every controller's rumble at once (the session ended). HID thread.
+void inputStopRumble(void);
+
 // Stops the sixaxis sensors started by inputInit(). Call once at shutdown.
 void inputExit(void);
