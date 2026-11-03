@@ -66,6 +66,12 @@ public sealed class InternetSession : ISessionController
     private DateTime _lastInputUtc;
     private bool _sessionActive;
 
+    // When the PC ended the session: Input still in flight from the Switch (it sends every ~8ms until
+    // the End reaches it) must not start a new session - that relaunched the game that had just
+    // exited. A Bye or a new Hello from the Switch follows within this time anyway.
+    private static readonly TimeSpan EndedByPcGrace = TimeSpan.FromSeconds(2);
+    private DateTime _endedByPcUtc = DateTime.MinValue;
+
     // What the current peer's Hello said about its version (PeerVersion.Legacy for a 0.2.4 Switch,
     // whose Hello is just device id + nonce).
     private PeerVersion? _peerVersion;
@@ -199,7 +205,16 @@ public sealed class InternetSession : ISessionController
         DisposeSockets();
     }
 
-    public void ForceDisconnect() => EndSession("ended by the PC", notifySwitch: true);
+    // Off the caller's thread, as in Wi-Fi mode (there it only closes the socket and the read loop
+    // raises SessionStopped later): the callers - AppOrchestrator's watchers - hold its pipeline gate,
+    // and SessionStopped's handler takes that gate. Raised right here it waited for itself: seen live
+    // when a library game exited in Internet mode - every later session hung at "waiting for pipeline
+    // gate" until the app was restarted.
+    public void ForceDisconnect()
+    {
+        lock (_lock) _endedByPcUtc = DateTime.UtcNow;
+        _ = Task.Run(() => EndSession("ended by the PC", notifySwitch: true));
+    }
 
     public ValueTask DisposeAsync()
     {
@@ -369,6 +384,7 @@ public sealed class InternetSession : ISessionController
                     _lastInputUtc = DateTime.UtcNow;
                     if (!_sessionActive)
                     {
+                        if (DateTime.UtcNow - _endedByPcUtc < EndedByPcGrace) return; // leftovers of the ended session
                         _sessionActive = true;
                         started = input;
                     }
@@ -464,6 +480,7 @@ public sealed class InternetSession : ISessionController
                 var keys = InternetCrypto.DeriveSessionKeys(device.Key, switchNonce, pcNonce);
                 ForgetPeer();
                 _peer = from;
+                _endedByPcUtc = DateTime.MinValue; // a fresh handshake: its input is a new session
                 _peerVersion = version;
                 _peerDeviceId = deviceId;
                 _peerNonce = switchNonce;
