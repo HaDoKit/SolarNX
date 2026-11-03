@@ -6,6 +6,17 @@ Versions follow [Semantic Versioning](https://semver.org/). While the project is
 (`0.x.y-alpha`), settings, the library and the protocol are not guaranteed to be compatible between
 versions: install the same version on the PC and on the Switch.
 
+## [0.2.4-alpha] - 2026-11-03
+
+- Video is now H.265 (HEVC): at the same bitrate the picture is cleaner than with H.264. If the
+  graphics card can't encode H.265, SolarNX falls back to H.264 by itself. The codec can be chosen in
+  Settings -> Codec. Encoding on the CPU is always H.264.
+- By default the resolution follows the Switch screen: 1280×720 handheld, 1920×1080 docked. If you
+  put the Switch in the dock or take it out mid-game, the picture freezes for about a second and goes
+  on at the new resolution. For 1080p raise the bitrate, about twice as much. A fixed resolution can
+  be chosen in Settings -> Resolution.
+- The video format changed: install 0.2.4 on both the PC and the Switch.
+
 ## [0.2.3-alpha] - 2026-11-02
 
 - Video is now protected against packet loss: each frame gets extra packets (a Reed–Solomon code,
