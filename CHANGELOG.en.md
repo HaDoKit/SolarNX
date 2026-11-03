@@ -6,6 +6,31 @@ Versions follow [Semantic Versioning](https://semver.org/). While the project is
 (`0.x.y-alpha`), settings, the library and the protocol are not guaranteed to be compatible between
 versions: install the same version on the PC and on the Switch.
 
+## [0.2.5-alpha] - 2026-11-03
+
+- Rumble: the game's rumble reaches the Joy-Cons or the Pro Controller. Turn it off on the PC in
+  Settings → "Rumble on the Switch", or on the Switch itself in the X menu → "Rumble" (all motors,
+  no small motor, or off).
+- Update check: on start and once a day SolarNX looks for a new version and says whether the Switch
+  app needs updating too. Nothing is downloaded automatically. Turn it off in Settings → Updates,
+  which also has a "Check now" button.
+- The PC and the Switch tell each other their versions. If the Switch app is incompatible with the PC
+  app, streaming doesn't start and the home screen says what to update. Small differences don't get
+  in the way: the 0.2.4 Switch app keeps working with the 0.2.5 PC app, just without the new
+  features.
+- "Traffic priority" (on by default): video, audio and input are marked as urgent, and a router with
+  WMM support lets them ahead of other traffic. If Wi-Fi got worse, turn it off in Settings.
+- The NVENC preset is adaptive by default: streaming starts at the best quality (p7, hq) and the
+  preset steps down if the graphics card can't keep up.
+- Debug mode (Settings → Debug): the Switch shows statistics over the video - bitrate, losses,
+  latency. The Switch's debug menu (Minus + Plus + ZL + ZR together) changes the bitrate, codec,
+  resolution, frame rate and NVENC preset on the fly.
+- Playing over the internet is steadier: more redundancy (about 40%), frames are sent evenly instead
+  of in bursts, the Switch copes with packets arriving out of order, and the sound no longer falls
+  behind after the connection hiccups.
+- Fixed: in internet mode, after a game exited or crashed SolarNX stopped launching games until it
+  was restarted.
+
 ## [0.2.4-alpha] - 2026-11-03
 
 - Video is now H.265 (HEVC): at the same bitrate the picture is cleaner than with H.264. If the
