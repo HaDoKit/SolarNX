@@ -336,7 +336,8 @@ static void drawConnectionFrame(MenuContext *context, StarSystem *starSystem, in
         pcId[0] != '\0' ? pcId : tr(Str_NotSet),
         pairing,
         languageName,
-        tr(settingsGetRumble() ? Str_On : Str_Off),
+        tr(settingsGetRumble() == SettingsRumble_Strong ? Str_RumbleStrong
+            : settingsGetRumble() == SettingsRumble_All ? Str_RumbleAll : Str_Off),
     };
 
     const int rowX = 160, rowW = MENU_RESX - 320, rowH = 46, rowTop = 84, rowPitch = 52;
@@ -435,7 +436,7 @@ static void runConnectionScreen(MenuContext *context, StarSystem *starSystem, Pa
             }
             else if (selected == ROW_RUMBLE)
             {
-                settingsToggleRumble();
+                settingsCycleRumble();
             }
             else if (transportGetStatus() != TransportStatus_Off)
             {

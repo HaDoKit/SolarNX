@@ -85,6 +85,8 @@ static RumbleStyle s_rumbleStyle[INPUT_MAX_CONTROLLERS];
 #define RUMBLE_MAX_AMPLITUDE 0.8f
 #define RUMBLE_FREQ_LOW  160.0f // Hz - the Switch's own defaults for its two bands
 #define RUMBLE_FREQ_HIGH 320.0f
+// "Strong only": a player's rumble below this (the stronger of the two motors, 0-255) isn't sent.
+#define RUMBLE_STRONG_THRESHOLD 80
 
 // Debug menu (debug mode only): the chord, the presses handed to the menu, and per player the
 // style for the overlay. The menu itself lives in video/overlay.c on the main thread.
@@ -319,11 +321,14 @@ static void applyRumble(void)
 {
     if (!s_vibReady)
         return;
-    bool enabled = settingsGetRumble(); // off on this console: everything stays (or goes) still
+    SettingsRumble mode = settingsGetRumble(); // off on this console: everything stays (or goes) still
     for (int i = 0; i < INPUT_MAX_CONTROLLERS; i++)
     {
         RumbleStyle style = currentRumbleStyle(i);
-        uint32_t target = enabled ? atomic_load(&s_rumbleTarget[i]) : 0;
+        uint32_t target = mode == SettingsRumble_Off ? 0 : atomic_load(&s_rumbleTarget[i]);
+        uint32_t strongest = ((target >> 8) & 0xFF) > (target & 0xFF) ? (target >> 8) & 0xFF : target & 0xFF;
+        if (mode == SettingsRumble_Strong && strongest < RUMBLE_STRONG_THRESHOLD)
+            target = 0;
         if (style != s_rumbleStyle[i])
         {
             if (s_rumbleApplied[i] != 0)

@@ -68,9 +68,18 @@ void settingsSetServerKey(const char *key);
 void settingsGetPcId(char out[SETTINGS_HOST_ID_SIZE + 1]);
 void settingsSetPcId(const char *id);
 
-// Rumble from the PC's games on this console's controllers (default on) - X > Settings.
-bool settingsGetRumble(void);
-void settingsToggleRumble(void);
+// Rumble from the PC's games on this console's controllers - X > Settings. Strong only (the default)
+// drops the weak background rumble some games keep up all the time (walking...), which a Joy-Con's
+// HD rumble turns into a vague tremor; hits and explosions still come through.
+typedef enum {
+    SettingsRumble_Off = 0,
+    SettingsRumble_All = 1,
+    SettingsRumble_Strong = 2,
+} SettingsRumble;
+
+SettingsRumble settingsGetRumble(void);
+// Strong only -> All -> Off -> Strong only, saved.
+void settingsCycleRumble(void);
 
 SettingsLanguage settingsGetLanguage(void);
 // Auto -> Russian -> English -> Auto, saved; applies at once.

@@ -183,7 +183,7 @@ static void updateStats(void)
     uint32_t messages = controlRumbleStats(levels);
     uint32_t messageDelta = messages - s_lastRumbleMessages;
     s_lastRumbleMessages = messages;
-    if (!settingsGetRumble())
+    if (settingsGetRumble() == SettingsRumble_Off)
         snprintf(s_lines[s_lineCount++], sizeof(s_lines[0]), "%s%s", tr(Str_DbgRumble), tr(Str_DbgRumbleOff));
     else
         snprintf(s_lines[s_lineCount++], sizeof(s_lines[0]), "%s1: %u/%u  2: %u/%u%s%u%s", tr(Str_DbgRumble),
