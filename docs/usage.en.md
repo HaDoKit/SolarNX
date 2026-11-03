@@ -146,6 +146,13 @@ no input while the menu is open. B or the same combination closes it.
 
 ## Playing over the internet (experimental)
 
+In this mode the video goes with twice the redundancy (about 40% recovery packets instead of 20%):
+losses over the internet usually come in bursts. That makes the traffic about 15% bigger.
+
+Testing this mode from the same home network as the PC tells little: the traffic then loops through
+the router, and many home routers do that slowly and lose packets. At home use the Wi-Fi mode, and
+test the internet mode from, say, mobile data.
+
 > **Experimental feature.** Internet mode hasn't been tested on many networks and routers yet. The
 > regular Wi-Fi mode works as before and doesn't depend on this mode.
 
