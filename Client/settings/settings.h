@@ -68,9 +68,9 @@ void settingsSetServerKey(const char *key);
 void settingsGetPcId(char out[SETTINGS_HOST_ID_SIZE + 1]);
 void settingsSetPcId(const char *id);
 
-// Rumble from the PC's games on this console's controllers - X > Settings. Strong only (the default)
-// drops the weak background rumble some games keep up all the time (walking...), which a Joy-Con's
-// HD rumble turns into a vague tremor; hits and explosions still come through.
+// Rumble from the PC's games on this console's controllers - X > Settings (default All). Strong only
+// drops a player's rumble below a threshold - meant for weak background rumble, but in at least one
+// game (Phantom Blade Zero) walking is the strong one and hits the weak one, so it's not the default.
 typedef enum {
     SettingsRumble_Off = 0,
     SettingsRumble_All = 1,
@@ -78,7 +78,7 @@ typedef enum {
 } SettingsRumble;
 
 SettingsRumble settingsGetRumble(void);
-// Strong only -> All -> Off -> Strong only, saved.
+// All -> Strong only -> Off -> All, saved.
 void settingsCycleRumble(void);
 
 SettingsLanguage settingsGetLanguage(void);
