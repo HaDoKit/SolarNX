@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using System.Threading.Channels;
 using SolarNX.Audio;
 using SolarNX.Input;
 
@@ -12,6 +13,7 @@ namespace SolarNX.Session;
 public sealed class SessionController : ISessionController
 {
     private readonly Config _config;
+    private readonly SwitchCompatibility _compatibility;
 
     // The client sends a HID packet every ~23ms for as long as it's alive (see main.c's
     // HID_SEND_INTERVAL_NS), so this much silence means it's gone - typically the Switch went to
@@ -35,13 +37,34 @@ public sealed class SessionController : ISessionController
     private Task? _runTask;
     private TcpClient? _currentClient;
 
+    // Control messages for the current connection (Session/ControlWire.cs) - queued by SendControl
+    // from any thread and written by one writer task, so frames never interleave on the stream. Null
+    // while no Switch that understands them is connected. Bounded with drop-oldest: if the Switch stops
+    // draining, stale rumble levels are the thing to lose, not the HID read loop's thread.
+    private volatile Channel<byte[]>? _controlQueue;
+    private volatile PeerVersion? _sessionPeer;
+    private bool _loggedBlocked;
+
     public event Action<HidPacket>? SessionStarted;
     public event Action? SessionStopped;
     public event Action<HidPacket>? PacketReceived;
+    public event Action<ControlWire.ClientMessage, byte[]>? ControlReceived;
 
-    public SessionController(Config config)
+    public PeerVersion? SessionPeer => _sessionPeer;
+
+    public SessionController(Config config, SwitchCompatibility compatibility)
     {
         _config = config;
+        _compatibility = compatibility;
+    }
+
+    public bool SendControl(ControlWire.HostMessage type, ReadOnlySpan<byte> payload)
+    {
+        var queue = _controlQueue;
+        var peer = _sessionPeer;
+        if (queue is null || peer is null || !ProtocolVersion.Supports(peer.Protocol, ProtocolVersion.ControlMessages))
+            return false;
+        return queue.Writer.TryWrite(ControlWire.TcpFrame(type, payload));
     }
 
     /// <summary>Forcibly drops the current client connection (if any), without disarming the
@@ -85,15 +108,30 @@ public sealed class SessionController : ISessionController
                 continue;
             }
 
+            // The Switch speaks another major protocol (learned over the library channel) - a session
+            // would only show a black screen. The UI says which side to update; the library channel
+            // keeps checking, so this lifts by itself once the Switch app is updated.
+            if (_compatibility.Blocks)
+            {
+                if (!_loggedBlocked) Logger.Log("SessionController", $"not connecting: the Switch's protocol is incompatible ({_compatibility.Switch})");
+                _loggedBlocked = true;
+                await Task.Delay(1000, ct).ContinueWith(_ => { }, TaskScheduler.Default);
+                continue;
+            }
+            _loggedBlocked = false;
+
             // Disposed explicitly (the finally blocks below) as soon as the connection is over - not by
             // `using` at the end of the iteration, which only ran after the 1s retry delay: for that
             // second the socket stayed open with nobody reading it, and the Switch could accept it as
             // a live session and send into the void until the host finally closed it.
             var client = new TcpClient();
+            IDisposable? qosFlow = null;
             try
             {
                 await client.ConnectAsync(_config.ClientIp, _config.HidPort, ct);
                 client.NoDelay = true;
+                // Our side carries only the control messages (rumble) - the Switch marks its input.
+                qosFlow = Native.QosMarking.Mark(client.Client, Native.QosMarking.DscpInteractive, "HID");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -115,12 +153,17 @@ public sealed class SessionController : ISessionController
             // connect: log and retry from the top rather than proceeding into ReadLoopAsync.
             try
             {
-                await client.GetStream().WriteAsync(BuildSessionConfig(_config).ToBytes(), ct);
+                // Hello right behind the SessionConfig, as the first control message: a Switch that
+                // understands them answers with its own and from then on gets the rest (SendControl);
+                // a 0.2.4 Switch never reads past the SessionConfig, so it never even sees this.
+                byte[] opening = [.. BuildSessionConfig(_config).ToBytes(), .. ControlWire.TcpFrame(ControlWire.HostMessage.Hello, PeerVersion.Own())];
+                await client.GetStream().WriteAsync(opening, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 Logger.Log("SessionController", $"failed to send session config to {_config.ClientIp}: {ex.Message}");
                 _currentClient = null;
+                qosFlow?.Dispose();
                 client.Dispose();
                 try { await Task.Delay(1000, ct); } catch (TaskCanceledException) { }
                 continue;
@@ -133,6 +176,9 @@ public sealed class SessionController : ISessionController
             // Only treat this as a genuine session once at least one real HID packet has actually
             // been parsed off the wire - see ReadLoopAsync's sawFirstPacket callback below.
             var sessionStarted = false;
+            var controlQueue = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(256) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
+            var writer = Task.Run(() => WriteControlLoopAsync(client, controlQueue.Reader, ct));
+            _controlQueue = controlQueue;
             try
             {
                 await ReadLoopAsync(client, ct, firstPacket =>
@@ -154,8 +200,13 @@ public sealed class SessionController : ISessionController
             }
             finally
             {
+                _controlQueue = null;
+                _sessionPeer = null;
+                controlQueue.Writer.TryComplete();
                 _currentClient = null;
+                qosFlow?.Dispose();
                 client.Dispose(); // close now, before the retry delay - see the comment at `new TcpClient()`
+                try { await writer; } catch { /* the connection is gone anyway */ }
                 if (sessionStarted)
                 {
                     Logger.Log("SessionController", "session stopped");
@@ -209,8 +260,20 @@ public sealed class SessionController : ISessionController
             }
             if (read == 0) break; // remote closed
 
-            foreach (var packet in frameReader.Feed(buffer, read))
+            foreach (var frame in frameReader.Feed(buffer, read))
             {
+                if (frame.Packet is not { } packet)
+                {
+                    if (frame.Message == ControlWire.ClientMessage.Hello && frame.Payload!.Length >= PeerVersion.WireSize)
+                    {
+                        var peer = PeerVersion.Read(frame.Payload);
+                        _sessionPeer = peer;
+                        _compatibility.Report(peer);
+                        Logger.Log("SessionController", $"the Switch says hello: SolarNX {peer}");
+                    }
+                    ControlReceived?.Invoke(frame.Message, frame.Payload!);
+                    continue;
+                }
                 if (!firedStart)
                 {
                     firedStart = true;
@@ -218,6 +281,20 @@ public sealed class SessionController : ISessionController
                 }
                 PacketReceived?.Invoke(packet);
             }
+        }
+    }
+
+    private static async Task WriteControlLoopAsync(TcpClient client, ChannelReader<byte[]> queue, CancellationToken ct)
+    {
+        try
+        {
+            var stream = client.GetStream();
+            await foreach (var frame in queue.ReadAllAsync(ct))
+                await stream.WriteAsync(frame, ct);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // The read loop notices the dead connection and ends the session.
         }
     }
 

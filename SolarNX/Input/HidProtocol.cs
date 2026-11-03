@@ -217,29 +217,36 @@ public sealed class HidPacket
     }
 }
 
+/// <summary>One unit off the Switch's HID stream: a HID packet, or a control message
+/// (Session/ControlWire.cs) - exactly one of the two is set.</summary>
+public readonly record struct HidFrame(HidPacket? Packet, SolarNX.Session.ControlWire.ClientMessage Message, byte[]? Payload);
+
 /// <summary>
-/// Extracts framed 224-byte HID payloads out of a raw byte stream.
-/// The client wraps each frame with an 8x0xFF start marker followed by the fixed-size payload;
-/// the original main.js end-marker is a substring match on a hex string, not byte-aligned, so instead
-/// of reproducing that exact (ambiguous) pattern we rely on the unambiguous start marker + known
-/// payload length and resync on the next start marker for whatever trailing bytes follow.
-/// NOTE: verify this framing against a live capture from the real client before relying on it.
+/// Extracts framed units out of the Switch's HID byte stream: 8x0xFF marker + a fixed 224-byte
+/// HidPacket, or (protocol 1.1) 8x0xFE marker + u16 length + u8 type + payload, a control message.
+/// The original main.js end-marker is a substring match on a hex string, not byte-aligned, so instead
+/// of reproducing that exact (ambiguous) pattern we rely on the unambiguous start markers + known
+/// lengths and resync on the next start marker for whatever trailing bytes follow.
 /// </summary>
 public sealed class HidFrameReader
 {
     private static readonly byte[] StartMarker = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+    private static readonly byte[] ControlMarker = SolarNX.Session.ControlWire.ClientMarker;
 
     private readonly List<byte> _buffer = new();
 
     // Takes a plain array/length rather than Span<byte>: iterator methods (this uses yield)
     // cannot declare or use ref struct types like Span<T> anywhere in their body.
-    public IEnumerable<HidPacket> Feed(byte[] chunk, int length)
+    public IEnumerable<HidFrame> Feed(byte[] chunk, int length)
     {
         for (var i = 0; i < length; i++) _buffer.Add(chunk[i]);
 
         while (true)
         {
-            var startIdx = IndexOf(_buffer, StartMarker, 0);
+            var packetIdx = IndexOf(_buffer, StartMarker, 0);
+            var controlIdx = IndexOf(_buffer, ControlMarker, 0);
+            var isControl = controlIdx >= 0 && (packetIdx < 0 || controlIdx < packetIdx);
+            var startIdx = isControl ? controlIdx : packetIdx;
             if (startIdx < 0)
             {
                 // Keep only a start-marker's worth of tail in case it's split across chunks.
@@ -249,6 +256,31 @@ public sealed class HidFrameReader
             }
 
             var payloadStart = startIdx + StartMarker.Length;
+            if (isControl)
+            {
+                if (_buffer.Count < payloadStart + 2)
+                {
+                    _buffer.RemoveRange(0, startIdx);
+                    yield break;
+                }
+                var frameLength = _buffer[payloadStart] | (_buffer[payloadStart + 1] << 8);
+                if (frameLength < 1 || frameLength > 1 + SolarNX.Session.ControlWire.MaxPayload)
+                {
+                    _buffer.RemoveRange(0, payloadStart); // not a real frame - resync after this marker
+                    continue;
+                }
+                if (_buffer.Count < payloadStart + 2 + frameLength)
+                {
+                    _buffer.RemoveRange(0, startIdx);
+                    yield break;
+                }
+                var type = (SolarNX.Session.ControlWire.ClientMessage)_buffer[payloadStart + 2];
+                var body = _buffer.GetRange(payloadStart + 3, frameLength - 1).ToArray();
+                _buffer.RemoveRange(0, payloadStart + 2 + frameLength);
+                yield return new HidFrame(null, type, body);
+                continue;
+            }
+
             if (_buffer.Count < payloadStart + HidPacket.PayloadSize)
             {
                 _buffer.RemoveRange(0, startIdx);
@@ -256,9 +288,8 @@ public sealed class HidFrameReader
             }
 
             var payload = _buffer.GetRange(payloadStart, HidPacket.PayloadSize).ToArray();
-            yield return HidPacket.Parse(payload);
-
             _buffer.RemoveRange(0, payloadStart + HidPacket.PayloadSize);
+            yield return new HidFrame(HidPacket.Parse(payload), default, null);
         }
     }
 

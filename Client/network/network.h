@@ -120,6 +120,16 @@ void networkSetSessionConfig(const SolarNxSessionConfig *config);
 // networkAcceptHid(), mirroring the host's reconnect-on-drop behavior.
 bool networkSendHid(const SolarNxHidPacket *pkt);
 
+// Sends the control messages queued in control.c (control/control.h): on the HID socket after a
+// 8x0xFE marker (Wi-Fi), or sealed (Internet). HID thread only, right after networkSendHid. False if
+// the connection is gone.
+bool networkFlushControl(void);
+
+// Waits up to timeoutNs - the HID send interval - and meanwhile reads the PC's control messages on
+// the HID socket, handing them to control.c as they arrive (Wi-Fi; in Internet mode transport.c
+// receives them and this just sleeps). False if the PC closed the connection. HID thread only.
+bool networkWaitForHost(uint64_t timeoutNs);
+
 // Closes the current HID client socket (if any) without tearing down the listen socket, so the
 // caller can go back to networkAcceptHid() for the next PC connection.
 void networkCloseHidClient(void);

@@ -84,6 +84,34 @@ public sealed class Config
     /// LibraryWire), so the last change made on either side is the one that sticks.</summary>
     public uint ButtonLayoutRevision { get; set; }
 
+    /// <summary>Forward the game's rumble (the virtual Xbox/DS4 pad's motors) to the Switch's HD
+    /// rumble - needs SolarNX 0.2.5+ on the Switch (protocol 1.1, Session/ControlWire.cs).</summary>
+    public bool Rumble { get; set; } = true;
+
+    /// <summary>DSCP marks on video (AF41), audio and input (EF) in Wi-Fi mode, so a router with WMM
+    /// lets them ahead of other traffic - see Native/QosMarking. The Switch marks its input the same
+    /// way when told so (control message Options).</summary>
+    public bool TrafficPriority { get; set; } = true;
+
+    /// <summary>Look for a newer release on GitHub at start-up and once a day (Update/UpdateChecker).
+    /// The settings' "check now" button works either way.</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
+    /// <summary>Debug mode: the Switch shows stream statistics over the video and opens its debug
+    /// menu on Minus + Plus + ZL + ZR (changing the video settings below live); the NVENC preset and
+    /// tuning appear in the PC settings.</summary>
+    public bool DebugMode { get; set; } = false;
+
+    /// <summary>Adaptive NVENC preset (Capture/AdaptivePresetController): p7/hq, stepping down when the
+    /// GPU can't keep up. Off: <see cref="NvencPreset"/> / <see cref="NvencTune"/> as set.</summary>
+    public bool NvencAdaptive { get; set; } = true;
+
+    /// <summary>NVENC preset p1 (fastest) .. p7 (best quality) - see EncoderSelection.EncodeArgs.</summary>
+    public string NvencPreset { get; set; } = "p4";
+
+    /// <summary>NVENC tuning: ll (low latency, default), ull (ultra-low latency), hq (high quality).</summary>
+    public string NvencTune { get; set; } = "ll";
+
     /// <summary>Off by default: after a game exits, Steam returns to Big Picture by itself. When on,
     /// AppOrchestrator additionally sends Escape and fully closes/reopens Big Picture - an old
     /// workaround for the gamepad staying dead in Big Picture after a non-Steam-game shortcut (e.g.

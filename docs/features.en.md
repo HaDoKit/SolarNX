@@ -61,6 +61,9 @@ PC, the Switch returns to the menu by itself.
   1500 kbps), and after 30 seconds of stable connection carefully raises it back to the configured
   value.
 - **Switch layout:** swaps A/B and X/Y. Can be changed both on the PC and on the Switch (Y in the menu).
+- **Rumble on the Switch** and **traffic priority** on Wi-Fi (WMM marks).
+- **Updates:** checks GitHub for new versions - with a hint whether the Switch needs one too.
+- **Debug:** statistics and a debug menu on the Switch, NVENC preset and tuning.
 - **shadPS4:** path to the emulator (found automatically) and a download link.
 - **Drivers:** reinstalling ViGEmBus.
 
@@ -120,6 +123,7 @@ More in [Game library](library.en.md).
 - Touches on the Switch screen become touches on the PC (on a game window, taking its position into
   account).
 - Gyro and accelerometer in DualShock 4 mode.
+- The game's rumble on the player's Joy-Con or Pro Controller (Xbox 360 and DualShock 4).
 
 **System**
 - While streaming, SolarNX raises its priority and the system timer resolution so audio and video
@@ -142,6 +146,8 @@ More in [Game library](library.en.md).
 - Hardware video decoding; the newest frame is always the one shown, so latency doesn't build up.
 - Audio with packet loss concealment: short gaps are inaudible.
 - After a dropout, the app waits for a new connection by itself.
+- In debug mode: statistics over the video and a debug menu (−, +, ZL and ZR together) to tune the
+  video while playing.
 
 **Input**
 - Up to 4 controllers: Joy-Con (as a pair or single), Pro Controller, the console in handheld mode.

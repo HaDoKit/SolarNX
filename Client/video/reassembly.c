@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <switch.h>
+
 #include "videowire.h"
 #include "../common/rs/rs.h"
 #include "../common/logger/logger.h"
@@ -25,9 +27,10 @@ typedef struct {
     size_t parityCapacity;
 } Block;
 
-static struct {
+typedef struct {
     bool active;
     bool complete;
+    bool delivered; // handed out (or dropped waiting for a keyframe) - done with
     bool keyframe;
     bool hevc;
     uint32_t number;
@@ -36,11 +39,34 @@ static struct {
     int blocksDone;
     uint8_t *data;
     size_t dataCapacity;
-} s_frame;
+    uint64_t firstTick;
+    Block blocks[MAX_BLOCKS];
+} Frame;
 
-static Block s_blocks[MAX_BLOCKS];
+// Two frames in flight. Over the internet (and through some routers) datagrams arrive out of order:
+// the first datagrams of frame N+1 overtake the last ones of frame N. Assembling one frame at a time,
+// N was given up the moment N+1 showed up - "1 frame lost per second, 0 datagrams rebuilt" with no
+// datagram actually missing. Now the window is the next frame to hand out (s_expected, slot s_a) and
+// the one after it (slot s_b) - either may still be waiting for its first datagram. s_expected is
+// given up only when a datagram of s_expected + 2 arrives; a complete s_b waits for s_a, and frames
+// always go out in order.
+static Frame s_slots[2];
+static Frame *s_a = &s_slots[0];
+static Frame *s_b = &s_slots[1];
+static bool s_haveExpected = false;
+static uint32_t s_expected;
+// 2: expected + next (Internet mode). 1: one frame at a time, as in 0.2.4 (Wi-Fi) - see reassembly.h.
+static int32_t s_window = 2;
+
 static bool s_needKeyframe = true;
 static ReassemblyStats s_stats;
+
+// Frames given up on recently - a datagram of one of them is "late" (reordering the window couldn't
+// absorb), told apart from the harmless redundant parity of a frame already rebuilt.
+#define LOST_HISTORY 16
+static uint32_t s_lostNumbers[LOST_HISTORY];
+static bool s_lostValid[LOST_HISTORY];
+static int s_lostNext = 0;
 
 static inline uint32_t readU32(const uint8_t *p)
 {
@@ -52,27 +78,41 @@ static inline uint32_t readU32(const uint8_t *p)
 bool reassemblyInit(void)
 {
     rsInit();
-    s_frame.dataCapacity = 512 * 1024;
-    s_frame.data = malloc(s_frame.dataCapacity);
-    return s_frame.data != NULL;
+    for (int i = 0; i < 2; i++)
+    {
+        s_slots[i].dataCapacity = 512 * 1024;
+        s_slots[i].data = malloc(s_slots[i].dataCapacity);
+        if (s_slots[i].data == NULL)
+            return false;
+    }
+    return true;
 }
 
 void reassemblyExit(void)
 {
-    free(s_frame.data);
-    s_frame.data = NULL;
-    s_frame.dataCapacity = 0;
-    for (int b = 0; b < MAX_BLOCKS; b++)
+    for (int i = 0; i < 2; i++)
     {
-        free(s_blocks[b].parity);
-        s_blocks[b].parity = NULL;
-        s_blocks[b].parityCapacity = 0;
+        Frame *f = &s_slots[i];
+        free(f->data);
+        f->data = NULL;
+        f->dataCapacity = 0;
+        f->active = false;
+        for (int b = 0; b < MAX_BLOCKS; b++)
+        {
+            free(f->blocks[b].parity);
+            f->blocks[b].parity = NULL;
+            f->blocks[b].parityCapacity = 0;
+        }
     }
 }
 
-void reassemblyReset(void)
+void reassemblyReset(bool reorderWindow)
 {
-    s_frame.active = false;
+    s_window = reorderWindow ? 2 : 1;
+    memset(s_lostValid, 0, sizeof(s_lostValid)); // the last stream's numbers mean nothing in the next one
+    s_a->active = false;
+    s_b->active = false;
+    s_haveExpected = false;
     s_needKeyframe = true;
 }
 
@@ -86,9 +126,9 @@ const ReassemblyStats *reassemblyStats(void)
     return &s_stats;
 }
 
-static bool startFrame(uint32_t number, uint32_t size, int blockCount, bool keyframe, bool hevc)
+static bool startFrame(Frame *f, uint32_t number, uint32_t size, int blockCount, bool keyframe, bool hevc)
 {
-    s_frame.active = false;
+    f->active = false;
     if (size == 0 || size > MAX_FRAME_BYTES || blockCount == 0)
         return false;
 
@@ -98,18 +138,18 @@ static bool startFrame(uint32_t number, uint32_t size, int blockCount, bool keyf
         return false;
 
     size_t needed = (size_t)dataShards * VIDEO_WIRE_SHARD_SIZE + PADDING_BYTES;
-    if (needed > s_frame.dataCapacity)
+    if (needed > f->dataCapacity)
     {
-        uint8_t *grown = realloc(s_frame.data, needed);
+        uint8_t *grown = realloc(f->data, needed);
         if (grown == NULL)
             return false;
-        s_frame.data = grown;
-        s_frame.dataCapacity = needed;
+        f->data = grown;
+        f->dataCapacity = needed;
     }
 
     for (int b = 0, first = 0; b < blockCount; b++)
     {
-        Block *block = &s_blocks[b];
+        Block *block = &f->blocks[b];
         block->first = first;
         block->dataCount = dataShards / blockCount + (b < dataShards % blockCount ? 1 : 0);
         block->parityCount = -1;
@@ -119,29 +159,47 @@ static bool startFrame(uint32_t number, uint32_t size, int blockCount, bool keyf
         first += block->dataCount;
     }
 
-    s_frame.active = true;
-    s_frame.complete = false;
-    s_frame.keyframe = keyframe;
-    s_frame.hevc = hevc;
-    s_frame.number = number;
-    s_frame.size = size;
-    s_frame.blockCount = blockCount;
-    s_frame.blocksDone = 0;
+    f->active = true;
+    f->complete = false;
+    f->delivered = false;
+    f->keyframe = keyframe;
+    f->hevc = hevc;
+    f->number = number;
+    f->size = size;
+    f->blockCount = blockCount;
+    f->blocksDone = 0;
+    f->firstTick = armGetSystemTick();
     return true;
 }
 
-// The current frame is being left behind - lost if it never completed.
-static void abandonFrame(void)
+// The expected frame isn't coming (complete) any more - lost unless it was handed out already.
+static void giveUpExpected(void)
 {
-    if (s_frame.active && !s_frame.complete)
+    if (!(s_a->active && s_a->delivered))
     {
         s_stats.framesLost++;
         s_needKeyframe = true;
+        s_lostNumbers[s_lostNext] = s_expected;
+        s_lostValid[s_lostNext] = true;
+        s_lostNext = (s_lostNext + 1) % LOST_HISTORY;
     }
-    s_frame.active = false;
+    s_a->active = false;
+    Frame *t = s_a;
+    s_a = s_b;
+    s_b = t;
+    s_b->active = false;
+    s_expected++;
 }
 
-static void finishBlock(Block *block)
+static bool wasLost(uint32_t number)
+{
+    for (int i = 0; i < LOST_HISTORY; i++)
+        if (s_lostValid[i] && s_lostNumbers[i] == number)
+            return true;
+    return false;
+}
+
+static void finishBlock(Frame *f, Block *block)
 {
     int missing = 0;
     for (int i = 0; i < block->dataCount; i++)
@@ -151,7 +209,7 @@ static void finishBlock(Block *block)
     {
         uint8_t *shards[RS_MAX_SHARDS];
         for (int i = 0; i < block->dataCount; i++)
-            shards[i] = s_frame.data + (size_t)(block->first + i) * VIDEO_WIRE_SHARD_SIZE;
+            shards[i] = f->data + (size_t)(block->first + i) * VIDEO_WIRE_SHARD_SIZE;
         for (int p = 0; p < block->parityCount; p++)
             shards[block->dataCount + p] = block->parity + (size_t)p * VIDEO_WIRE_SHARD_SIZE;
         if (!rsReconstruct(shards, block->present, block->dataCount, block->parityCount, VIDEO_WIRE_SHARD_SIZE))
@@ -160,7 +218,65 @@ static void finishBlock(Block *block)
     }
 
     block->done = true;
-    s_frame.blocksDone++;
+    f->blocksDone++;
+}
+
+// Which slot a datagram of frame `number` goes to - starting it if needed and moving the window
+// along. NULL: nothing to do with it (late or redundant, or a frame that couldn't be started).
+static Frame *slotFor(uint32_t number, uint32_t size, int blockCount, bool keyframe, bool hevc)
+{
+    if (!s_haveExpected)
+    {
+        s_haveExpected = true;
+        s_expected = number;
+        s_a->active = s_b->active = false;
+    }
+
+    int32_t distance = (int32_t)(number - s_expected);
+    if (distance >= STREAM_RESTART_DISTANCE || distance <= -STREAM_RESTART_DISTANCE)
+    {
+        s_a->active = s_b->active = false;
+        s_expected = number;
+        s_needKeyframe = true; // a new stream starts mid-GOP as far as this side knows
+        distance = 0;
+    }
+    if (distance < 0)
+    {
+        if (wasLost(number))
+            s_stats.datagramsLate++; // a frame given up on - the reordering outran the window
+        return NULL; // otherwise: redundant parity of a frame already handed out
+    }
+    while (distance >= s_window)
+    {
+        giveUpExpected(); // a frame past the window is here: the expected one won't complete any more
+        distance--;
+    }
+
+    Frame *f = distance == 0 ? s_a : s_b;
+    if (f->active)
+        return f->number == number ? f : NULL;
+    return startFrame(f, number, size, blockCount, keyframe, hevc) ? f : NULL;
+}
+
+// Hands a complete frame out (unless a keyframe is awaited). True when *out was filled.
+static bool deliver(Frame *f, ReassembledFrame *out)
+{
+    f->delivered = true;
+    if (s_needKeyframe && !f->keyframe)
+    {
+        s_stats.framesSkipped++;
+        return false;
+    }
+    s_needKeyframe = false;
+
+    memset(f->data + f->size, 0, PADDING_BYTES);
+    out->data = f->data;
+    out->size = f->size;
+    out->number = f->number;
+    out->keyframe = f->keyframe;
+    out->hevc = f->hevc;
+    out->firstTick = f->firstTick;
+    return true;
 }
 
 bool reassemblyPush(const uint8_t *datagram, size_t length, ReassembledFrame *out)
@@ -183,39 +299,19 @@ bool reassemblyPush(const uint8_t *datagram, size_t length, ReassembledFrame *ou
     uint32_t size = readU32(datagram + 12);
     const uint8_t *payload = datagram + VIDEO_WIRE_HEADER_SIZE;
 
-    if (!s_frame.active || number != s_frame.number)
-    {
-        int32_t distance = s_frame.active ? (int32_t)(number - s_frame.number) : STREAM_RESTART_DISTANCE;
-        if (distance < 0 && distance > -STREAM_RESTART_DISTANCE)
-            return false; // a late datagram of a frame already left behind
+    Frame *f = slotFor(number, size, blockCount, keyframe, hevc);
+    if (f == NULL)
+        return false;
 
-        abandonFrame();
-        if (distance >= STREAM_RESTART_DISTANCE || distance <= -STREAM_RESTART_DISTANCE)
-        {
-            s_needKeyframe = true; // a new stream starts mid-GOP as far as this side knows
-        }
-        else if (distance > 1)
-        {
-            s_stats.framesLost += (uint32_t)(distance - 1); // not a single datagram of these arrived
-            s_needKeyframe = true;
-        }
-
-        if (!startFrame(number, size, blockCount, keyframe, hevc))
-        {
-            s_stats.datagramsRejected++;
-            return false;
-        }
-    }
-
-    if (s_frame.complete)
+    if (f->complete)
         return false; // a redundant parity datagram of a frame already rebuilt
-    if (size != s_frame.size || blockCount != s_frame.blockCount || blockIndex >= blockCount)
+    if (size != f->size || blockCount != f->blockCount || blockIndex >= blockCount)
     {
         s_stats.datagramsRejected++;
         return false;
     }
 
-    Block *block = &s_blocks[blockIndex];
+    Block *block = &f->blocks[blockIndex];
     if (block->parityCount < 0)
     {
         if (parityCount > RS_MAX_PARITY || block->dataCount + parityCount > RS_MAX_SHARDS)
@@ -243,29 +339,32 @@ bool reassemblyPush(const uint8_t *datagram, size_t length, ReassembledFrame *ou
         return false;
 
     uint8_t *target = shardIndex < block->dataCount
-        ? s_frame.data + (size_t)(block->first + shardIndex) * VIDEO_WIRE_SHARD_SIZE
+        ? f->data + (size_t)(block->first + shardIndex) * VIDEO_WIRE_SHARD_SIZE
         : block->parity + (size_t)(shardIndex - block->dataCount) * VIDEO_WIRE_SHARD_SIZE;
     memcpy(target, payload, VIDEO_WIRE_SHARD_SIZE);
     block->present[shardIndex] = true;
     if (++block->received >= block->dataCount)
-        finishBlock(block);
+        finishBlock(f, block);
 
-    if (s_frame.blocksDone < s_frame.blockCount)
-        return false;
+    if (f->blocksDone == f->blockCount)
+        f->complete = true; // the newer one may finish first - it then waits for the older one
+    return reassemblyNext(out);
+}
 
-    s_frame.complete = true;
-    if (s_needKeyframe && !s_frame.keyframe)
+bool reassemblyNext(ReassembledFrame *out)
+{
+    // In order: the expected frame first; once it is out, the one after it becomes the expected one.
+    // The handed-out frame's slot is only reused by a later push, so its data stays valid until then.
+    while (s_haveExpected && s_a->active && s_a->complete)
     {
-        s_stats.framesSkipped++;
-        return false;
+        bool handed = deliver(s_a, out);
+        Frame *t = s_a;
+        s_a = s_b;
+        s_b = t;
+        s_b->active = false;
+        s_expected++;
+        if (handed)
+            return true;
     }
-    s_needKeyframe = false;
-
-    memset(s_frame.data + s_frame.size, 0, PADDING_BYTES);
-    out->data = s_frame.data;
-    out->size = s_frame.size;
-    out->number = s_frame.number;
-    out->keyframe = s_frame.keyframe;
-    out->hevc = s_frame.hevc;
-    return true;
+    return false;
 }

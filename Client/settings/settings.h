@@ -68,6 +68,19 @@ void settingsSetServerKey(const char *key);
 void settingsGetPcId(char out[SETTINGS_HOST_ID_SIZE + 1]);
 void settingsSetPcId(const char *id);
 
+// Rumble from the PC's games on this console's controllers - X > Settings (default All). LargeOnly
+// drops the small (high-frequency) motor: games use it for the constant fine buzz - footsteps in
+// Phantom Blade Zero are the small motor alone, every 20ms - while hits drive both motors.
+typedef enum {
+    SettingsRumble_Off = 0,
+    SettingsRumble_All = 1,
+    SettingsRumble_LargeOnly = 2,
+} SettingsRumble;
+
+SettingsRumble settingsGetRumble(void);
+// All -> Large motor only -> Off -> All, saved.
+void settingsCycleRumble(void);
+
 SettingsLanguage settingsGetLanguage(void);
 // Auto -> Russian -> English -> Auto, saved; applies at once.
 void settingsCycleLanguage(void);

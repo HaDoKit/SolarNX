@@ -78,9 +78,319 @@ public sealed class AppOrchestrator : IDisposable
         _config = config;
         _gamepads.SwapAbxy = config.SwitchButtonLayout;
         _session = CreateSession();
+        _gamepads.RumbleChanged += OnGameRumble;
+        _adaptivePreset = new AdaptivePresetController(RestartForNvencStep);
+        Native.QosMarking.Enabled = config.TrafficPriority;
         _adaptiveBitrate = new AdaptiveBitrateController(config, ApplyAdaptiveBitrate);
-        _libraryPusher = new LibraryPusher(config, _library, AdoptSwitchButtonLayout, () => _session as InternetSession);
+        _libraryPusher = new LibraryPusher(config, _library, AdoptSwitchButtonLayout, () => _session as InternetSession, Compatibility);
+        Updates = new Update.UpdateChecker(config, Compatibility);
+        Updates.Start();
     }
+
+    /// <summary>Newer releases on GitHub - the home screen and the settings show them.</summary>
+    public Update.UpdateChecker Updates { get; }
+
+    private readonly AdaptivePresetController _adaptivePreset;
+
+    // NVENC preset/tuning for the next encoder start: the adaptive ladder's step, or the manual setting.
+    private (string Preset, string Tune)? NvencForStart() => _config.NvencAdaptive ? _adaptivePreset.Current : null;
+
+    // A step of the adaptive preset: the same restart as the watchdog's - the running (possibly
+    // adaptive) bitrate carries over.
+    private void RestartForNvencStep(string reason)
+    {
+        _ = Task.Run(async () =>
+        {
+            await _pipelineGate.WaitAsync();
+            try
+            {
+                if (_pipelineActive) RestartVideoEncoder(reason);
+            }
+            finally
+            {
+                _pipelineGate.Release();
+            }
+        });
+    }
+
+    private void WatchEncoder(VideoEncoder encoder)
+    {
+        _adaptivePreset.EncoderStarted();
+        encoder.OutputFps += fps =>
+        {
+            if (_config.NvencAdaptive && encoder.ActiveEncoder == EncoderKind.Nvenc && ReferenceEquals(encoder, _videoEncoder))
+                _adaptivePreset.OnWindow(fps, _config.Fps);
+        };
+    }
+
+    // The motor levels last sent to the Switch, per player (large, small) - only changes go out.
+    private readonly byte[] _rumble = new byte[8];
+    private readonly object _rumbleLock = new();
+
+    // A stop (0, 0) waits this long before it goes out, and is dropped if the motors are set again
+    // meanwhile. Some other XInput client on the PC (seen in a test: zeros between a game's own
+    // values) can reset the virtual pad's motors - forwarded as-is, a steady rumble turned into a
+    // stream of short jolts on the Switch.
+    private static readonly TimeSpan RumbleStopDelay = TimeSpan.FromMilliseconds(60);
+    private readonly int[] _rumbleGeneration = new int[4];
+
+    // Debug mode: what the game sends, per player, logged every 5s - to tell a game's background
+    // rumble (walking...) from its hits by numbers rather than by feel.
+    private sealed class RumbleWindow
+    {
+        public int Commands, Stops, MaxLarge, MaxSmall;
+        public TimeSpan OnTime;
+        public DateTime LastUtc;
+        public bool LastOn;
+        public readonly Dictionary<(byte, byte), int> Levels = new();
+        public readonly System.Text.StringBuilder Trace = new();
+        public int TraceCount;
+    }
+    private readonly RumbleWindow[] _rumbleWindows = Enumerable.Range(0, 4).Select(_ => new RumbleWindow()).ToArray();
+    private DateTime _rumbleLogUtc = DateTime.UtcNow;
+
+    private void OnGameRumble(int player, byte large, byte small)
+    {
+        if (player is < 0 or > 3) return;
+        if (_config.DebugMode) CountRumble(player, large, small);
+        if (!_config.Rumble) large = small = 0;
+
+        int generation;
+        lock (_rumbleLock)
+        {
+            generation = ++_rumbleGeneration[player];
+            if (large == 0 && small == 0 && (_rumble[player * 2] != 0 || _rumble[player * 2 + 1] != 0))
+            {
+                _ = Task.Delay(RumbleStopDelay).ContinueWith(_ =>
+                {
+                    lock (_rumbleLock)
+                        if (_rumbleGeneration[player] != generation) return; // set again meanwhile: not a real stop
+                    SetRumble(player, 0, 0);
+                }, TaskScheduler.Default);
+                return;
+            }
+        }
+        SetRumble(player, large, small);
+    }
+
+    private void SetRumble(int player, byte large, byte small)
+    {
+        byte[] levels;
+        lock (_rumbleLock)
+        {
+            if (_rumble[player * 2] == large && _rumble[player * 2 + 1] == small) return;
+            _rumble[player * 2] = large;
+            _rumble[player * 2 + 1] = small;
+            levels = (byte[])_rumble.Clone();
+        }
+        _session.SendControl(ControlWire.HostMessage.Rumble, levels);
+    }
+
+    private void CountRumble(int player, byte large, byte small)
+    {
+        var lines = new List<string>();
+        lock (_rumbleLock)
+        {
+            var now = DateTime.UtcNow;
+            var w = _rumbleWindows[player];
+            if (w.LastOn && w.LastUtc != default) w.OnTime += now - w.LastUtc;
+            w.Commands++;
+            if (large == 0 && small == 0) w.Stops++;
+            w.MaxLarge = Math.Max(w.MaxLarge, large);
+            w.MaxSmall = Math.Max(w.MaxSmall, small);
+            w.Levels[(large, small)] = w.Levels.GetValueOrDefault((large, small)) + 1;
+            // The first commands of the window as "+ms large/small" - shows the rhythm (pulse lengths).
+            if (w.TraceCount++ < 40)
+                w.Trace.Append($" +{(now - _rumbleLogUtc).TotalMilliseconds:0}:{large}/{small}");
+            w.LastUtc = now;
+            w.LastOn = large != 0 || small != 0;
+
+            var span = now - _rumbleLogUtc;
+            if (span >= TimeSpan.FromSeconds(5))
+            {
+                for (var i = 0; i < 4; i++)
+                {
+                    var x = _rumbleWindows[i];
+                    if (x.Commands == 0) continue;
+                    if (x.LastOn) x.OnTime += now - x.LastUtc;
+                    var top = string.Join(" ", x.Levels.OrderByDescending(kv => kv.Value).Take(4).Select(kv => $"{kv.Key.Item1}/{kv.Key.Item2}x{kv.Value}"));
+                    lines.Add($"player {i + 1}: {x.Commands} commands, {x.Stops} stops, max {x.MaxLarge}/{x.MaxSmall}, " +
+                        $"on {100 * x.OnTime.TotalSeconds / span.TotalSeconds:0}% of the time, most often {top}; trace{x.Trace}");
+                    _rumbleWindows[i] = new RumbleWindow { LastOn = x.LastOn, LastUtc = now };
+                }
+                _rumbleLogUtc = now;
+            }
+        }
+        foreach (var line in lines) Logger.Log("Rumble", $"last 5s - {line}");
+    }
+
+    // The Switch said Hello: from now on it takes control messages - tell it the current options.
+    private void OnControlReceived(ControlWire.ClientMessage type, byte[] payload)
+    {
+        switch (type)
+        {
+            case ControlWire.ClientMessage.Hello:
+                SendOptions();
+                SendDebugInfo();
+                break;
+            case ControlWire.ClientMessage.Ping when _config.DebugMode && payload.Length >= 8:
+                _session.SendControl(ControlWire.HostMessage.Pong, payload.AsSpan(0, 8));
+                break;
+            case ControlWire.ClientMessage.SetSetting when _config.DebugMode && payload.Length >= 8:
+                ApplyRemoteSetting((ControlWire.DebugSetting)payload[0], System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(4)));
+                break;
+        }
+    }
+
+    private void SendOptions()
+    {
+        var flags = ControlWire.OptionFlags.None;
+        if (_config.TrafficPriority) flags |= ControlWire.OptionFlags.TrafficPriority;
+        if (_config.DebugMode) flags |= ControlWire.OptionFlags.DebugMode;
+        _session.SendControl(ControlWire.HostMessage.Options, [(byte)flags, 0, 0, 0]);
+    }
+
+    // What the Switch's overlay and debug menu show - see ControlWire.HostMessage.DebugInfo.
+    private void SendDebugInfo()
+    {
+        if (!_config.DebugMode) return;
+        var encoder = _videoEncoder;
+        var running = encoder?.ActiveEncoder;
+        var size = encoder?.ActiveSize ?? CurrentStreamSize();
+        var name = System.Text.Encoding.UTF8.GetBytes(running is { } kind ? EncoderSelection.DisplayName(kind) : "-");
+        if (name.Length > 60) name = name[..60];
+        var info = new byte[33 + name.Length];
+        var span = info.AsSpan();
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(span, (uint)_config.BitrateKbps);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(span[4..], (uint)(encoder?.ActiveBitrateKbps ?? 0));
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(span[8..], (ushort)size.Width);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(span[10..], (ushort)size.Height);
+        info[12] = (byte)_config.Fps;
+        info[13] = (byte)(encoder?.ActiveCodec == VideoCodec.H264 ? 1 : 0);
+        info[14] = (byte)(_config.Codec == VideoCodec.H264 ? 1 : 0);
+        info[15] = (byte)(running ?? EncoderKind.Auto);
+        info[16] = (byte)(_config.AutoResolution ? 0 : Math.Max(0, Array.IndexOf(ControlWire.DebugResolutions, (_config.TargetWidth, _config.TargetHeight))) + 1);
+        var nvenc = encoder?.ActiveNvenc ?? NvencForStart() ?? (_config.NvencPreset, _config.NvencTune);
+        info[17] = (byte)Math.Max(0, Array.IndexOf(EncoderSelection.NvencPresets, nvenc.Preset));
+        info[18] = (byte)Math.Max(0, Array.IndexOf(EncoderSelection.NvencTunes, nvenc.Tune));
+        var flags = ControlWire.DebugInfoFlags.None;
+        if (_config.AdaptiveBitrate) flags |= ControlWire.DebugInfoFlags.AdaptiveBitrate;
+        if (_config.TrafficPriority) flags |= ControlWire.DebugInfoFlags.TrafficPriority;
+        if (running == EncoderKind.Nvenc) flags |= ControlWire.DebugInfoFlags.Nvenc;
+        if (_config.NvencAdaptive) flags |= ControlWire.DebugInfoFlags.AdaptivePreset;
+        info[19] = (byte)flags;
+        info[32] = (byte)name.Length;
+        name.CopyTo(info, 33);
+        _session.SendControl(ControlWire.HostMessage.DebugInfo, info);
+    }
+
+    /// <summary>A video setting changed from the Switch's debug menu (or a debug setting in the PC
+    /// settings): fired on the thread pool so the settings screen can show the new value.</summary>
+    public event Action? SettingsChangedRemotely;
+
+    private void ApplyRemoteSetting(ControlWire.DebugSetting setting, int value)
+    {
+        switch (setting)
+        {
+            case ControlWire.DebugSetting.BitrateKbps:
+                _config.BitrateKbps = Math.Clamp(value, 1000, 50000);
+                break;
+            case ControlWire.DebugSetting.AdaptiveBitrate:
+                _config.AdaptiveBitrate = value != 0;
+                break;
+            case ControlWire.DebugSetting.Codec:
+                _config.Codec = value == 1 ? VideoCodec.H264 : VideoCodec.Hevc;
+                break;
+            case ControlWire.DebugSetting.Resolution when value == 0:
+                _config.AutoResolution = true;
+                break;
+            case ControlWire.DebugSetting.Resolution when value >= 1 && value <= ControlWire.DebugResolutions.Length:
+                _config.AutoResolution = false;
+                (_config.TargetWidth, _config.TargetHeight) = ControlWire.DebugResolutions[value - 1];
+                break;
+            case ControlWire.DebugSetting.Fps when ControlWire.DebugFps.Contains(value):
+                _config.Fps = value;
+                break;
+            case ControlWire.DebugSetting.NvencPreset when value >= 0 && value < EncoderSelection.NvencPresets.Length:
+                _config.NvencPreset = EncoderSelection.NvencPresets[value];
+                _config.NvencAdaptive = false; // a manual choice
+                break;
+            case ControlWire.DebugSetting.NvencTune when value >= 0 && value < EncoderSelection.NvencTunes.Length:
+                _config.NvencTune = EncoderSelection.NvencTunes[value];
+                _config.NvencAdaptive = false;
+                break;
+            case ControlWire.DebugSetting.AdaptivePreset:
+                _config.NvencAdaptive = value != 0;
+                break;
+            case ControlWire.DebugSetting.TrafficPriority:
+                _config.TrafficPriority = value != 0;
+                Native.QosMarking.Enabled = _config.TrafficPriority;
+                SendOptions();
+                break;
+            default:
+                Logger.Log("AppOrchestrator", $"debug menu: ignored setting {setting} = {value}");
+                return;
+        }
+        _config.Save();
+        Logger.Log("AppOrchestrator", $"debug menu on the Switch: {setting} = {value}");
+        SettingsChangedRemotely?.Invoke();
+        ApplyVideoSettingsNow($"debug menu: {setting}"); // answers with a fresh DebugInfo either way
+    }
+
+    /// <summary>Restarts the running encoder with the current settings (the debug menu, or a debug
+    /// setting in the PC settings) - otherwise video settings apply at the next session. The picture
+    /// freezes for about a second.</summary>
+    public void ApplyVideoSettingsNow(string reason)
+    {
+        _ = Task.Run(async () =>
+        {
+            await _pipelineGate.WaitAsync();
+            try
+            {
+                if (_pipelineActive)
+                {
+                    RestartVideoEncoder(reason, _config.BitrateKbps); // sends a DebugInfo itself
+                    _adaptiveBitrate.Start(_config.BitrateKbps);
+                }
+                else
+                {
+                    SendDebugInfo(); // not streaming: the menu still gets the new value
+                }
+            }
+            finally
+            {
+                _pipelineGate.Release();
+            }
+        });
+    }
+
+    /// <summary>The debug-mode toggle in the PC settings.</summary>
+    public void DebugModeSettingChanged()
+    {
+        SendOptions();
+        SendDebugInfo();
+    }
+
+    /// <summary>The settings' traffic-priority toggle: new sockets (the next encoder start) and the
+    /// Switch's input follow it; the running video/audio sockets keep their mark until then.</summary>
+    public void TrafficPrioritySettingChanged()
+    {
+        Native.QosMarking.Enabled = _config.TrafficPriority;
+        SendOptions();
+    }
+
+    /// <summary>The settings' rumble toggle: turning it off stops whatever is vibrating now.</summary>
+    public void RumbleSettingChanged()
+    {
+        if (_config.Rumble) return;
+        lock (_rumbleLock) Array.Clear(_rumble);
+        _session.SendControl(ControlWire.HostMessage.Rumble, new byte[8]);
+    }
+
+    /// <summary>What the Switch said about its version (library channel, Internet Hello, session
+    /// Hello) and how it relates to this PC's - the home screen shows it, a different major protocol
+    /// blocks sessions.</summary>
+    public SwitchCompatibility Compatibility { get; } = new();
 
     /// <summary>The host-side game library, for the UI's library screen.</summary>
     public GameLibrary Library => _library;
@@ -174,11 +484,12 @@ public sealed class AppOrchestrator : IDisposable
     private ISessionController CreateSession()
     {
         ISessionController session = _config.ConnectionMode == ConnectionMode.Internet
-            ? new InternetSession(_config)
-            : new SessionController(_config);
+            ? new InternetSession(_config, Compatibility)
+            : new SessionController(_config, Compatibility);
         session.SessionStarted += OnSessionStarted;
         session.SessionStopped += OnSessionStopped;
         session.PacketReceived += OnPacketReceived;
+        session.ControlReceived += OnControlReceived;
         return session;
     }
 
@@ -383,8 +694,10 @@ public sealed class AppOrchestrator : IDisposable
             }
 
             _videoEncoder = new VideoEncoder(_config);
-            _videoEncoder.Start(streamSize: CurrentStreamSize());
+            WatchEncoder(_videoEncoder);
+            _videoEncoder.Start(streamSize: CurrentStreamSize(), nvencOverride: NvencForStart());
             _adaptiveBitrate.Start(_config.BitrateKbps);
+            SendDebugInfo();
 
             // Captures whatever is currently playing on the first user's real default audio
             // device directly via WASAPI loopback - see AudioCaptureSender.
@@ -458,7 +771,9 @@ public sealed class AppOrchestrator : IDisposable
             var carryOverWindow = captureWindowOverride ?? _videoEncoder?.CaptureWindow ?? IntPtr.Zero;
             _videoEncoder?.Stop();
             _videoEncoder = new VideoEncoder(_config);
-            _videoEncoder.Start(bitrateKbpsOverride: carryOverBitrate, captureWindow: carryOverWindow, streamSize: CurrentStreamSize());
+            WatchEncoder(_videoEncoder);
+            _videoEncoder.Start(bitrateKbpsOverride: carryOverBitrate, captureWindow: carryOverWindow, streamSize: CurrentStreamSize(), nvencOverride: NvencForStart());
+            SendDebugInfo();
         }
         catch (Exception ex)
         {
@@ -907,8 +1222,9 @@ public sealed class AppOrchestrator : IDisposable
         if (now - _lastVideoLinkLogUtc < VideoLinkLogInterval) return;
         var firstPacket = _lastVideoLinkLogUtc == DateTime.MinValue;
         _lastVideoLinkLogUtc = now;
-        var recovered = packet.VideoRecoveredPacketCount - _loggedRecoveredPackets;
-        var lost = packet.VideoLostFrameCount - _loggedLostFrames;
+        // The counters start over when the Switch app restarts - that read as "4294967153 frames lost".
+        var recovered = packet.VideoRecoveredPacketCount >= _loggedRecoveredPackets ? packet.VideoRecoveredPacketCount - _loggedRecoveredPackets : 0;
+        var lost = packet.VideoLostFrameCount >= _loggedLostFrames ? packet.VideoLostFrameCount - _loggedLostFrames : 0;
         _loggedRecoveredPackets = packet.VideoRecoveredPacketCount;
         _loggedLostFrames = packet.VideoLostFrameCount;
         if (firstPacket || (recovered == 0 && lost == 0)) return;
@@ -957,6 +1273,7 @@ public sealed class AppOrchestrator : IDisposable
         _touch.Dispose();
         _adaptiveBitrate.Dispose();
         _libraryPusher.Dispose();
+        Updates.Dispose();
         _pipelineGate.Dispose();
     }
 }

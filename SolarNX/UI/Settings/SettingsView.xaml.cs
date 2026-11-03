@@ -34,9 +34,11 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         BackButton.Click += (_, _) => BackRequested?.Invoke();
 
         InitLanguageSection();
+        InitUpdatesSection();
         InitConnectionSection();
         InitVideoSection();
         InitGamepadSection();
+        InitDebugSection();
         InitShadPs4Section();
         InitDriversSection();
 
@@ -80,6 +82,119 @@ public partial class SettingsView : System.Windows.Controls.UserControl
             EncoderInfoText.Text = Loc.T("Settings.EncoderChecking");
             _ = RefreshEncoderInfoAsync();
         }
+        RefreshUpdateStatus();
+    }
+
+    // Set while controls are moved to show values changed elsewhere (the Switch's debug menu) - their
+    // change handlers then must not act as if the user changed them here.
+    private bool _reloading;
+
+    private void InitDebugSection()
+    {
+        DebugModeToggle.IsChecked = _config.DebugMode;
+        NvencPanel.Visibility = _config.DebugMode ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+        DebugModeToggle.Checked += (_, _) => SetDebugMode(true);
+        DebugModeToggle.Unchecked += (_, _) => SetDebugMode(false);
+
+        foreach (var preset in EncoderSelection.NvencPresets) NvencPresetCombo.Items.Add(preset);
+        foreach (var tune in EncoderSelection.NvencTunes) NvencTuneCombo.Items.Add(tune);
+        NvencPresetCombo.SelectedItem = _config.NvencPreset;
+        NvencTuneCombo.SelectedItem = _config.NvencTune;
+        NvencPresetCombo.SelectionChanged += (_, _) =>
+        {
+            if (_reloading || NvencPresetCombo.SelectedItem is not string preset) return;
+            _config.NvencPreset = preset;
+            SetManualNvenc();
+            _orchestrator.ApplyVideoSettingsNow($"NVENC preset {preset}");
+        };
+        NvencTuneCombo.SelectionChanged += (_, _) =>
+        {
+            if (_reloading || NvencTuneCombo.SelectedItem is not string tune) return;
+            _config.NvencTune = tune;
+            SetManualNvenc();
+            _orchestrator.ApplyVideoSettingsNow($"NVENC tune {tune}");
+        };
+
+        NvencAdaptiveToggle.IsChecked = _config.NvencAdaptive;
+        NvencAdaptiveToggle.Checked += (_, _) => SetNvencAdaptive(true);
+        NvencAdaptiveToggle.Unchecked += (_, _) => SetNvencAdaptive(false);
+
+        _orchestrator.SettingsChangedRemotely += () => Dispatcher.BeginInvoke(ReloadVideoSettings);
+    }
+
+    // A preset picked by hand: the adaptive one steps aside.
+    private void SetManualNvenc()
+    {
+        _config.NvencAdaptive = false;
+        _config.Save();
+        _reloading = true;
+        try { NvencAdaptiveToggle.IsChecked = false; }
+        finally { _reloading = false; }
+    }
+
+    private void SetNvencAdaptive(bool enabled)
+    {
+        if (_reloading) return;
+        _config.NvencAdaptive = enabled;
+        _config.Save();
+        _orchestrator.ApplyVideoSettingsNow(enabled ? "adaptive NVENC preset on" : "adaptive NVENC preset off");
+    }
+
+    private void SetDebugMode(bool enabled)
+    {
+        _config.DebugMode = enabled;
+        _config.Save();
+        NvencPanel.Visibility = enabled ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+        _orchestrator.DebugModeSettingChanged();
+    }
+
+    // Shows what the Switch's debug menu changed (Config already holds it).
+    private void ReloadVideoSettings()
+    {
+        _reloading = true;
+        try
+        {
+            var closest = Array.IndexOf(ResolutionOptions, ResolutionOptions
+                .OrderBy(r => Math.Abs(r.Width - _config.TargetWidth) + Math.Abs(r.Height - _config.TargetHeight)).First());
+            ResolutionCombo.SelectedIndex = _config.AutoResolution ? 0 : closest + 1;
+            FpsCombo.SelectedItem = FpsOptions.OrderBy(f => Math.Abs(f - _config.Fps)).First().ToString();
+            BitrateBox.Value = _config.BitrateKbps;
+            AdaptiveBitrateToggle.IsChecked = _config.AdaptiveBitrate;
+            BitrateBox.IsEnabled = !_config.AdaptiveBitrate;
+            CodecCombo.SelectedIndex = Math.Max(0, Array.IndexOf(CodecOptions, _config.Codec));
+            TrafficPriorityToggle.IsChecked = _config.TrafficPriority;
+            NvencPresetCombo.SelectedItem = _config.NvencPreset;
+            NvencTuneCombo.SelectedItem = _config.NvencTune;
+            NvencAdaptiveToggle.IsChecked = _config.NvencAdaptive;
+        }
+        finally
+        {
+            _reloading = false;
+        }
+    }
+
+    private void InitUpdatesSection()
+    {
+        CheckUpdatesToggle.IsChecked = _config.CheckForUpdates;
+        CheckUpdatesToggle.Checked += (_, _) => { _config.CheckForUpdates = true; _config.Save(); };
+        CheckUpdatesToggle.Unchecked += (_, _) => { _config.CheckForUpdates = false; _config.Save(); };
+        CheckNowButton.Click += async (_, _) =>
+        {
+            CheckNowButton.IsEnabled = false;
+            try { await _orchestrator.Updates.CheckNowAsync(); }
+            finally { CheckNowButton.IsEnabled = true; }
+        };
+        _orchestrator.Updates.Changed += () => Dispatcher.BeginInvoke(RefreshUpdateStatus);
+        RefreshUpdateStatus();
+    }
+
+    private void RefreshUpdateStatus()
+    {
+        var updates = _orchestrator.Updates;
+        UpdateStatusText.Text = updates.Available is { } info ? Loc.F("Settings.UpdateAvailable", info.Version)
+            : updates.LastCheckFailed ? Loc.T("Settings.UpdateFailed")
+            : updates.LastCheckedUtc is null ? Loc.T("Settings.UpdateNever")
+            : Loc.F("Settings.UpdateLatest", AppVersion.Current);
     }
 
     private void InitConnectionSection()
@@ -284,12 +399,32 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         SwitchLayoutToggle.IsChecked = _config.SwitchButtonLayout;
         SwitchLayoutToggle.Checked += (_, _) => SetSwitchLayout(true);
         SwitchLayoutToggle.Unchecked += (_, _) => SetSwitchLayout(false);
+        TrafficPriorityToggle.IsChecked = _config.TrafficPriority;
+        TrafficPriorityToggle.Checked += (_, _) => SetTrafficPriority(true);
+        TrafficPriorityToggle.Unchecked += (_, _) => SetTrafficPriority(false);
+        RumbleToggle.IsChecked = _config.Rumble;
+        RumbleToggle.Checked += (_, _) => SetRumble(true);
+        RumbleToggle.Unchecked += (_, _) => SetRumble(false);
         _orchestrator.ButtonLayoutChanged += () => Dispatcher.BeginInvoke(() =>
         {
             _showingSwitchLayout = true;
             SwitchLayoutToggle.IsChecked = _orchestrator.SwapAbxy;
             _showingSwitchLayout = false;
         });
+    }
+
+    private void SetTrafficPriority(bool enabled)
+    {
+        _config.TrafficPriority = enabled;
+        _config.Save();
+        _orchestrator.TrafficPrioritySettingChanged();
+    }
+
+    private void SetRumble(bool enabled)
+    {
+        _config.Rumble = enabled;
+        _config.Save();
+        _orchestrator.RumbleSettingChanged();
     }
 
     private void SetSwitchLayout(bool enabled)

@@ -75,6 +75,12 @@ public sealed class VideoEncoder : IDisposable
     /// <summary>Stream size the running ffmpeg process encodes at, or null if none is running.</summary>
     public (int Width, int Height)? ActiveSize { get; private set; }
 
+    /// <summary>The NVENC preset and tuning the running process uses (meaningful with NVENC only).</summary>
+    public (string Preset, string Tune)? ActiveNvenc { get; private set; }
+
+    /// <summary>Frames per second VideoSender got from ffmpeg, every 5s (VideoSender.WindowFps).</summary>
+    public event Action<double>? OutputFps;
+
     /// <summary>The window being captured instead of the monitor (IntPtr.Zero = whole primary
     /// monitor). Lets a restart (watchdog / adaptive bitrate) carry the same capture target over.</summary>
     public IntPtr CaptureWindow { get; private set; }
@@ -111,8 +117,10 @@ public sealed class VideoEncoder : IDisposable
     /// screen. IntPtr.Zero (default) = monitor 0, as for Big Picture.</param>
     /// <param name="streamSize">Stream resolution - AppOrchestrator picks it (the Switch's screen with
     /// automatic resolution); null (default) uses <see cref="Config.TargetWidth"/>/<see cref="Config.TargetHeight"/>.</param>
+    /// <param name="nvencOverride">NVENC preset and tuning from the adaptive preset; null uses
+    /// <see cref="Config.NvencPreset"/> / <see cref="Config.NvencTune"/>.</param>
     public void Start(EncoderKind? encoderOverride = null, int? bitrateKbpsOverride = null, IntPtr captureWindow = default,
-        (int Width, int Height)? streamSize = null)
+        (int Width, int Height)? streamSize = null, (string Preset, string Tune)? nvencOverride = null)
     {
         var (streamWidth, streamHeight) = streamSize ?? (_config.TargetWidth, _config.TargetHeight);
         ActiveSize = (streamWidth, streamHeight);
@@ -130,7 +138,9 @@ public sealed class VideoEncoder : IDisposable
         ActiveEncoder = encoder;
         ActiveCodec = codec;
         var pixelFormat = EncoderSelection.PixelFormat(encoder);
-        _sender = new VideoSender(switchEndpoint, _config.Fps, codec);
+        _sender = new VideoSender(switchEndpoint, _config.Fps, codec,
+            internet: _config.ConnectionMode == Session.ConnectionMode.Internet);
+        _sender.WindowFps += fps => OutputFps?.Invoke(fps);
         // RTP over plain udp:// (not rtp://, which would also send RTCP to a second port nobody
         // listens on). Loopback has no 1500-byte MTU: big packets keep a frame to a few datagrams.
         var target = $"udp://127.0.0.1:{_sender.RtpPort}?pkt_size=16384";
@@ -146,7 +156,9 @@ public sealed class VideoEncoder : IDisposable
         // better quality at the same bitrate with no latency cost. The Switch decodes High (NVTEGRA).
         // A quality-target rate mode (the original "-rc vbr -cq:v 19") fought the hard bitrate bounds
         // below and made the encoder fall behind real time - keep rate control constant-bitrate.
-        var encodeArgs = EncoderSelection.EncodeArgs(encoder, codec, keyframeInterval);
+        var nvenc = nvencOverride ?? (_config.NvencPreset, _config.NvencTune);
+        ActiveNvenc = nvenc;
+        var encodeArgs = EncoderSelection.EncodeArgs(encoder, codec, keyframeInterval, nvenc.Preset, nvenc.Tune);
 
         // gfxcapture scales to the stream's target resolution itself (resize_mode=scale) - no
         // separate -vf scale step needed. hwdownload+format=bgra brings the D3D11 hardware frame

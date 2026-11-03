@@ -26,6 +26,7 @@ static char s_server[SETTINGS_ADDRESS_MAX] = "";
 static char s_serverKey[33] = "";
 static char s_pcId[SETTINGS_HOST_ID_SIZE + 1] = "";
 static SettingsLanguage s_language = SettingsLanguage_Auto;
+static SettingsRumble s_rumble = SettingsRumble_All;
 
 static const char *const kLanguageNames[] = {"auto", "ru", "en"};
 
@@ -76,6 +77,7 @@ static void save(void)
     }
     fprintf(f, "server=%s\nserver_key=%s\npc_id=%s\n", s_server, s_serverKey, s_pcId);
     fprintf(f, "language=%s\n", kLanguageNames[s_language]);
+    fprintf(f, "rumble=%d\n", (int)s_rumble);
     fclose(f);
 }
 
@@ -106,6 +108,8 @@ void settingsInit(void)
             s_swapAbxy = value != 0;
         else if (sscanf(line, "button_layout_revision=%u", &value) == 1)
             s_layoutRevision = value;
+        else if (sscanf(line, "rumble=%u", &value) == 1)
+            s_rumble = value <= SettingsRumble_LargeOnly ? (SettingsRumble)value : SettingsRumble_All;
         else if (readValue(line, "connection_mode", mode, sizeof(mode)))
             s_connectionMode = strcmp(mode, "internet") == 0 ? SettingsConnection_Internet : SettingsConnection_Wifi;
         else if (readValue(line, "pc_address", s_pcAddress, sizeof(s_pcAddress))) {}
@@ -269,6 +273,23 @@ void settingsSetPcId(const char *id)
     for (char *c = s_pcId; *c; c++)
         if (*c >= 'a' && *c <= 'z')
             *c = (char)(*c - 32);
+    save();
+    mutexUnlock(&s_mutex);
+}
+
+SettingsRumble settingsGetRumble(void)
+{
+    mutexLock(&s_mutex);
+    SettingsRumble rumble = s_rumble;
+    mutexUnlock(&s_mutex);
+    return rumble;
+}
+
+void settingsCycleRumble(void)
+{
+    mutexLock(&s_mutex);
+    s_rumble = s_rumble == SettingsRumble_All ? SettingsRumble_LargeOnly
+             : s_rumble == SettingsRumble_LargeOnly ? SettingsRumble_Off : SettingsRumble_All;
     save();
     mutexUnlock(&s_mutex);
 }

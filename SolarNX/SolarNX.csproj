@@ -22,6 +22,9 @@
     <!-- Single source of truth for the version: ../VERSION (also read by Client/Makefile and
          installer.iss). -->
     <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\VERSION').Trim())</Version>
+    <!-- Wire protocol "major.minor" (../PROTOCOL, also read by Client/Makefile and the release
+         workflow) - stamped as assembly metadata, read by Session/ProtocolVersion.cs. -->
+    <SolarNXProtocol>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\PROTOCOL').Trim())</SolarNXProtocol>
     <!-- App.xaml's ApplicationDefinition build action auto-generates its own Main() - Program.cs
          owns startup instead (has to build Config/AppOrchestrator/the tray icon before any window
          exists), so this picks that one explicitly rather than leaving two candidate entry points. -->
@@ -81,4 +84,7 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyMetadata Include="SolarNXProtocol" Value="$(SolarNXProtocol)" />
+  </ItemGroup>
 </Project>

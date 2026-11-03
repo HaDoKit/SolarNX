@@ -16,6 +16,7 @@
 #include "library/library.h"
 #include "settings/settings.h"
 #include "transport/transport.h"
+#include "control/control.h"
 
 // HID (network.c) blocks forever on its own accept/send loop, and video (video.c) blocks forever
 // pumping appMainLoop()/SDL - they can't both run on one thread, so HID gets its own. 0x4000
@@ -140,6 +141,7 @@ static void startNetwork(void) {
 
         u64 totalSent = 0;
         u32 sinceHeartbeat = 0;
+        u64 lastPingTick = 0;
 
         while (1) {
             inputRead(&pkt);
@@ -150,12 +152,14 @@ static void startNetwork(void) {
             if (appMenuRequested()) {
                 logWrite("network", "back to menu requested - closing the HID connection so the host ends the session");
                 networkCloseHidClient();
+                inputStopRumble();
                 break;
             }
 
-            if (!networkSendHid(&pkt)) {
+            if (!networkSendHid(&pkt) || !networkFlushControl()) {
                 logWrite("network", "HID send failed after %lu packets - PC disconnected, waiting for reconnect", totalSent);
                 networkCloseHidClient();
+                inputStopRumble();
                 // A library game's session is ended by the host when the game exits (or couldn't
                 // start) - that's the signal to bring the player back to the menu to pick the next
                 // one, instead of sitting on a frozen stream waiting for a reconnect.
@@ -166,13 +170,30 @@ static void startNetwork(void) {
                 break;
             }
 
+            // Debug mode: a ping twice a second for the overlay's round trip (control/control.h).
+            if (controlDebugEnabled() && armTicksToNs(armGetSystemTick() - lastPingTick) >= 500000000ULL) {
+                controlSendPing();
+                lastPingTick = armGetSystemTick();
+            }
+
             totalSent++;
             if (++sinceHeartbeat >= HID_HEARTBEAT_EVERY) {
                 logWrite("network", "HID connection stable - %lu packets sent (%d bytes each)", totalSent, (int)sizeof(pkt));
                 sinceHeartbeat = 0;
             }
 
-            svcSleepThread(HID_SEND_INTERVAL_NS);
+            // Not a plain sleep: the PC's control messages (control/control.h) are read meanwhile, so
+            // they're handled as they arrive rather than once per interval.
+            if (!networkWaitForHost(HID_SEND_INTERVAL_NS)) {
+                logWrite("network", "the PC closed the HID connection after %lu packets", totalSent);
+                networkCloseHidClient();
+                inputStopRumble();
+                if (inputGetAppTarget() == SolarNxAppTarget_Library) {
+                    logWrite("network", "library session ended by the host - back to the menu");
+                    appRequestMenu();
+                }
+                break;
+            }
         }
     }
 }
@@ -229,6 +250,7 @@ void main() {
     // tries to load anything from "romfs:/...".
     romfsInit();
     settingsInit(); // before initNetwork() starts the library thread, which syncs these
+    controlInit();  // before the library thread and transport, which report the PC's version
     langInit();
 
     if (!initNetwork())

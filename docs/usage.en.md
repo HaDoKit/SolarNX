@@ -48,9 +48,20 @@ The Switch system keeps the HOME and Capture buttons for itself, so SolarNX uses
 |---|---|
 | **−** and **+** together | Steam (Guide) button: the Steam menu in Big Picture; on DualShock 4, the PS button |
 | hold **− for 3 seconds** | back to the SolarNX menu on the Switch. On the PC, the running game (and Big Picture) is closed |
+| **−**, **+**, **ZL** and **ZR** together | the debug menu - only while Debug mode is on on the PC (see below) |
 
 A single − or + press is delayed by up to 0.1 seconds, while SolarNX waits to see whether the second
-button follows.
+button follows. In debug mode, by up to 0.2 seconds.
+
+### Rumble
+
+The game's rumble goes to the Joy-Con or Pro Controller of the player whose virtual controller
+rumbles. An Xbox pad's small motor (a fine buzz) comes through weaker than the large one - as on the
+pad itself. On the Switch: **X** → Rumble - all (the default), no small motor, or off. No small motor
+drops the fine constant tremor some games make with the small motor, e.g. while walking; hits and
+explosions, which drive both motors, stay. On the PC it can be turned off
+entirely: Rumble on the Switch. Needs SolarNX 0.2.5 or newer on both the Switch and the PC. If it keeps going in short jolts,
+turn debug mode on: its Rumble line shows how many rumble commands come from the PC.
 
 ### Button layout on the Switch
 
@@ -85,13 +96,62 @@ The gear button on the SolarNX main screen.
 | Encoder | Auto (recommended): SolarNX picks the encoder for your graphics card itself. The line under the list shows the detected graphics card and the encoder that will be used. Choose one by hand only if the automatic one causes problems, such as artifacts. The AMD and Intel encoders are experimental. Takes effect the next time the Switch connects |
 | Codec | H.265 (the default): a noticeably better picture at the same bitrate. H.264: if H.265 causes problems. If the selected encoder can't do H.265, the video goes in H.264; the line under the encoder shows it. Takes effect the next time the Switch connects |
 | Switch layout (A↔B, X↔Y) | swaps A/B and X/Y so the buttons match the labels on the Switch. The same setting can be changed on the Switch (see below); the last change wins |
+| Rumble on the Switch | the game's rumble on the Joy-Con or Pro Controller. On by default |
+| Traffic priority | video, audio and input are marked as urgent: a router with WMM lets them ahead of other traffic on Wi-Fi. On by default, Wi-Fi mode only. If things get worse, turn it off |
+| Check for updates | at start-up and once a day SolarNX looks at the list of releases on GitHub and shows on the main screen when a new version is out, and whether the Switch app needs updating too. Nothing is downloaded by itself. Check now works even with the check turned off |
+| Debug mode | statistics over the video on the Switch, and the debug menu (see below). Off by default |
+| Adaptive NVENC preset | NVIDIA graphics cards only, on by default. Starts at the best quality (p7, hq); if the graphics card can't keep up with encoding, the preset goes down step by step, and after a couple of minutes running smoothly SolarNX tries to raise it again. Each change freezes the picture for about a second. The network is handled by adaptive bitrate |
+| NVENC preset and tuning | shown in debug mode; a manual choice turns the adaptive preset off, NVIDIA graphics cards only. Preset p1 is the fastest, p7 the best quality (p4 by default). Tuning: ll is low latency (default), ull even lower, hq quality. Applies at once, the picture freezes for about a second |
 | shadPS4 | path to the emulator |
 | Drivers | reinstalls ViGEmBus |
 
 The **Show screen** toggle on the main window shows a preview of what the Switch
 sees.
 
+## Versions on the PC and the Switch
+
+Normally the PC and the Switch should run the same SolarNX version. Since 0.2.5 they also check each
+other when they connect:
+
+- If nothing changed in how they talk to each other, different versions work together - the Switch
+  app doesn't have to be updated.
+- If something small changed, they still work, without the new features of the older side. The PC's
+  main screen and the Switch's menu say what to update.
+- If something important changed, streaming won't start, and both sides say what to update.
+
+A Switch with SolarNX 0.2.4 works with a PC on 0.2.5 without rumble, debug mode and traffic priority.
+With older versions (0.2.3 and earlier) there will be no video: update both sides.
+
+With Check for updates on, the new-version notice on the PC says right away whether the Switch app
+has to be updated too.
+
+## Debug mode
+
+Turn it on on the PC: Settings → Debug → Debug mode. While streaming, the Switch shows over the video:
+
+- the encoder, codec, resolution, frame rate and NVENC preset;
+- how many frames per second are shown, how many are lost and how many packets are rebuilt;
+- the bitrate and the decode time on the Switch;
+- the latency from the PC sending a frame to the Switch showing it (encoding on the PC isn't
+  included yet), and the network round trip;
+- which controllers are connected and what the Switch sees them as (Pro Controller, Joy-Con,
+  GameCube...);
+- the current rumble level and how many rumble commands per second come from the PC.
+
+Pressing **−**, **+**, **ZL** and **ZR** together opens the debug menu. Select and change with the
+D-pad: statistics on screen, bitrate, adaptive bitrate, codec, resolution, frames per second, adaptive
+preset, NVENC preset and tuning, traffic priority. A change goes to the PC after a fraction of a second, is saved in
+its settings, and the video restarts with it - the picture freezes for about a second. The game gets
+no input while the menu is open. B or the same combination closes it.
+
 ## Playing over the internet (experimental)
+
+In this mode the video goes with twice the redundancy (about 40% recovery packets instead of 20%):
+losses over the internet usually come in bursts. That makes the traffic about 15% bigger.
+
+Testing this mode from the same home network as the PC tells little: the traffic then loops through
+the router, and many home routers do that slowly and lose packets. At home use the Wi-Fi mode, and
+test the internet mode from, say, mobile data.
 
 > **Experimental feature.** Internet mode hasn't been tested on many networks and routers yet. The
 > regular Wi-Fi mode works as before and doesn't depend on this mode.

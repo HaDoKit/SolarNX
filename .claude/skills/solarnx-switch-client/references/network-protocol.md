@@ -66,7 +66,31 @@ History: until 0.2.3 this was MPEG-TS via libavformat (`udp://...?fifo_size=0` -
 ignored the interrupt callback and hung back-to-menu). A lost datagram there smeared the picture
 until the next keyframe; that is what the FEC framing replaced.
 
+## Control messages and protocol version (`control/control.c`, protocol 1.1)
+
+`../PROTOCOL` (`major.minor`) reaches the code as `SOLARNX_PROTOCOL_MAJOR/MINOR` from the Makefile.
+What the PC said about itself (`PcVersion`) comes from the library header v3 (v2 = a 0.2.4 PC, shown
+as "older"), the Internet Welcome/Reject, or the Hello control message; `controlPcCompat()` decides
+what the menu shows (line above the connection mode) and `controlPcIncompatible()` makes A in the menu
+do nothing and the Internet transport stay unconnected.
+
+Control messages ride the HID session: from the PC after the SessionConfig as `u16 length, u8 type,
+payload` (read by `networkWaitForHost`, which replaced the HID loop's plain sleep with `poll`), to the
+PC as `8x0xFE, u16 length, u8 type, payload` after a HID packet (`networkFlushControl`), sealed types
+21/22 in Internet mode. `controlSessionReset()` queues this side's Hello on every new connection;
+nothing else is sent before the PC's Hello (`controlPeerReady`). Messages and payloads: see the PC
+skill's switch-protocol.md. Rumble: `inputSetRumble` -> `applyRumble` in `inputRead` (HID thread),
+handles for handheld / FullKey / JoyDual per player, stopped when the HID connection ends. Options:
+traffic priority sets IP_TOS 0xB8 on the HID socket; debug mode enables the overlay
+(`video/overlay.c`, drawn before each present), pings, and the debug menu (Minus + Plus + ZL + ZR,
+`input.c`; Minus/Plus held back 100ms in debug mode so the PC's Guide chord never fires; while the
+menu is open and until everything is released afterwards the PC gets no input).
+
 ## Library (TCP in, `library/library.c`)
+
+Since protocol 1.1 the header is version 3 (56 bytes, with both sides' versions - see the PC skill);
+version 2 (24 bytes) from a 0.2.4 PC is still answered the old way. The description below predates
+both (it is version 1's shape).
 
 Listen socket opened by `libraryStart()` right after `networkInit()` (before the first menu). Per
 connection (5s send/recv timeouts): read 16-byte header (`"ONXL"`, version 1, u64 hash) → reply one

@@ -24,5 +24,22 @@ void inputRead(SolarNxHidPacket *pkt);
 // the HID thread is paused (not calling inputRead).
 void inputReconfigure(void);
 
+// The game's rumble from the PC (control message Rumble): motor levels 0-255 for player 0-3, XInput
+// meaning (large = low frequency, small = high frequency). Any thread - inputRead() applies it to
+// whatever controller the player has right now (Joy-Con pair, handheld, Pro Controller).
+void inputSetRumble(int player, uint8_t large, uint8_t small);
+// Stops every controller's rumble at once (the session ended). HID thread.
+void inputStopRumble(void);
+
+// Debug mode (the PC turned it on - control.h): Minus + Plus + ZL + ZR together on one controller
+// opens/closes the debug menu. While it is open the PC gets no input (sticks centred, nothing
+// pressed) and the presses go to the menu instead.
+bool inputDebugMenuOpen(void);
+void inputCloseDebugMenu(void);              // any thread (the menu's own B)
+uint64_t inputTakeDebugMenuButtons(void);    // HidNpadButton bits newly pressed since the last call
+
+// What each player holds, for the debug overlay: "1: Pro Controller, 2: Joy-Con (L+R)". Any thread.
+void inputDescribeControllers(char *out, size_t size);
+
 // Stops the sixaxis sensors started by inputInit(). Call once at shutdown.
 void inputExit(void);

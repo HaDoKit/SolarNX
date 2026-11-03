@@ -186,9 +186,21 @@ internal static class EncoderSelection
     /// themselves are added by VideoEncoder), High (H.264) / Main (H.265) profile, no B-frames and no
     /// lookahead, so nothing holds frames back, and a keyframe every <paramref name="keyframeInterval"/>
     /// frames. Main, not Main 10: the stream is 8-bit, which is what the Switch's NV12 path shows.</summary>
-    public static string EncodeArgs(EncoderKind kind, VideoCodec codec, int keyframeInterval) => codec == VideoCodec.Hevc
-        ? HevcArgs(kind, keyframeInterval)
-        : H264Args(kind, keyframeInterval);
+    /// <param name="nvencPreset">NVENC only: p1..p7 (Config.NvencPreset, debug mode); anything else = p4.</param>
+    /// <param name="nvencTune">NVENC only: hq, ll or ull (Config.NvencTune); anything else = ll.</param>
+    public static string EncodeArgs(EncoderKind kind, VideoCodec codec, int keyframeInterval, string? nvencPreset = null, string? nvencTune = null)
+    {
+        var args = codec == VideoCodec.Hevc ? HevcArgs(kind, keyframeInterval) : H264Args(kind, keyframeInterval);
+        if (kind != EncoderKind.Nvenc) return args;
+        var preset = NvencPresets.Contains(nvencPreset) ? nvencPreset : "p4";
+        var tune = NvencTunes.Contains(nvencTune) ? nvencTune : "ll";
+        return args.Replace("-preset p4 -tune ll", $"-preset {preset} -tune {tune}");
+    }
+
+    /// <summary>The NVENC presets and tunings the debug settings offer (both sides: the Switch's debug
+    /// menu steps through the same lists by index - Client/control/control.h).</summary>
+    public static readonly string[] NvencPresets = ["p1", "p2", "p3", "p4", "p5", "p6", "p7"];
+    public static readonly string[] NvencTunes = ["hq", "ll", "ull"];
 
     // Same tuning as H264Args, per encoder. AMF: header_insertion_mode idr + gops_per_idr 1 put
     // VPS/SPS/PPS on every keyframe and make every keyframe an IDR (the Switch starts decoding at one).

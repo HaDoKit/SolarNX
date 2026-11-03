@@ -39,6 +39,53 @@ public partial class HomeView : System.Windows.Controls.UserControl
 
         RefreshMode();
         Loc.Changed += RefreshMode;
+        _orchestrator.Compatibility.Changed += () => Dispatcher.BeginInvoke(RefreshCompatibility);
+        _orchestrator.Updates.Changed += () => Dispatcher.BeginInvoke(RefreshUpdate);
+    }
+
+    /// <summary>"SolarNX X is available", what that means for the Switch app, and a link to the
+    /// release page - nothing while this is the newest.</summary>
+    private void RefreshUpdate()
+    {
+        UpdateLabel.Inlines.Clear();
+        if (_orchestrator.Updates.Available is not { } info)
+        {
+            UpdateLabel.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var switchNote = info.Switch switch
+        {
+            SolarNX.Update.SwitchUpdate.NotNeeded => Loc.T("Update.SwitchNotNeeded"),
+            SolarNX.Update.SwitchUpdate.Optional => Loc.T("Update.SwitchOptional"),
+            SolarNX.Update.SwitchUpdate.Required => Loc.T("Update.SwitchRequired"),
+            _ => Loc.T("Update.SwitchUnknown"),
+        };
+        UpdateLabel.Inlines.Add(new System.Windows.Documents.Run($"{Loc.F("Home.UpdateAvailable", info.Version)} {switchNote} "));
+        var link = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(Loc.T("Home.UpdateOpen")))
+        {
+            Foreground = System.Windows.Media.Brushes.White,
+        };
+        link.Click += (_, _) => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(info.PageUrl) { UseShellExecute = true });
+        UpdateLabel.Inlines.Add(link);
+        UpdateLabel.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Says when the Switch's protocol differs from this PC's, and which side to update -
+    /// nothing while they match (or nothing was heard from the Switch yet).</summary>
+    private void RefreshCompatibility()
+    {
+        var peer = _orchestrator.Compatibility.Switch;
+        var text = SolarNX.Session.SwitchCompatibility.Classify(peer) switch
+        {
+            SolarNX.Session.Compatibility.SwitchOlder when peer!.IsLegacy => Loc.T("Home.CompatLegacy"),
+            SolarNX.Session.Compatibility.SwitchOlder => Loc.F("Home.CompatSwitchOlder", peer!.AppVersion!),
+            SolarNX.Session.Compatibility.SwitchNewer => Loc.F("Home.CompatSwitchNewer", peer!.AppVersion!),
+            SolarNX.Session.Compatibility.UpdateSwitch => Loc.F("Home.CompatUpdateSwitch", peer!.AppVersion ?? "?"),
+            SolarNX.Session.Compatibility.UpdatePc => Loc.F("Home.CompatUpdatePc", peer!.AppVersion ?? "?"),
+            _ => null,
+        };
+        CompatLabel.Text = text ?? "";
+        CompatLabel.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     /// <summary>Wi-Fi: the editable client IP. Internet (experimental): the Switch finds this PC
@@ -52,6 +99,8 @@ public partial class HomeView : System.Windows.Controls.UserControl
         IpBox.Text = internet ? (paired == 0 ? Loc.T("Home.NoPaired") : Loc.F("Home.PairedCount", paired)) : _config.ClientIp;
         IpBox.IsReadOnly = internet;
         RefreshStatus();
+        RefreshCompatibility();
+        RefreshUpdate();
     }
 
     private void SaveClientIp()

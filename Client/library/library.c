@@ -14,19 +14,27 @@
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
 #include "../settings/settings.h"
+#include "../control/control.h"
 
 // Wire format - mirrors SolarNX/Library/LibraryWire.cs, little-endian, one exchange per connection
-// (the host dials in, same direction as HID):
-//   host -> here   u32 magic "ONXL", u32 version (2), u64 content hash,
-//                  u8 button layout (1 = A/B X/Y by label), u8[3] zero, u32 layout revision
-//   here -> host   u8 1 = send it / 0 = already have this hash,
-//                  u8 button layout, u8[2] zero, u32 layout revision - this side's, after syncing
-//                  with the host's (higher revision wins, a tie goes to the host; see settings.h)
+// (the host dials in, same direction as HID). Version 3 (protocol 1.1):
+//   host -> here   56 bytes: u32 magic "ONXL", u32 version (3), version[28] (control.h: protocol +
+//                  app version), u64 content hash, u8 button layout (1 = A/B X/Y by label), u8[3]
+//                  zero, u32 layout revision, u32 extra length (bytes that follow; skipped)
+//   here -> host   40 bytes: u8 1 = send it / 0 = already have this hash (always 0 on another major
+//                  protocol), u8 button layout, u8[2] zero, u32 layout revision - this side's, after
+//                  syncing with the host's (higher revision wins, a tie goes to the host; see
+//                  settings.h) - then version[28], u32 extra length (0)
 //   host -> here   (only if 1) u32 count, then per entry:
 //                  u32 id, u16 nameLength, name (UTF-8), u32 coverLength, cover (JPEG)
+// Frozen across protocol majors: the header's first 36 bytes, the reply's bytes 8..35, and "fixed
+// size + extra length" - so either side can always read the other's version and say "update".
+// Version 2 (a 0.2.4 or older PC, protocol 1.0): 24-byte header (magic, 2, hash, layout, revision),
+// 8-byte reply - still answered, the PC is then shown as older.
 // A malformed or oversized message is dropped whole; the previous library stays in place.
-#define LIBRARY_MAGIC   0x4C584E4Fu
-#define LIBRARY_VERSION 2u
+#define LIBRARY_MAGIC          0x4C584E4Fu
+#define LIBRARY_VERSION        3u
+#define LIBRARY_LEGACY_VERSION 2u
 
 // Receiver thread: idle almost all the time (blocked in accept), short bursts while a library
 // arrives. Covers go to the heap, so a small stack is plenty. Shares core 0 with the HID thread,
@@ -144,28 +152,66 @@ static void handleConnection(int sock)
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
-    uint32_t header[6]; // magic, version, hash (2 words), layout flags, layout revision
-    if (!recvAll(sock, header, sizeof(header)))
+    uint32_t head[2]; // magic, version
+    if (!recvAll(sock, head, sizeof(head)))
         return;
-    if (header[0] != LIBRARY_MAGIC || header[1] != LIBRARY_VERSION)
+    if (head[0] != LIBRARY_MAGIC || (head[1] != LIBRARY_LEGACY_VERSION && head[1] < LIBRARY_VERSION))
     {
-        logWrite("library", "unexpected header (magic %08x, version %u) - ignoring", header[0], header[1]);
+        logWrite("library", "unexpected header (magic %08x, version %u) - ignoring", head[0], head[1]);
         return;
     }
-    uint64_t hash = (uint64_t)header[2] | ((uint64_t)header[3] << 32);
+    bool legacy = head[1] == LIBRARY_LEGACY_VERSION;
 
-    settingsSyncButtonLayout((header[4] & 0xFF) != 0, header[5]);
+    // The rest: version 2 = hash, layout, revision (16 bytes); 3 = version[28] first, then the same
+    // plus the extra length (48 bytes).
+    uint8_t rest[CONTROL_VERSION_WIRE_SIZE + 20];
+    size_t restSize = legacy ? 16 : sizeof(rest);
+    if (!recvAll(sock, rest, restSize))
+        return;
+
+    PcVersion pc = {.known = true, .legacy = true, .major = 1, .minor = 0};
+    strcpy(pc.appVersion, "?");
+    const uint8_t *fields = rest;
+    if (!legacy)
+    {
+        controlReadVersion(rest, &pc);
+        fields = rest + CONTROL_VERSION_WIRE_SIZE;
+        uint32_t extra;
+        memcpy(&extra, fields + 16, 4);
+        uint8_t skip[64];
+        while (extra > 0) // a newer minor's appended fields - not ours to read
+        {
+            size_t chunk = extra < sizeof(skip) ? extra : sizeof(skip);
+            if (!recvAll(sock, skip, chunk))
+                return;
+            extra -= (uint32_t)chunk;
+        }
+    }
+    controlSetPcVersion(&pc);
+    bool incompatible = controlPcIncompatible();
+
+    uint64_t hash;
+    uint32_t hostRevision;
+    memcpy(&hash, fields, 8);
+    memcpy(&hostRevision, fields + 12, 4);
+
+    // Another major protocol: still answer (the PC learns this side's version from the reply), but
+    // take neither the library nor the layout - their format may have changed.
+    if (!incompatible)
+        settingsSyncButtonLayout(fields[8] != 0, hostRevision);
     bool swapAbxy;
     uint32_t layoutRevision;
     settingsGetButtonLayout(&swapAbxy, &layoutRevision);
 
     mutexLock(&s_mutex);
-    bool need = hash != s_hash;
+    bool need = !incompatible && hash != s_hash;
     mutexUnlock(&s_mutex);
 
-    uint8_t reply[8] = {need ? 1 : 0, swapAbxy ? 1 : 0, 0, 0};
+    uint8_t reply[8 + CONTROL_VERSION_WIRE_SIZE + 4] = {need ? 1 : 0, swapAbxy ? 1 : 0, 0, 0};
     memcpy(&reply[4], &layoutRevision, sizeof(layoutRevision));
-    if (send(sock, reply, sizeof(reply), 0) != (ssize_t)sizeof(reply) || !need)
+    controlWriteOwnVersion(&reply[8]); // the extra length after it stays 0
+    size_t replySize = legacy ? 8 : sizeof(reply);
+    if (send(sock, reply, replySize, 0) != (ssize_t)replySize || !need)
         return;
 
     int count = 0;

@@ -46,6 +46,7 @@ public sealed class InternetSession : ISessionController
     private const int LibraryWindowChunks = 48;
 
     private readonly Config _config;
+    private readonly SwitchCompatibility _compatibility;
     private readonly object _lock = new();
     private CancellationTokenSource? _runCts;
     private UdpClient? _socket;
@@ -64,6 +65,16 @@ public sealed class InternetSession : ISessionController
     private DateTime _lastFromPeerUtc;
     private DateTime _lastInputUtc;
     private bool _sessionActive;
+
+    // When the PC ended the session: Input still in flight from the Switch (it sends every ~8ms until
+    // the End reaches it) must not start a new session - that relaunched the game that had just
+    // exited. A Bye or a new Hello from the Switch follows within this time anyway.
+    private static readonly TimeSpan EndedByPcGrace = TimeSpan.FromSeconds(2);
+    private DateTime _endedByPcUtc = DateTime.MinValue;
+
+    // What the current peer's Hello said about its version (PeerVersion.Legacy for a 0.2.4 Switch,
+    // whose Hello is just device id + nonce).
+    private PeerVersion? _peerVersion;
 
     // Pairing.
     private DateTime _pairingOpenUntil;
@@ -101,14 +112,36 @@ public sealed class InternetSession : ISessionController
     public event Action<HidPacket>? SessionStarted;
     public event Action? SessionStopped;
     public event Action<HidPacket>? PacketReceived;
+    public event Action<ControlWire.ClientMessage, byte[]>? ControlReceived;
 
     /// <summary>A Switch asks to pair: its name and the 6-digit code to compare with its screen.
     /// Answer with <see cref="CompletePairing"/>. Raised on the network thread.</summary>
     public event Action<string, int>? PairingRequested;
 
-    public InternetSession(Config config)
+    public InternetSession(Config config, SwitchCompatibility compatibility)
     {
         _config = config;
+        _compatibility = compatibility;
+    }
+
+    public PeerVersion? SessionPeer
+    {
+        get { lock (_lock) return _peerVersion is { IsLegacy: false } version && _toSwitch is not null ? version : null; }
+    }
+
+    public bool SendControl(ControlWire.HostMessage type, ReadOnlySpan<byte> payload)
+    {
+        IPEndPoint? peer;
+        PeerVersion? version;
+        lock (_lock)
+        {
+            peer = _peer;
+            version = _peerVersion;
+        }
+        if (peer is null || version is null || !ProtocolVersion.Supports(version.Protocol, ProtocolVersion.ControlMessages) || _socket is not { } socket)
+            return false;
+        SendSealed(socket, InternetWire.Type.Control, ControlWire.DatagramPayload(type, payload), peer);
+        return true;
     }
 
     /// <summary>This PC's public address as the rendezvous server sees it (null without a server or
@@ -139,6 +172,11 @@ public sealed class InternetSession : ISessionController
             _socket = new UdpClient(new IPEndPoint(IPAddress.Any, Port));
             _videoRelay = new UdpClient(new IPEndPoint(IPAddress.Loopback, VideoRelayPort));
             _audioRelay = new UdpClient(new IPEndPoint(IPAddress.Loopback, AudioRelayPort));
+            // The default ~64KB held a quarter of a keyframe: VideoSender's datagrams come faster than
+            // the relay seals them, and the overflow was dropped right here on loopback - counted on
+            // the Switch as ordinary losses. Same for the outgoing side of the shared socket.
+            _videoRelay.Client.ReceiveBufferSize = 4 * 1024 * 1024;
+            _socket.Client.SendBufferSize = 1024 * 1024;
             // A datagram the Switch couldn't take (ICMP port unreachable) must not kill the receive
             // loop: on Windows it surfaces as a ConnectionReset on the next ReceiveAsync.
             const int SioUdpConnReset = -1744830452;
@@ -172,7 +210,16 @@ public sealed class InternetSession : ISessionController
         DisposeSockets();
     }
 
-    public void ForceDisconnect() => EndSession("ended by the PC", notifySwitch: true);
+    // Off the caller's thread, as in Wi-Fi mode (there it only closes the socket and the read loop
+    // raises SessionStopped later): the callers - AppOrchestrator's watchers - hold its pipeline gate,
+    // and SessionStopped's handler takes that gate. Raised right here it waited for itself: seen live
+    // when a library game exited in Internet mode - every later session hung at "waiting for pipeline
+    // gate" until the app was restarted.
+    public void ForceDisconnect()
+    {
+        lock (_lock) _endedByPcUtc = DateTime.UtcNow;
+        _ = Task.Run(() => EndSession("ended by the PC", notifySwitch: true));
+    }
 
     public ValueTask DisposeAsync()
     {
@@ -192,6 +239,7 @@ public sealed class InternetSession : ISessionController
     private void ForgetPeer()
     {
         _peer = null;
+        _peerVersion = null;
         _peerDeviceId = null;
         _peerNonce = null;
         _welcome = null;
@@ -298,7 +346,7 @@ public sealed class InternetSession : ISessionController
         if (version != InternetWire.Version)
         {
             if (type is InternetWire.Type.Hello or InternetWire.Type.PairStart)
-                Send(socket, InternetWire.Plain(InternetWire.Type.Reject, [(byte)InternetWire.RejectReason.WrongVersion]), from);
+                Send(socket, InternetWire.Plain(InternetWire.Type.Reject, [(byte)InternetWire.RejectReason.WrongVersion, .. PeerVersion.Own()]), from);
             return;
         }
         var payload = data.AsSpan(InternetWire.HeaderSize);
@@ -341,6 +389,7 @@ public sealed class InternetSession : ISessionController
                     _lastInputUtc = DateTime.UtcNow;
                     if (!_sessionActive)
                     {
+                        if (DateTime.UtcNow - _endedByPcUtc < EndedByPcGrace) return; // leftovers of the ended session
                         _sessionActive = true;
                         started = input;
                     }
@@ -351,6 +400,9 @@ public sealed class InternetSession : ISessionController
                 return;
             case InternetWire.Type.Keepalive:
                 SendSealed(socket, InternetWire.Type.KeepaliveAck, [], from);
+                return;
+            case InternetWire.Type.ClientControl when plain.Length >= 1:
+                ControlReceived?.Invoke((ControlWire.ClientMessage)plain[0], plain[1..]);
                 return;
             case InternetWire.Type.LibReply when plain.Length >= 12:
                 lock (_lock)
@@ -388,6 +440,20 @@ public sealed class InternetSession : ISessionController
         var deviceId = payload[..InternetWire.DeviceIdSize].ToArray();
         var switchNonce = payload.Slice(InternetWire.DeviceIdSize, InternetCrypto.NonceSize).ToArray();
 
+        // Protocol 1.1 appends its version (PeerVersion wire form); a 0.2.4 Switch's Hello ends here.
+        var versionAt = InternetWire.DeviceIdSize + InternetCrypto.NonceSize;
+        var version = payload.Length >= versionAt + PeerVersion.WireSize
+            ? PeerVersion.Read(payload.Slice(versionAt, PeerVersion.WireSize))
+            : PeerVersion.Legacy;
+        _compatibility.Report(version);
+        if (!version.Compatible)
+        {
+            // Another major protocol: a session would only show a black screen. The Reject carries
+            // this PC's version so the Switch can say which side to update.
+            Send(socket, InternetWire.Plain(InternetWire.Type.Reject, [(byte)InternetWire.RejectReason.WrongVersion, .. PeerVersion.Own()]), from);
+            return;
+        }
+
         var device = PairedDevices.Find(deviceId);
         if (device is null)
         {
@@ -419,6 +485,8 @@ public sealed class InternetSession : ISessionController
                 var keys = InternetCrypto.DeriveSessionKeys(device.Key, switchNonce, pcNonce);
                 ForgetPeer();
                 _peer = from;
+                _endedByPcUtc = DateTime.MinValue; // a fresh handshake: its input is a new session
+                _peerVersion = version;
                 _peerDeviceId = deviceId;
                 _peerNonce = switchNonce;
                 _toSwitch = new InternetCrypto.Channel(keys.EncryptPcToSwitch, keys.MacPcToSwitch);
@@ -429,7 +497,9 @@ public sealed class InternetSession : ISessionController
 
                 var hostId = Encoding.ASCII.GetBytes(_config.HostId);
                 byte[] aad = [.. InternetWire.Header(InternetWire.Type.Welcome), .. pcNonce, .. hostId];
-                _welcome = _toSwitch.Seal(1, aad, SessionController.BuildSessionConfig(_config).ToBytes());
+                // The SessionConfig, then (1.1) this PC's version - a 0.2.4 Switch reads the config and
+                // ignores the rest.
+                _welcome = _toSwitch.Seal(1, aad, [.. SessionController.BuildSessionConfig(_config).ToBytes(), .. PeerVersion.Own()]);
                 welcome = _welcome;
                 Logger.Log("InternetSession", $"'{device.Name}' connected from {from}");
             }

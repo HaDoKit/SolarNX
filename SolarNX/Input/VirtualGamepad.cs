@@ -75,6 +75,10 @@ public sealed class VirtualGamepadHub : IDisposable
         GameBarSuppressor.Disable();
     }
 
+    /// <summary>A game set a virtual pad's motors: player index 0-3, large motor, small motor (0-255).
+    /// Raised on ViGEm's callback thread (Xbox360) or the pad's output-report thread (DualShock4).</summary>
+    public event Action<int, byte, byte>? RumbleChanged;
+
     public void Apply(HidPacket packet)
     {
         var count = Math.Clamp((int)packet.ControllerCount, 0, 4);
@@ -115,6 +119,9 @@ public sealed class VirtualGamepadHub : IDisposable
     private IXbox360Controller PlugInXbox360(int id)
     {
         var pad = _client.CreateXbox360Controller();
+        // Not obsolete for Xbox360 (unlike DS4's, see PlugInDs4) - the driver's own XInput
+        // SetState notifications, one per change.
+        pad.FeedbackReceived += (_, e) => RumbleChanged?.Invoke(id - 1, e.LargeMotor, e.SmallMotor);
         pad.Connect();
         Logger.Log("VirtualGamepad", $"controller {id} connected via ViGEmBus (Xbox360)");
         return pad;
@@ -128,8 +135,9 @@ public sealed class VirtualGamepadHub : IDisposable
         pad.Connect();
         Logger.Log("VirtualGamepad", $"controller {id} connected via ViGEmBus (DualShock4)");
 
-        // Rumble/lightbar-color output reports have nowhere to go (no haptics on the Switch side to
-        // forward them to) - but they still need to be actively consumed. Suspected root cause of a
+        // Output reports (rumble, lightbar colour) must be actively consumed - since 0.2.5 the motor
+        // levels are forwarded to the Switch's HD rumble (RumbleChanged), the rest is still dropped.
+        // Suspected root cause of a
         // confirmed live regression (video stutter/artifacts tied to WSAENOBUFS - UDP send buffer
         // exhaustion - specifically in DualShock4 mode): a game continuously sending output reports
         // (e.g. per-frame lightbar color) with nothing on this end ever reading them could back up
@@ -150,7 +158,7 @@ public sealed class VirtualGamepadHub : IDisposable
         // in the same run, well past when this specific DS4 session had already ended.
         var cts = new CancellationTokenSource();
         _ds4DrainCts[id] = cts;
-        var thread = new Thread(() => DrainDs4OutputReports(pad, id, cts.Token))
+        var thread = new Thread(() => DrainDs4OutputReports(pad, id, cts.Token, (large, small) => RumbleChanged?.Invoke(id - 1, large, small)))
         {
             IsBackground = true,
             Name = $"Ds4OutputDrain-{id}",
@@ -160,7 +168,7 @@ public sealed class VirtualGamepadHub : IDisposable
         return pad;
     }
 
-    private static void DrainDs4OutputReports(IDualShock4Controller pad, int id, CancellationToken ct)
+    private static void DrainDs4OutputReports(IDualShock4Controller pad, int id, CancellationToken ct, Action<byte, byte> onRumble)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -168,12 +176,11 @@ public sealed class VirtualGamepadHub : IDisposable
             {
                 // Bounded per-call wait (not the no-arg overload, which blocks indefinitely) so this
                 // loop notices cancellation within ~500ms of Disconnect() instead of potentially
-                // blocking forever on a device that's already gone.
-                foreach (var _ in pad.AwaitRawOutputReport(500, out _))
-                {
-                    if (ct.IsCancellationRequested) break;
-                    // discarded - draining is the point, see PlugInDs4's comment
-                }
+                // blocking forever on a device that's already gone. Draining is still the main point
+                // (see PlugInDs4's comment); the motor levels are picked out on the way.
+                var report = pad.AwaitRawOutputReport(500, out var timedOut).ToArray();
+                if (!timedOut && TryParseDs4Rumble(report, out var large, out var small))
+                    onRumble(large, small);
             }
             catch (Exception ex)
             {
@@ -182,6 +189,20 @@ public sealed class VirtualGamepadHub : IDisposable
                 break;
             }
         }
+    }
+
+    // The raw report is whatever the game wrote to the pad: the USB output report 0x05 (flags at 1,
+    // weak/right motor at 4, strong/left at 5 - SDL's and DS4Windows' layout) or the Bluetooth one
+    // 0x11 (the same three, 2 bytes later). Flag bit 0 = "the motor bytes are valid"; a report
+    // without it only changes the lightbar and leaves the motors as they were.
+    private static bool TryParseDs4Rumble(byte[] report, out byte large, out byte small)
+    {
+        large = small = 0;
+        var at = report is [0x05, ..] ? 1 : report is [0x11, ..] ? 3 : -1;
+        if (at < 0 || report.Length < at + 5 || (report[at] & 0x01) == 0) return false;
+        small = report[at + 3];
+        large = report[at + 4];
+        return true;
     }
 
     private void UnplugXbox360At(int id)

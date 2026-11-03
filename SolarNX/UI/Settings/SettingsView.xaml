@@ -63,6 +63,32 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Обновления -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Settings.Updates}" Style="{StaticResource CardHeader}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="{DynamicResource Settings.CheckUpdates}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                            <ui:ToggleSwitch x:Name="CheckUpdatesToggle" Grid.Column="1" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,10" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                       Text="{DynamicResource Settings.CheckUpdatesHint}" />
+                            <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                                <ui:Button x:Name="CheckNowButton" Content="{DynamicResource Settings.CheckNow}" Appearance="Secondary" Margin="0,0,12,0" />
+                                <TextBlock x:Name="UpdateStatusText" Foreground="White" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
                 <!-- Подключение -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
@@ -74,6 +100,20 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{DynamicResource Settings.Mode}" Style="{StaticResource FieldLabel}" />
                             <ComboBox x:Name="ConnectionModeCombo" Grid.Column="1" />
+                        </Grid>
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="{DynamicResource Settings.TrafficPriority}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                            <ui:ToggleSwitch x:Name="TrafficPriorityToggle" Grid.Column="1" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                       Text="{DynamicResource Settings.TrafficPriorityHint}" />
                         </Grid>
                         <Grid x:Name="InternetPanel">
                             <Grid.ColumnDefinitions>
@@ -159,6 +199,21 @@
                             <ui:ToggleSwitch x:Name="AdaptiveBitrateToggle" Grid.Column="1" HorizontalAlignment="Left" />
                         </Grid>
 
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="{DynamicResource Settings.NvencAdaptive}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                            <ui:ToggleSwitch x:Name="NvencAdaptiveToggle" Grid.Column="1" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                       Text="{DynamicResource Settings.NvencAdaptiveHint}" />
+                        </Grid>
+
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="170" />
@@ -205,12 +260,63 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <TextBlock Text="{DynamicResource Settings.SwitchLayout}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
                             <ui:ToggleSwitch x:Name="SwitchLayoutToggle" Grid.Column="1" HorizontalAlignment="Left" />
                             <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
                                        Text="{DynamicResource Settings.SwitchLayoutHint}" />
+                            <TextBlock Grid.Row="2" Margin="0,14,0,0" Text="{DynamicResource Settings.Rumble}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                            <ui:ToggleSwitch x:Name="RumbleToggle" Grid.Row="2" Grid.Column="1" Margin="0,14,0,0" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                       Text="{DynamicResource Settings.RumbleHint}" />
                         </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Отладка -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Settings.Debug}" Style="{StaticResource CardHeader}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="{DynamicResource Settings.DebugMode}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                            <ui:ToggleSwitch x:Name="DebugModeToggle" Grid.Column="1" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                       Text="{DynamicResource Settings.DebugModeHint}" />
+                        </Grid>
+                        <StackPanel x:Name="NvencPanel" Margin="0,14,0,0">
+                            <Grid Style="{StaticResource Row}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{DynamicResource Settings.NvencPreset}" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="NvencPresetCombo" Grid.Column="1" />
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{DynamicResource Settings.NvencTune}" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="NvencTuneCombo" Grid.Column="1" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                           Text="{DynamicResource Settings.NvencHint}" />
+                            </Grid>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
