@@ -55,6 +55,8 @@ static Frame *s_a = &s_slots[0];
 static Frame *s_b = &s_slots[1];
 static bool s_haveExpected = false;
 static uint32_t s_expected;
+// 2: expected + next (Internet mode). 1: one frame at a time, as in 0.2.4 (Wi-Fi) - see reassembly.h.
+static int32_t s_window = 2;
 
 static bool s_needKeyframe = true;
 static ReassemblyStats s_stats;
@@ -104,8 +106,10 @@ void reassemblyExit(void)
     }
 }
 
-void reassemblyReset(void)
+void reassemblyReset(bool reorderWindow)
 {
+    s_window = reorderWindow ? 2 : 1;
+    memset(s_lostValid, 0, sizeof(s_lostValid)); // the last stream's numbers mean nothing in the next one
     s_a->active = false;
     s_b->active = false;
     s_haveExpected = false;
@@ -242,9 +246,9 @@ static Frame *slotFor(uint32_t number, uint32_t size, int blockCount, bool keyfr
             s_stats.datagramsLate++; // a frame given up on - the reordering outran the window
         return NULL; // otherwise: redundant parity of a frame already handed out
     }
-    while (distance >= 2)
+    while (distance >= s_window)
     {
-        giveUpExpected(); // a frame two ahead is here: the expected one won't complete any more
+        giveUpExpected(); // a frame past the window is here: the expected one won't complete any more
         distance--;
     }
 

@@ -172,6 +172,11 @@ public sealed class InternetSession : ISessionController
             _socket = new UdpClient(new IPEndPoint(IPAddress.Any, Port));
             _videoRelay = new UdpClient(new IPEndPoint(IPAddress.Loopback, VideoRelayPort));
             _audioRelay = new UdpClient(new IPEndPoint(IPAddress.Loopback, AudioRelayPort));
+            // The default ~64KB held a quarter of a keyframe: VideoSender's datagrams come faster than
+            // the relay seals them, and the overflow was dropped right here on loopback - counted on
+            // the Switch as ordinary losses. Same for the outgoing side of the shared socket.
+            _videoRelay.Client.ReceiveBufferSize = 4 * 1024 * 1024;
+            _socket.Client.SendBufferSize = 1024 * 1024;
             // A datagram the Switch couldn't take (ICMP port unreachable) must not kill the receive
             // loop: on Windows it surfaces as a ConnectionReset on the next ReceiveAsync.
             const int SioUdpConnReset = -1744830452;

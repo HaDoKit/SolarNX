@@ -18,6 +18,7 @@
 #include <libavutil/pixfmt.h>
 
 #include "../network/network.h"
+#include "../settings/settings.h"
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
 #include "reassembly.h"
@@ -535,7 +536,7 @@ static void runStreamSession(void)
     if (sock < 0)
         return;
 
-    reassemblyReset();
+    reassemblyReset(settingsGetConnectionMode() == SettingsConnection_Internet);
     DecodeJob job = { sock };
     Thread decodeThread;
     if (R_FAILED(threadCreate(&decodeThread, decodeThreadFunc, &job, NULL,
