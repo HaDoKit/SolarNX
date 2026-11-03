@@ -25,6 +25,11 @@ namespace SolarNX.Capture;
 /// router's or access point's queue and loses a burst in the first place. Ordinary frames go out
 /// at once - pacing them would add its delay to every frame.
 ///
+/// Internet mode spreads every frame instead (see <see cref="SpreadFrame"/>): there even an
+/// ordinary frame's 10-40 datagrams back to back, and a keyframe's 100-200 within 4ms, met a
+/// router's or the ISP's shaper and lost runs of datagrams longer than the parity covers - "frames
+/// lost" with few datagrams rebuilt, at any bitrate. Wi-Fi keeps the behaviour above unchanged.
+///
 /// Wire format - every datagram is <see cref="HeaderSize"/> + <see cref="ShardSize"/> bytes,
 /// little-endian, mirrored by the Switch's Client/video/videowire.h:
 ///   0  u8  magic 0x53 ('S')         8  u32 frame number (starts random, +1 per frame)
@@ -75,6 +80,8 @@ public sealed class VideoSender : IDisposable
     private readonly Socket _sendSocket;
     private readonly IDisposable? _qosFlow;
     private readonly TimeSpan _paceWindow;
+    private readonly bool _internet;
+    private readonly double _frameIntervalSeconds;
     private readonly Thread _thread;
     private volatile bool _stopping;
 
@@ -96,12 +103,15 @@ public sealed class VideoSender : IDisposable
     /// <param name="target">The Switch's video port (Wi-Fi) or the Internet relay on loopback.</param>
     /// <param name="fps">Stream frame rate - the pacing window is a quarter of a frame.</param>
     /// <param name="codec">What ffmpeg encodes - decides the RTP payload format.</param>
-    /// <param name="parityRatio">Parity shards per data shard - <see cref="ParityRatioWifi"/> or
-    /// <see cref="ParityRatioInternet"/>.</param>
-    public VideoSender(IPEndPoint target, int fps, VideoCodec codec, double parityRatio = ParityRatioWifi)
+    /// <param name="internet">Internet mode: <see cref="ParityRatioInternet"/> and every frame spread
+    /// over the frame interval. Otherwise <see cref="ParityRatioWifi"/> and the Wi-Fi pacing.</param>
+    public VideoSender(IPEndPoint target, int fps, VideoCodec codec, bool internet = false)
     {
+        var parityRatio = internet ? ParityRatioInternet : ParityRatioWifi;
+        _internet = internet;
+        _frameIntervalSeconds = 1.0 / Math.Max(1, fps);
         _parityRatio = parityRatio;
-        _minParityShards = parityRatio > ParityRatioWifi ? 4 : 2;
+        _minParityShards = internet ? 4 : 2;
         _hevc = codec == VideoCodec.Hevc;
         _paceWindow = TimeSpan.FromMilliseconds(Math.Min(4.0, 1000.0 / Math.Max(1, fps) / 4));
 
@@ -119,7 +129,7 @@ public sealed class VideoSender : IDisposable
 
         _thread = new Thread(Run) { IsBackground = true, Name = "VideoSender", Priority = ThreadPriority.Highest };
         _thread.Start();
-        Logger.Log("VideoSender", $"{EncoderSelection.DisplayName(codec)} RTP in on 127.0.0.1:{RtpPort}, frames out to {target}, pacing over {_paceWindow.TotalMilliseconds:0.#}ms, parity {parityRatio:P0}");
+        Logger.Log("VideoSender", $"{EncoderSelection.DisplayName(codec)} RTP in on 127.0.0.1:{RtpPort}, frames out to {target}, {(internet ? $"every frame spread over {SpreadOrdinary * _frameIntervalSeconds * 1000:0.#}ms (keyframes {SpreadKeyframe * _frameIntervalSeconds * 1000:0.#}ms)" : $"pacing over {_paceWindow.TotalMilliseconds:0.#}ms")}, parity {parityRatio:P0}");
     }
 
     /// <summary>The loopback port ffmpeg's RTP output goes to.</summary>
@@ -354,6 +364,7 @@ public sealed class VideoSender : IDisposable
 
         var total = dataShards + parityTotal;
         var paced = total > PaceAbovePackets;
+        var spreadSeconds = _frameIntervalSeconds * (_frameKeyframe ? SpreadKeyframe : SpreadOrdinary);
         var start = Stopwatch.GetTimestamp();
         var sent = 0;
         for (var shard = 0; shard < maxShardsInBlock; shard++)
@@ -369,7 +380,9 @@ public sealed class VideoSender : IDisposable
                 header[6] = (byte)blockParity[b];
                 source.CopyTo(_datagram.AsSpan(HeaderSize));
 
-                if (paced && sent > 0 && sent % PaceGroupPackets == 0)
+                if (_internet)
+                    SpreadFrame(start, sent, total, spreadSeconds);
+                else if (paced && sent > 0 && sent % PaceGroupPackets == 0)
                     WaitUntil(start, _paceWindow * ((double)sent / total));
                 Send();
                 sent++;
@@ -394,6 +407,30 @@ public sealed class VideoSender : IDisposable
         {
             // ICMP "port unreachable" from a Switch that isn't listening yet, or a full send buffer:
             // UDP, the datagram is simply gone - the parity or the next keyframe covers it.
+        }
+    }
+
+    // Internet mode: an ordinary frame over 3/4 of the frame interval, so it is out before the next
+    // one comes; a keyframe (several times bigger, every half second) over two intervals - the frame
+    // after it then leaves up to a frame later, once per keyframe. At 6Mbps that is ~5-50Mbps at the
+    // peaks instead of a few hundred.
+    private const double SpreadOrdinary = 0.75;
+    private const double SpreadKeyframe = 2.0;
+    // Sent together before the next check - with 1ms sleeps the schedule is kept in steps of ~1ms anyway.
+    private const int SpreadBurstPackets = 4;
+
+    // Waits until datagram `sent` of `total` is due on a straight line over `seconds` from `start`.
+    // Sleeps only (1ms with TimerResolution during a session) - spinning would burn most of a core
+    // for the whole frame interval, every frame. A sleep that overshoots is made up by the next
+    // check letting more datagrams through.
+    private static void SpreadFrame(long start, int sent, int total, double seconds)
+    {
+        while (true)
+        {
+            var elapsed = (double)(Stopwatch.GetTimestamp() - start) / Stopwatch.Frequency;
+            var allowed = SpreadBurstPackets + total * Math.Min(1.0, elapsed / seconds);
+            if (sent < allowed) return;
+            Thread.Sleep(1);
         }
     }
 

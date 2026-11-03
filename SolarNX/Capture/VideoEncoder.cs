@@ -139,7 +139,7 @@ public sealed class VideoEncoder : IDisposable
         ActiveCodec = codec;
         var pixelFormat = EncoderSelection.PixelFormat(encoder);
         _sender = new VideoSender(switchEndpoint, _config.Fps, codec,
-            _config.ConnectionMode == Session.ConnectionMode.Internet ? VideoSender.ParityRatioInternet : VideoSender.ParityRatioWifi);
+            internet: _config.ConnectionMode == Session.ConnectionMode.Internet);
         _sender.WindowFps += fps => OutputFps?.Invoke(fps);
         // RTP over plain udp:// (not rtp://, which would also send RTCP to a second port nobody
         // listens on). Loopback has no 1500-byte MTU: big packets keep a frame to a few datagrams.
