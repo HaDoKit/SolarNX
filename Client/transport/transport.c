@@ -19,6 +19,7 @@
 #include "../library/library.h"
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
+#include "../control/control.h"
 
 #define WIRE_MAGIC     0x55584E53u // "SNXU"
 #define WIRE_VERSION   2
@@ -47,6 +48,9 @@ enum {
     TYPE_PAIR_RESULT = 17,
     TYPE_KEEPALIVE = 18,
     TYPE_KEEPALIVE_ACK = 19,
+    TYPE_PUNCH = 20,          // PC -> PC's own NAT only; never handled here
+    TYPE_CONTROL = 21,        // protocol 1.1: PC -> here, u8 type + payload (control/control.h)
+    TYPE_CLIENT_CONTROL = 22, // protocol 1.1: here -> PC
 };
 
 enum {
@@ -368,9 +372,11 @@ static void handlePairResult(const uint8_t *payload, size_t length)
 
 static void sendHello(void)
 {
-    uint8_t payload[WIRE_DEVICE_ID + CRYPTO_NONCE_SIZE];
+    // Protocol 1.1 appends this side's version; a 0.2.4 PC reads the first 32 bytes and ignores it.
+    uint8_t payload[WIRE_DEVICE_ID + CRYPTO_NONCE_SIZE + CONTROL_VERSION_WIRE_SIZE];
     settingsGetDeviceId(payload);
     memcpy(payload + WIRE_DEVICE_ID, s_switchNonce, CRYPTO_NONCE_SIZE);
+    controlWriteOwnVersion(payload + WIRE_DEVICE_ID + CRYPTO_NONCE_SIZE);
     sendPlain(TYPE_HELLO, payload, sizeof(payload));
 }
 
@@ -394,6 +400,20 @@ static void handleWelcome(const uint8_t *packet, size_t length)
     long size = cryptoOpen(s_plain, keys.encPcToSwitch, keys.macPcToSwitch, packet, length, aadSize, &counter);
     if (size < (long)sizeof(SolarNxSessionConfig))
         return; // not from our PC (or for an older Hello) - keep saying hello
+
+    // The session config, then (1.1) the PC's version; a 0.2.4 PC's Welcome ends after the config.
+    PcVersion pc = {.known = true, .legacy = true, .major = 1, .minor = 0};
+    strcpy(pc.appVersion, "?");
+    if (size >= (long)(sizeof(SolarNxSessionConfig) + CONTROL_VERSION_WIRE_SIZE))
+        controlReadVersion(s_plain + sizeof(SolarNxSessionConfig), &pc);
+    controlSetPcVersion(&pc);
+    if (controlPcIncompatible())
+    {
+        // Another major protocol: streaming would show nothing. Stay unconnected - the menu says
+        // which side to update.
+        atomic_store(&s_status, TransportStatus_WrongVersion);
+        return;
+    }
 
     SolarNxSessionConfig config;
     memcpy(&config, s_plain, sizeof(config));
@@ -469,6 +489,10 @@ static void handleSealed(uint8_t type, const uint8_t *packet, size_t length)
             sendSealed(TYPE_LIB_REPLY, reply, sizeof(reply));
         }
         break;
+    case TYPE_CONTROL:
+        if (size >= 1)
+            controlHandleHostMessage(payload[0], payload + 1, (size_t)size - 1);
+        break;
     case TYPE_LIB_CHUNK:
         if (size >= 16)
         {
@@ -512,6 +536,13 @@ static void handleDatagram(const uint8_t *data, size_t length)
     case TYPE_REJECT:
         if (payloadLength >= 1)
         {
+            // 1.1: a WrongVersion carries the PC's version - the menu can then say which side to update.
+            if (payload[0] == REJECT_WRONG_VERSION && payloadLength >= 1 + CONTROL_VERSION_WIRE_SIZE)
+            {
+                PcVersion pc;
+                controlReadVersion(payload + 1, &pc);
+                controlSetPcVersion(&pc);
+            }
             int status = payload[0] == REJECT_NOT_PAIRED ? TransportStatus_NotPaired
                 : payload[0] == REJECT_BUSY ? TransportStatus_Busy
                 : payload[0] == REJECT_PAIRING_CLOSED ? TransportStatus_PairingClosed
@@ -901,6 +932,17 @@ bool transportSendInput(const SolarNxHidPacket *pkt)
     if (svcGetSystemTick() - atomic_load(&s_lastValidFromPc) > PC_SILENT_END)
         return false;
     return sendSealed(TYPE_INPUT, pkt, sizeof(*pkt));
+}
+
+bool transportSendControl(uint8_t type, const void *payload, size_t length)
+{
+    uint8_t data[1 + CONTROL_MAX_PAYLOAD];
+    if (length > CONTROL_MAX_PAYLOAD)
+        return false;
+    data[0] = type;
+    if (length > 0)
+        memcpy(data + 1, payload, length);
+    return sendSealed(TYPE_CLIENT_CONTROL, data, 1 + length);
 }
 
 void transportEndSession(void)

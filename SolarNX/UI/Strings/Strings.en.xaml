@@ -32,6 +32,11 @@
     <sys:String x:Key="Home.StatusStreamingTarget">Status: client connected, streaming — {0}</sys:String>
     <sys:String x:Key="Home.StatusWaitingInternet">Status: waiting for the Switch over the internet (UDP {0})…</sys:String>
     <sys:String x:Key="Home.StatusWaiting">Status: waiting for the client to connect…</sys:String>
+    <sys:String x:Key="Home.CompatLegacy">The Switch has an older SolarNX (0.2.4 or earlier). It works without the new features - rumble and debug mode. Update the app on the Switch.</sys:String>
+    <sys:String x:Key="Home.CompatSwitchOlder">The Switch has SolarNX {0}. It works without the features it doesn't have yet. Update the app on the Switch.</sys:String>
+    <sys:String x:Key="Home.CompatSwitchNewer">The Switch has SolarNX {0} - newer than this program. It works without its new features. Update SolarNX on the PC.</sys:String>
+    <sys:String x:Key="Home.CompatUpdateSwitch">The Switch has SolarNX {0}, which is incompatible with this version. Streaming won't start: update the app on the Switch.</sys:String>
+    <sys:String x:Key="Home.CompatUpdatePc">The Switch has SolarNX {0}, which is incompatible with this version. Streaming won't start: update SolarNX on the PC.</sys:String>
     <sys:String x:Key="Home.ShowScreen">Show screen</sys:String>
     <sys:String x:Key="Home.EnterIpFirst">Enter the client IP first.</sys:String>
 

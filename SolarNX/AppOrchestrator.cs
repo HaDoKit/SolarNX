@@ -79,8 +79,13 @@ public sealed class AppOrchestrator : IDisposable
         _gamepads.SwapAbxy = config.SwitchButtonLayout;
         _session = CreateSession();
         _adaptiveBitrate = new AdaptiveBitrateController(config, ApplyAdaptiveBitrate);
-        _libraryPusher = new LibraryPusher(config, _library, AdoptSwitchButtonLayout, () => _session as InternetSession);
+        _libraryPusher = new LibraryPusher(config, _library, AdoptSwitchButtonLayout, () => _session as InternetSession, Compatibility);
     }
+
+    /// <summary>What the Switch said about its version (library channel, Internet Hello, session
+    /// Hello) and how it relates to this PC's - the home screen shows it, a different major protocol
+    /// blocks sessions.</summary>
+    public SwitchCompatibility Compatibility { get; } = new();
 
     /// <summary>The host-side game library, for the UI's library screen.</summary>
     public GameLibrary Library => _library;
@@ -174,8 +179,8 @@ public sealed class AppOrchestrator : IDisposable
     private ISessionController CreateSession()
     {
         ISessionController session = _config.ConnectionMode == ConnectionMode.Internet
-            ? new InternetSession(_config)
-            : new SessionController(_config);
+            ? new InternetSession(_config, Compatibility)
+            : new SessionController(_config, Compatibility);
         session.SessionStarted += OnSessionStarted;
         session.SessionStopped += OnSessionStopped;
         session.PacketReceived += OnPacketReceived;
