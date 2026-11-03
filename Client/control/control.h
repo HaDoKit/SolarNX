@@ -31,7 +31,10 @@
 typedef enum {
     HostMessage_Hello = 1, // CONTROL_VERSION_WIRE_SIZE bytes: the PC's protocol and app version
     HostMessage_Rumble = 2, // 8 bytes: per player 1-4, u8 large motor, u8 small motor (input.c)
+    HostMessage_Options = 3, // 4 bytes: u8 flags (CONTROL_OPTION_*), u8[3] zero
 } HostMessage;
+
+#define CONTROL_OPTION_TRAFFIC_PRIORITY 0x01 // mark this side's input packets DSCP EF (network.c)
 
 typedef enum {
     ClientMessage_Hello = 1, // CONTROL_VERSION_WIRE_SIZE bytes: this side's protocol and app version
@@ -77,6 +80,8 @@ void controlSessionReset(void);
 bool controlPeerReady(void);
 // Internet mode: the Welcome carried the PC's version instead of a Hello - same effect.
 void controlAssumePeerReady(void);
+// The last Options flags from the PC (0 before any). Any thread.
+uint8_t controlOptions(void);
 // A message from the PC (network.c for Wi-Fi, transport.c for Internet). Any thread.
 void controlHandleHostMessage(uint8_t type, const uint8_t *payload, size_t length);
 

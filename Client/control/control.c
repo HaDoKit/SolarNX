@@ -10,6 +10,7 @@
 static Mutex s_mutex;
 static PcVersion s_pc;          // what the PC last said about itself
 static bool s_peerReady = false; // the PC said Hello in this session
+static uint8_t s_options = 0;    // the PC's last Options flags
 
 // Outgoing messages, filled from any thread and drained by the HID thread (it alone writes the
 // HID socket / sends Internet input, so frames never interleave). Small on purpose: these are rare
@@ -121,6 +122,14 @@ void controlSessionReset(void)
     mutexUnlock(&s_mutex);
 }
 
+uint8_t controlOptions(void)
+{
+    mutexLock(&s_mutex);
+    uint8_t options = s_options;
+    mutexUnlock(&s_mutex);
+    return options;
+}
+
 bool controlPeerReady(void)
 {
     mutexLock(&s_mutex);
@@ -155,6 +164,14 @@ void controlHandleHostMessage(uint8_t type, const uint8_t *payload, size_t lengt
             s_peerReady = supportsControl(&pc);
             mutexUnlock(&s_mutex);
             logWrite("control", "the PC says hello: SolarNX %s", pc.appVersion);
+        }
+        break;
+    case HostMessage_Options:
+        if (length >= 1)
+        {
+            mutexLock(&s_mutex);
+            s_options = payload[0];
+            mutexUnlock(&s_mutex);
         }
         break;
     case HostMessage_Rumble:

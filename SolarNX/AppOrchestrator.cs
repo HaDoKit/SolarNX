@@ -79,6 +79,7 @@ public sealed class AppOrchestrator : IDisposable
         _gamepads.SwapAbxy = config.SwitchButtonLayout;
         _session = CreateSession();
         _gamepads.RumbleChanged += OnGameRumble;
+        Native.QosMarking.Enabled = config.TrafficPriority;
         _adaptiveBitrate = new AdaptiveBitrateController(config, ApplyAdaptiveBitrate);
         _libraryPusher = new LibraryPusher(config, _library, AdoptSwitchButtonLayout, () => _session as InternetSession, Compatibility);
     }
@@ -100,6 +101,27 @@ public sealed class AppOrchestrator : IDisposable
             levels = (byte[])_rumble.Clone();
         }
         _session.SendControl(ControlWire.HostMessage.Rumble, levels);
+    }
+
+    // The Switch said Hello: from now on it takes control messages - tell it the current options.
+    private void OnControlReceived(ControlWire.ClientMessage type, byte[] payload)
+    {
+        if (type == ControlWire.ClientMessage.Hello) SendOptions();
+    }
+
+    private void SendOptions()
+    {
+        var flags = ControlWire.OptionFlags.None;
+        if (_config.TrafficPriority) flags |= ControlWire.OptionFlags.TrafficPriority;
+        _session.SendControl(ControlWire.HostMessage.Options, [(byte)flags, 0, 0, 0]);
+    }
+
+    /// <summary>The settings' traffic-priority toggle: new sockets (the next encoder start) and the
+    /// Switch's input follow it; the running video/audio sockets keep their mark until then.</summary>
+    public void TrafficPrioritySettingChanged()
+    {
+        Native.QosMarking.Enabled = _config.TrafficPriority;
+        SendOptions();
     }
 
     /// <summary>The settings' rumble toggle: turning it off stops whatever is vibrating now.</summary>
@@ -212,6 +234,7 @@ public sealed class AppOrchestrator : IDisposable
         session.SessionStarted += OnSessionStarted;
         session.SessionStopped += OnSessionStopped;
         session.PacketReceived += OnPacketReceived;
+        session.ControlReceived += OnControlReceived;
         return session;
     }
 

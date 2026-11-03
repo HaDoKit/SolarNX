@@ -50,6 +50,7 @@ public sealed class AudioCaptureSender : IDisposable
     private volatile bool _stopping;
 
     private UdpClient? _udpClient;
+    private IDisposable? _qosFlow; // DSCP mark on _udpClient (Native/QosMarking)
     private WaveFileWriter? _debugWriter;
     private IOpusEncoder? _opusEncoder;
     private RtpPacketizer? _rtpPacketizer;
@@ -88,6 +89,7 @@ public sealed class AudioCaptureSender : IDisposable
                 _udpClient.Connect("127.0.0.1", Session.InternetSession.AudioRelayPort);
             else
                 _udpClient.Connect(_config.ClientIp, _config.AudioPort);
+            _qosFlow = Native.QosMarking.Mark(_udpClient.Client, Native.QosMarking.DscpInteractive, "audio");
             // OpusCodecFactory (not the OpusEncoder constructor directly) - lets Concentus pick a
             // native implementation if the platform supports one, falling back to its pure-managed
             // encoder otherwise; the constructor-based API is obsolete precisely because it always
@@ -324,6 +326,8 @@ public sealed class AudioCaptureSender : IDisposable
         try { (_pcmSource as IDisposable)?.Dispose(); } catch { /* best-effort teardown */ }
         try { _capture?.Dispose(); } catch { /* best-effort teardown */ }
         try { _opusEncoder?.Dispose(); } catch { /* best-effort teardown */ }
+        try { _qosFlow?.Dispose(); } catch { /* best-effort teardown */ }
+        _qosFlow = null;
         try { _udpClient?.Dispose(); } catch { /* best-effort teardown */ }
         try { _debugWriter?.Dispose(); } catch { /* best-effort teardown */ }
 

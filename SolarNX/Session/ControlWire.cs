@@ -37,6 +37,18 @@ public static class ControlWire
         /// large = low frequency, small = high frequency). Sent when a value changes; the Switch keeps
         /// the last levels until the next message and stops on its own when the session ends.</summary>
         Rumble = 2,
+
+        /// <summary>4 bytes: u8 flags (<see cref="OptionFlags"/>), u8[3] zero. Sent when the Switch
+        /// said Hello and whenever one of them changes in the settings.</summary>
+        Options = 3,
+    }
+
+    [Flags]
+    public enum OptionFlags : byte
+    {
+        None = 0,
+        /// <summary>Mark the Switch's own input (HID) packets with DSCP EF.</summary>
+        TrafficPriority = 0x01,
     }
 
     public enum ClientMessage : byte

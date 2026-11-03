@@ -125,10 +125,13 @@ public sealed class SessionController : ISessionController
             // second the socket stayed open with nobody reading it, and the Switch could accept it as
             // a live session and send into the void until the host finally closed it.
             var client = new TcpClient();
+            IDisposable? qosFlow = null;
             try
             {
                 await client.ConnectAsync(_config.ClientIp, _config.HidPort, ct);
                 client.NoDelay = true;
+                // Our side carries only the control messages (rumble) - the Switch marks its input.
+                qosFlow = Native.QosMarking.Mark(client.Client, Native.QosMarking.DscpInteractive, "HID");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -160,6 +163,7 @@ public sealed class SessionController : ISessionController
             {
                 Logger.Log("SessionController", $"failed to send session config to {_config.ClientIp}: {ex.Message}");
                 _currentClient = null;
+                qosFlow?.Dispose();
                 client.Dispose();
                 try { await Task.Delay(1000, ct); } catch (TaskCanceledException) { }
                 continue;
@@ -200,6 +204,7 @@ public sealed class SessionController : ISessionController
                 _sessionPeer = null;
                 controlQueue.Writer.TryComplete();
                 _currentClient = null;
+                qosFlow?.Dispose();
                 client.Dispose(); // close now, before the retry delay - see the comment at `new TcpClient()`
                 try { await writer; } catch { /* the connection is gone anyway */ }
                 if (sessionStarted)

@@ -68,6 +68,7 @@ public sealed class VideoSender : IDisposable
     private readonly bool _hevc;
     private readonly Socket _rtpSocket;
     private readonly Socket _sendSocket;
+    private readonly IDisposable? _qosFlow;
     private readonly TimeSpan _paceWindow;
     private readonly Thread _thread;
     private volatile bool _stopping;
@@ -105,6 +106,7 @@ public sealed class VideoSender : IDisposable
         _sendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         _sendSocket.SendBufferSize = 1024 * 1024;
         _sendSocket.Connect(target); // UDP: only fixes the destination, nothing is sent
+        _qosFlow = Native.QosMarking.Mark(_sendSocket, Native.QosMarking.DscpVideo, "video");
 
         _thread = new Thread(Run) { IsBackground = true, Name = "VideoSender", Priority = ThreadPriority.Highest };
         _thread.Start();
@@ -418,6 +420,7 @@ public sealed class VideoSender : IDisposable
         _stopping = true;
         _rtpSocket.Dispose();
         _thread.Join(1000);
+        _qosFlow?.Dispose();
         _sendSocket.Dispose();
     }
 }
