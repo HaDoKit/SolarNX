@@ -55,6 +55,7 @@ typedef enum {
     DebugSetting_NvencPreset = 6,     // 0..6 = p1..p7
     DebugSetting_NvencTune = 7,       // 0 hq, 1 ll, 2 ull
     DebugSetting_TrafficPriority = 8, // 0/1
+    DebugSetting_AdaptivePreset = 9,  // 0/1 - a manual preset/tuning turns it off on the PC
 } DebugSetting;
 
 // The PC settings' fixed lists, in order (ControlWire.DebugResolutions / DebugFps,
@@ -70,6 +71,7 @@ extern const char *const kControlTunes[CONTROL_TUNE_COUNT];
 #define DEBUG_INFO_ADAPTIVE 0x01
 #define DEBUG_INFO_PRIORITY 0x02
 #define DEBUG_INFO_NVENC    0x04
+#define DEBUG_INFO_ADAPTIVE_PRESET 0x08
 
 // HostMessage_DebugInfo, decoded. seq goes up with every one received (the menu uses it to know its
 // change has been applied).
@@ -138,6 +140,8 @@ bool controlGetDebugInfo(ControlDebugInfo *out);
 // Debug mode: queues a Ping (HID thread, a couple of times a second); the Pong updates the round trip.
 void controlSendPing(void);
 uint32_t controlRttUs(void); // smoothed round trip to the PC and back, 0 = not measured yet
+// Rumble messages received so far (free-running) and the last levels (4 x large, small) - debug overlay.
+uint32_t controlRumbleStats(uint8_t levels[8]);
 // Debug menu: asks the PC to change a setting.
 void controlSendSetting(uint8_t setting, int32_t value);
 // A message from the PC (network.c for Wi-Fi, transport.c for Internet). Any thread.

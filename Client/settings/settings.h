@@ -68,6 +68,10 @@ void settingsSetServerKey(const char *key);
 void settingsGetPcId(char out[SETTINGS_HOST_ID_SIZE + 1]);
 void settingsSetPcId(const char *id);
 
+// Rumble from the PC's games on this console's controllers (default on) - X > Settings.
+bool settingsGetRumble(void);
+void settingsToggleRumble(void);
+
 SettingsLanguage settingsGetLanguage(void);
 // Auto -> Russian -> English -> Auto, saved; applies at once.
 void settingsCycleLanguage(void);

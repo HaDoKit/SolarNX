@@ -275,8 +275,8 @@ static void drawButtonLayoutHint(MenuContext *context)
 
 // --- Settings screen (X): Wi-Fi / experimental Internet mode, PC address, pairing, language ---
 
-#define CONNECTION_ROWS 7
-enum { ROW_MODE, ROW_ADDRESS, ROW_SERVER, ROW_SERVER_KEY, ROW_PC_ID, ROW_PAIR, ROW_LANGUAGE };
+#define CONNECTION_ROWS 8
+enum { ROW_MODE, ROW_ADDRESS, ROW_SERVER, ROW_SERVER_KEY, ROW_PC_ID, ROW_PAIR, ROW_LANGUAGE, ROW_RUMBLE };
 
 // The system keyboard applet; false if it couldn't be shown or the player cancelled.
 static bool editText(const char *header, const char *current, char *out, size_t size)
@@ -326,7 +326,7 @@ static void drawConnectionFrame(MenuContext *context, StarSystem *starSystem, in
 
     const char *labels[CONNECTION_ROWS] = {
         tr(Str_RowMode), tr(Str_RowAddress), tr(Str_RowServer), tr(Str_RowServerKey), tr(Str_RowPcId), tr(Str_RowPair),
-        tr(Str_RowLanguage),
+        tr(Str_RowLanguage), tr(Str_RowRumble),
     };
     const char *values[CONNECTION_ROWS] = {
         tr(mode == SettingsConnection_Internet ? Str_ModeInternet : Str_ModeWifi),
@@ -336,6 +336,7 @@ static void drawConnectionFrame(MenuContext *context, StarSystem *starSystem, in
         pcId[0] != '\0' ? pcId : tr(Str_NotSet),
         pairing,
         languageName,
+        tr(settingsGetRumble() ? Str_On : Str_Off),
     };
 
     const int rowX = 160, rowW = MENU_RESX - 320, rowH = 46, rowTop = 84, rowPitch = 52;
@@ -431,6 +432,10 @@ static void runConnectionScreen(MenuContext *context, StarSystem *starSystem, Pa
             else if (selected == ROW_LANGUAGE)
             {
                 settingsCycleLanguage();
+            }
+            else if (selected == ROW_RUMBLE)
+            {
+                settingsToggleRumble();
             }
             else if (transportGetStatus() != TransportStatus_Off)
             {

@@ -108,6 +108,12 @@ static const char *const kEnglish[Str_Count] = {
     [Str_DbgApplying] = " - applying...",
     [Str_On] = "on",
     [Str_Off] = "off",
+    [Str_RowRumble] = "Rumble",
+    [Str_DbgRumble] = "Rumble: ",
+    [Str_DbgRumbleOff] = "off on this Switch",
+    [Str_DbgCommands] = "   commands from the PC: ",
+    [Str_DbgAdaptivePreset] = "Adaptive NVENC preset",
+    [Str_DbgAuto2] = " (auto)",
 };
 
 static const char *const kRussian[Str_Count] = {
@@ -211,6 +217,12 @@ static const char *const kRussian[Str_Count] = {
     [Str_DbgApplying] = " — применяется…",
     [Str_On] = "вкл",
     [Str_Off] = "выкл",
+    [Str_RowRumble] = "Вибрация",
+    [Str_DbgRumble] = "Вибрация: ",
+    [Str_DbgRumbleOff] = "выключена на этом Switch",
+    [Str_DbgCommands] = "   команд с ПК: ",
+    [Str_DbgAdaptivePreset] = "Адаптивный пресет NVENC",
+    [Str_DbgAuto2] = " (авто)",
 };
 
 void langInit(void)

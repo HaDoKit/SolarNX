@@ -79,6 +79,7 @@ public sealed class AppOrchestrator : IDisposable
         _gamepads.SwapAbxy = config.SwitchButtonLayout;
         _session = CreateSession();
         _gamepads.RumbleChanged += OnGameRumble;
+        _adaptivePreset = new AdaptivePresetController(RestartForNvencStep);
         Native.QosMarking.Enabled = config.TrafficPriority;
         _adaptiveBitrate = new AdaptiveBitrateController(config, ApplyAdaptiveBitrate);
         _libraryPusher = new LibraryPusher(config, _library, AdoptSwitchButtonLayout, () => _session as InternetSession, Compatibility);
@@ -89,14 +90,81 @@ public sealed class AppOrchestrator : IDisposable
     /// <summary>Newer releases on GitHub - the home screen and the settings show them.</summary>
     public Update.UpdateChecker Updates { get; }
 
+    private readonly AdaptivePresetController _adaptivePreset;
+
+    // NVENC preset/tuning for the next encoder start: the adaptive ladder's step, or the manual setting.
+    private (string Preset, string Tune)? NvencForStart() => _config.NvencAdaptive ? _adaptivePreset.Current : null;
+
+    // A step of the adaptive preset: the same restart as the watchdog's - the running (possibly
+    // adaptive) bitrate carries over.
+    private void RestartForNvencStep(string reason)
+    {
+        _ = Task.Run(async () =>
+        {
+            await _pipelineGate.WaitAsync();
+            try
+            {
+                if (_pipelineActive) RestartVideoEncoder(reason);
+            }
+            finally
+            {
+                _pipelineGate.Release();
+            }
+        });
+    }
+
+    private void WatchEncoder(VideoEncoder encoder)
+    {
+        _adaptivePreset.EncoderStarted();
+        encoder.OutputFps += fps =>
+        {
+            if (_config.NvencAdaptive && encoder.ActiveEncoder == EncoderKind.Nvenc && ReferenceEquals(encoder, _videoEncoder))
+                _adaptivePreset.OnWindow(fps, _config.Fps);
+        };
+    }
+
     // The motor levels last sent to the Switch, per player (large, small) - only changes go out.
     private readonly byte[] _rumble = new byte[8];
     private readonly object _rumbleLock = new();
 
+    // A stop (0, 0) waits this long before it goes out, and is dropped if the motors are set again
+    // meanwhile. Some other XInput client on the PC (seen in a test: zeros between a game's own
+    // values) can reset the virtual pad's motors - forwarded as-is, a steady rumble turned into a
+    // stream of short jolts on the Switch.
+    private static readonly TimeSpan RumbleStopDelay = TimeSpan.FromMilliseconds(60);
+    private readonly int[] _rumbleGeneration = new int[4];
+
+    // Debug mode: how many rumble commands a player got, logged every 5s.
+    private readonly int[] _rumbleEvents = new int[4];
+    private readonly int[] _rumbleStops = new int[4];
+    private DateTime _rumbleLogUtc = DateTime.UtcNow;
+
     private void OnGameRumble(int player, byte large, byte small)
     {
         if (player is < 0 or > 3) return;
+        if (_config.DebugMode) CountRumble(player, large, small);
         if (!_config.Rumble) large = small = 0;
+
+        int generation;
+        lock (_rumbleLock)
+        {
+            generation = ++_rumbleGeneration[player];
+            if (large == 0 && small == 0 && (_rumble[player * 2] != 0 || _rumble[player * 2 + 1] != 0))
+            {
+                _ = Task.Delay(RumbleStopDelay).ContinueWith(_ =>
+                {
+                    lock (_rumbleLock)
+                        if (_rumbleGeneration[player] != generation) return; // set again meanwhile: not a real stop
+                    SetRumble(player, 0, 0);
+                }, TaskScheduler.Default);
+                return;
+            }
+        }
+        SetRumble(player, large, small);
+    }
+
+    private void SetRumble(int player, byte large, byte small)
+    {
         byte[] levels;
         lock (_rumbleLock)
         {
@@ -106,6 +174,26 @@ public sealed class AppOrchestrator : IDisposable
             levels = (byte[])_rumble.Clone();
         }
         _session.SendControl(ControlWire.HostMessage.Rumble, levels);
+    }
+
+    private void CountRumble(int player, byte large, byte small)
+    {
+        string? line = null;
+        lock (_rumbleLock)
+        {
+            _rumbleEvents[player]++;
+            if (large == 0 && small == 0) _rumbleStops[player]++;
+            var now = DateTime.UtcNow;
+            if (now - _rumbleLogUtc >= TimeSpan.FromSeconds(5))
+            {
+                line = string.Join(", ", Enumerable.Range(0, 4).Where(i => _rumbleEvents[i] > 0)
+                    .Select(i => $"player {i + 1}: {_rumbleEvents[i]} commands ({_rumbleStops[i]} stops), now {_rumble[i * 2]}/{_rumble[i * 2 + 1]}"));
+                Array.Clear(_rumbleEvents);
+                Array.Clear(_rumbleStops);
+                _rumbleLogUtc = now;
+            }
+        }
+        if (line is { Length: > 0 }) Logger.Log("Rumble", $"last 5s - {line}");
     }
 
     // The Switch said Hello: from now on it takes control messages - tell it the current options.
@@ -154,12 +242,14 @@ public sealed class AppOrchestrator : IDisposable
         info[14] = (byte)(_config.Codec == VideoCodec.H264 ? 1 : 0);
         info[15] = (byte)(running ?? EncoderKind.Auto);
         info[16] = (byte)(_config.AutoResolution ? 0 : Math.Max(0, Array.IndexOf(ControlWire.DebugResolutions, (_config.TargetWidth, _config.TargetHeight))) + 1);
-        info[17] = (byte)Math.Max(0, Array.IndexOf(EncoderSelection.NvencPresets, _config.NvencPreset));
-        info[18] = (byte)Math.Max(0, Array.IndexOf(EncoderSelection.NvencTunes, _config.NvencTune));
+        var nvenc = encoder?.ActiveNvenc ?? NvencForStart() ?? (_config.NvencPreset, _config.NvencTune);
+        info[17] = (byte)Math.Max(0, Array.IndexOf(EncoderSelection.NvencPresets, nvenc.Preset));
+        info[18] = (byte)Math.Max(0, Array.IndexOf(EncoderSelection.NvencTunes, nvenc.Tune));
         var flags = ControlWire.DebugInfoFlags.None;
         if (_config.AdaptiveBitrate) flags |= ControlWire.DebugInfoFlags.AdaptiveBitrate;
         if (_config.TrafficPriority) flags |= ControlWire.DebugInfoFlags.TrafficPriority;
         if (running == EncoderKind.Nvenc) flags |= ControlWire.DebugInfoFlags.Nvenc;
+        if (_config.NvencAdaptive) flags |= ControlWire.DebugInfoFlags.AdaptivePreset;
         info[19] = (byte)flags;
         info[32] = (byte)name.Length;
         name.CopyTo(info, 33);
@@ -195,9 +285,14 @@ public sealed class AppOrchestrator : IDisposable
                 break;
             case ControlWire.DebugSetting.NvencPreset when value >= 0 && value < EncoderSelection.NvencPresets.Length:
                 _config.NvencPreset = EncoderSelection.NvencPresets[value];
+                _config.NvencAdaptive = false; // a manual choice
                 break;
             case ControlWire.DebugSetting.NvencTune when value >= 0 && value < EncoderSelection.NvencTunes.Length:
                 _config.NvencTune = EncoderSelection.NvencTunes[value];
+                _config.NvencAdaptive = false;
+                break;
+            case ControlWire.DebugSetting.AdaptivePreset:
+                _config.NvencAdaptive = value != 0;
                 break;
             case ControlWire.DebugSetting.TrafficPriority:
                 _config.TrafficPriority = value != 0;
@@ -571,7 +666,8 @@ public sealed class AppOrchestrator : IDisposable
             }
 
             _videoEncoder = new VideoEncoder(_config);
-            _videoEncoder.Start(streamSize: CurrentStreamSize());
+            WatchEncoder(_videoEncoder);
+            _videoEncoder.Start(streamSize: CurrentStreamSize(), nvencOverride: NvencForStart());
             _adaptiveBitrate.Start(_config.BitrateKbps);
             SendDebugInfo();
 
@@ -647,7 +743,8 @@ public sealed class AppOrchestrator : IDisposable
             var carryOverWindow = captureWindowOverride ?? _videoEncoder?.CaptureWindow ?? IntPtr.Zero;
             _videoEncoder?.Stop();
             _videoEncoder = new VideoEncoder(_config);
-            _videoEncoder.Start(bitrateKbpsOverride: carryOverBitrate, captureWindow: carryOverWindow, streamSize: CurrentStreamSize());
+            WatchEncoder(_videoEncoder);
+            _videoEncoder.Start(bitrateKbpsOverride: carryOverBitrate, captureWindow: carryOverWindow, streamSize: CurrentStreamSize(), nvencOverride: NvencForStart());
             SendDebugInfo();
         }
         catch (Exception ex)
