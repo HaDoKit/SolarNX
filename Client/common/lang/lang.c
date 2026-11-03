@@ -114,6 +114,8 @@ static const char *const kEnglish[Str_Count] = {
     [Str_DbgCommands] = "   commands from the PC: ",
     [Str_DbgAdaptivePreset] = "Adaptive NVENC preset",
     [Str_DbgAuto2] = " (auto)",
+    [Str_RumbleStrong] = "strong only",
+    [Str_RumbleAll] = "all",
 };
 
 static const char *const kRussian[Str_Count] = {
@@ -223,6 +225,8 @@ static const char *const kRussian[Str_Count] = {
     [Str_DbgCommands] = "   команд с ПК: ",
     [Str_DbgAdaptivePreset] = "Адаптивный пресет NVENC",
     [Str_DbgAuto2] = " (авто)",
+    [Str_RumbleStrong] = "только сильная",
+    [Str_RumbleAll] = "вся",
 };
 
 void langInit(void)
