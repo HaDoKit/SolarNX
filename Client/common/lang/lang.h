@@ -114,7 +114,7 @@ typedef enum {
     Str_DbgCommands,
     Str_DbgAdaptivePreset,
     Str_DbgAuto2,
-    Str_RumbleStrong,
+    Str_RumbleLargeOnly,
     Str_RumbleAll,
 
     Str_Count

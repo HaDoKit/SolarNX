@@ -83,10 +83,13 @@ static RumbleStyle s_rumbleStyle[INPUT_MAX_CONTROLLERS];
 
 // HD rumble at full amplitude is harsh on a Joy-Con; XInput's 255 is "full", so it is scaled to this.
 #define RUMBLE_MAX_AMPLITUDE 0.8f
+// An Xbox pad's small motor is a tiny one - a faint buzz even at 255. Games lean on that: footsteps in
+// Phantom Blade Zero are the small motor alone, 0..134 every 20ms, which at full HD-rumble strength
+// on the high band felt like a constant tremor. Scaled down to match how it feels on the original.
+#define RUMBLE_SMALL_MOTOR_SCALE 0.35f
 #define RUMBLE_FREQ_LOW  160.0f // Hz - the Switch's own defaults for its two bands
 #define RUMBLE_FREQ_HIGH 320.0f
-// "Strong only": a player's rumble below this (the stronger of the two motors, 0-255) isn't sent.
-#define RUMBLE_STRONG_THRESHOLD 80
+
 
 // Debug menu (debug mode only): the chord, the presses handed to the menu, and per player the
 // style for the overlay. The menu itself lives in video/overlay.c on the main thread.
@@ -308,7 +311,7 @@ static void sendRumble(int i, RumbleStyle style, uint32_t levels)
     HidVibrationValue value = {
         .amp_low = (float)((levels >> 8) & 0xFF) / 255.0f * RUMBLE_MAX_AMPLITUDE,
         .freq_low = RUMBLE_FREQ_LOW,
-        .amp_high = (float)(levels & 0xFF) / 255.0f * RUMBLE_MAX_AMPLITUDE,
+        .amp_high = (float)(levels & 0xFF) / 255.0f * RUMBLE_MAX_AMPLITUDE * RUMBLE_SMALL_MOTOR_SCALE,
         .freq_high = RUMBLE_FREQ_HIGH,
     };
     HidVibrationValue values[2] = {value, value};
@@ -326,9 +329,8 @@ static void applyRumble(void)
     {
         RumbleStyle style = currentRumbleStyle(i);
         uint32_t target = mode == SettingsRumble_Off ? 0 : atomic_load(&s_rumbleTarget[i]);
-        uint32_t strongest = ((target >> 8) & 0xFF) > (target & 0xFF) ? (target >> 8) & 0xFF : target & 0xFF;
-        if (mode == SettingsRumble_Strong && strongest < RUMBLE_STRONG_THRESHOLD)
-            target = 0;
+        if (mode == SettingsRumble_LargeOnly)
+            target &= 0xFF00u; // the small motor's byte gone
         if (style != s_rumbleStyle[i])
         {
             if (s_rumbleApplied[i] != 0)

@@ -56,9 +56,10 @@ button follows. In debug mode, by up to 0.2 seconds.
 ### Rumble
 
 The game's rumble goes to the Joy-Con or Pro Controller of the player whose virtual controller
-rumbles. On the Switch itself: **X** → Rumble - all (the default), strong only, or off. Strong only
-drops weak rumble - useful when a game keeps a weak background rumble up all the time. In some games
-the hits are the weak ones, though: then those are what goes. On the PC it can be turned off
+rumbles. An Xbox pad's small motor (a fine buzz) comes through weaker than the large one - as on the
+pad itself. On the Switch: **X** → Rumble - all (the default), no small motor, or off. No small motor
+drops the fine constant tremor some games make with the small motor, e.g. while walking; hits and
+explosions, which drive both motors, stay. On the PC it can be turned off
 entirely: Rumble on the Switch. Needs SolarNX 0.2.5 or newer on both the Switch and the PC. If it keeps going in short jolts,
 turn debug mode on: its Rumble line shows how many rumble commands come from the PC.
 

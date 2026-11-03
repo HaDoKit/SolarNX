@@ -336,7 +336,7 @@ static void drawConnectionFrame(MenuContext *context, StarSystem *starSystem, in
         pcId[0] != '\0' ? pcId : tr(Str_NotSet),
         pairing,
         languageName,
-        tr(settingsGetRumble() == SettingsRumble_Strong ? Str_RumbleStrong
+        tr(settingsGetRumble() == SettingsRumble_LargeOnly ? Str_RumbleLargeOnly
             : settingsGetRumble() == SettingsRumble_All ? Str_RumbleAll : Str_Off),
     };
 
