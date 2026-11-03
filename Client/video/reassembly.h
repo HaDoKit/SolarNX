@@ -7,9 +7,9 @@
 // Rebuilds whole H.264/H.265 frames from the PC's video datagrams (videowire.h), recovering lost ones
 // from the Reed-Solomon parity that comes with each frame (common/rs). Video decode thread only.
 //
-// One frame is assembled at a time: the PC paces a frame's datagrams over a few milliseconds and
-// the next frame starts a whole frame interval later, so a datagram of a newer frame means the
-// current one has got everything it is going to get - if it still can't be rebuilt, it is lost.
+// Two frames are assembled at a time: datagrams can arrive out of order (the internet, some routers),
+// so the first ones of frame N+1 may overtake the last ones of frame N. N is lost only once N+1 is
+// complete or a datagram of N+2 arrives - see reassembly.c.
 // After a lost frame every following frame is dropped until a keyframe completes: the decoder
 // would only smear the damage across the picture until then (the "water on glass" artifact), so
 // the last good picture simply stays on screen instead.
@@ -28,6 +28,7 @@ typedef struct {
     uint32_t framesSkipped;     // complete, but dropped while waiting for a keyframe
     uint32_t shardsRecovered;   // data shards rebuilt from parity
     uint32_t datagramsRejected; // not our format (an older host sending MPEG-TS), or inconsistent
+    uint32_t datagramsLate;     // arrived for a frame already given up on - reordering beyond the two-frame window
 } ReassemblyStats;
 
 bool reassemblyInit(void);
@@ -40,7 +41,11 @@ void reassemblyReset(void);
 void reassemblyRequestKeyframe(void);
 
 // Takes one datagram. Returns true and fills *out when it completed a frame that should be decoded.
+// One datagram can complete two (the older frame, with a newer one already waiting): call
+// reassemblyNext after decoding until it returns false.
 bool reassemblyPush(const uint8_t *datagram, size_t length, ReassembledFrame *out);
+
+bool reassemblyNext(ReassembledFrame *out);
 
 // Free-running counters (never reset) - read from other threads as plain words, telemetry only.
 const ReassemblyStats *reassemblyStats(void);
