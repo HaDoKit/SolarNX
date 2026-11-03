@@ -11,6 +11,7 @@
 #include "../common/appstate/appstate.h"
 #include "../common/lang/lang.h"
 #include "../control/control.h"
+#include "../settings/settings.h"
 
 #include <stdio.h>
 
@@ -318,10 +319,11 @@ static void applyRumble(void)
 {
     if (!s_vibReady)
         return;
+    bool enabled = settingsGetRumble(); // off on this console: everything stays (or goes) still
     for (int i = 0; i < INPUT_MAX_CONTROLLERS; i++)
     {
         RumbleStyle style = currentRumbleStyle(i);
-        uint32_t target = atomic_load(&s_rumbleTarget[i]);
+        uint32_t target = enabled ? atomic_load(&s_rumbleTarget[i]) : 0;
         if (style != s_rumbleStyle[i])
         {
             if (s_rumbleApplied[i] != 0)

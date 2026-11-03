@@ -14,6 +14,8 @@ static uint8_t s_options = 0;    // the PC's last Options flags
 static ControlDebugInfo s_debugInfo;
 static uint32_t s_debugSeq = 0;
 static uint32_t s_rttUs = 0;
+static uint32_t s_rumbleMessages = 0;
+static uint8_t s_rumbleLevels[8];
 
 const int kControlResolutions[CONTROL_RESOLUTION_COUNT][2] = {{640, 360}, {854, 480}, {960, 540}, {1280, 720}, {1920, 1080}};
 const int kControlFps[CONTROL_FPS_COUNT] = {24, 30, 45, 60};
@@ -170,6 +172,15 @@ uint32_t controlRttUs(void)
     return rtt;
 }
 
+uint32_t controlRumbleStats(uint8_t levels[8])
+{
+    mutexLock(&s_mutex);
+    uint32_t count = s_rumbleMessages;
+    memcpy(levels, s_rumbleLevels, 8);
+    mutexUnlock(&s_mutex);
+    return count;
+}
+
 void controlSendSetting(uint8_t setting, int32_t value)
 {
     uint8_t payload[8] = {setting, 0, 0, 0};
@@ -263,8 +274,14 @@ void controlHandleHostMessage(uint8_t type, const uint8_t *payload, size_t lengt
         break;
     case HostMessage_Rumble:
         if (length >= 8)
+        {
             for (int i = 0; i < 4; i++)
                 inputSetRumble(i, payload[i * 2], payload[i * 2 + 1]);
+            mutexLock(&s_mutex);
+            s_rumbleMessages++;
+            memcpy(s_rumbleLevels, payload, 8);
+            mutexUnlock(&s_mutex);
+        }
         break;
     default: // a newer PC's message this build doesn't know - ignored by design (protocol minor)
         break;

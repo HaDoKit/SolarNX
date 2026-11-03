@@ -41,9 +41,11 @@
     <sys:String x:Key="Settings.Debug">Debug</sys:String>
     <sys:String x:Key="Settings.DebugMode">Debug mode</sys:String>
     <sys:String x:Key="Settings.DebugModeHint">The Switch shows statistics over the video: bitrate, losses, latency, decode time. Pressing − + ZL + ZR together opens a menu on the Switch to tune the video while playing. Needs SolarNX 0.2.5 or newer on the Switch.</sys:String>
+    <sys:String x:Key="Settings.NvencAdaptive">Adaptive NVENC preset</sys:String>
+    <sys:String x:Key="Settings.NvencAdaptiveHint">Starts at the best quality (p7, hq) and lowers the preset when the graphics card can't keep up with encoding, then tries to go back up. The network is handled by adaptive bitrate. NVIDIA graphics cards only.</sys:String>
     <sys:String x:Key="Settings.NvencPreset">NVENC preset</sys:String>
     <sys:String x:Key="Settings.NvencTune">NVENC tuning</sys:String>
-    <sys:String x:Key="Settings.NvencHint">p1 is the fastest, p7 the best quality; ll is low latency (default), ull even lower, hq quality. NVIDIA graphics cards only. Applies at once, the picture freezes for about a second.</sys:String>
+    <sys:String x:Key="Settings.NvencHint">p1 is the fastest, p7 the best quality; ll is low latency (default), ull even lower, hq quality. NVIDIA graphics cards only. Applies at once, the picture freezes for about a second. A manual choice turns the adaptive preset off.</sys:String>
     <sys:String x:Key="Settings.Updates">Updates</sys:String>
     <sys:String x:Key="Settings.CheckUpdates">Check for updates</sys:String>
     <sys:String x:Key="Settings.CheckUpdatesHint">At start-up and once a day SolarNX looks at the list of releases on GitHub. Nothing is downloaded or installed by itself.</sys:String>

@@ -108,6 +108,12 @@ typedef enum {
     Str_DbgApplying,
     Str_On,
     Str_Off,
+    Str_RowRumble,
+    Str_DbgRumble,
+    Str_DbgRumbleOff,
+    Str_DbgCommands,
+    Str_DbgAdaptivePreset,
+    Str_DbgAuto2,
 
     Str_Count
 } StrId;

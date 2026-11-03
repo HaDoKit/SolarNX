@@ -64,6 +64,7 @@ public static class ControlWire
         AdaptiveBitrate = 0x01,
         TrafficPriority = 0x02,
         Nvenc = 0x04,
+        AdaptivePreset = 0x08,
     }
 
     /// <summary>Settings the Switch's debug menu can change - <see cref="ClientMessage.SetSetting"/>.</summary>
@@ -77,6 +78,7 @@ public static class ControlWire
         NvencPreset = 6,      // index into EncoderSelection.NvencPresets
         NvencTune = 7,        // index into EncoderSelection.NvencTunes
         TrafficPriority = 8,  // 0/1
+        AdaptivePreset = 9,   // 0/1 - a manual NvencPreset/NvencTune turns it off
     }
 
     /// <summary>The fixed resolutions of the PC settings, in order - mirrored by the Switch's menu.</summary>

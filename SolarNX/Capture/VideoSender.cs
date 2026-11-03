@@ -402,11 +402,16 @@ public sealed class VideoSender : IDisposable
         }
     }
 
+    /// <summary>Frames per second received from ffmpeg in each stats window (every 5s) - the
+    /// adaptive NVENC preset's measure of whether the encoder keeps up. Raised on the sender thread.</summary>
+    public event Action<double>? WindowFps;
+
     private void LogStatsIfDue()
     {
         var now = DateTime.UtcNow;
         if (now - _lastStatsUtc < StatsInterval) return;
         var seconds = (now - _lastStatsUtc).TotalSeconds;
+        WindowFps?.Invoke(_statFrames / seconds);
         Logger.Log("VideoSender",
             $"{_statFrames / seconds:0.#} fps ({_statKeyframes} keyframes), {_statBytes * 8 / seconds / 1000:0} kbps video, " +
             $"{_statDatagrams} datagrams of which {_statParity} parity ({100.0 * _statParity / Math.Max(1, _statDatagrams - _statParity):0}%), " +

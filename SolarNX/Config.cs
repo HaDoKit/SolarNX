@@ -102,6 +102,10 @@ public sealed class Config
     /// tuning appear in the PC settings.</summary>
     public bool DebugMode { get; set; } = false;
 
+    /// <summary>Adaptive NVENC preset (Capture/AdaptivePresetController): p7/hq, stepping down when the
+    /// GPU can't keep up. Off: <see cref="NvencPreset"/> / <see cref="NvencTune"/> as set.</summary>
+    public bool NvencAdaptive { get; set; } = true;
+
     /// <summary>NVENC preset p1 (fastest) .. p7 (best quality) - see EncoderSelection.EncodeArgs.</summary>
     public string NvencPreset { get; set; } = "p4";
 

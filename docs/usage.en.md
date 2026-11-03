@@ -56,8 +56,9 @@ button follows. In debug mode, by up to 0.2 seconds.
 ### Rumble
 
 The game's rumble goes to the Joy-Con or Pro Controller of the player whose virtual controller
-rumbles. It can be turned off in the PC settings: Rumble on the Switch. Needs SolarNX 0.2.5 or newer
-on both the Switch and the PC.
+rumbles. It can be turned off on the PC (Rumble on the Switch) or on the Switch itself: **X** →
+Rumble. Needs SolarNX 0.2.5 or newer on both the Switch and the PC. If it keeps going in short jolts,
+turn debug mode on: its Rumble line shows how many rumble commands come from the PC.
 
 ### Button layout on the Switch
 
@@ -96,7 +97,8 @@ The gear button on the SolarNX main screen.
 | Traffic priority | video, audio and input are marked as urgent: a router with WMM lets them ahead of other traffic on Wi-Fi. On by default, Wi-Fi mode only. If things get worse, turn it off |
 | Check for updates | at start-up and once a day SolarNX looks at the list of releases on GitHub and shows on the main screen when a new version is out, and whether the Switch app needs updating too. Nothing is downloaded by itself. Check now works even with the check turned off |
 | Debug mode | statistics over the video on the Switch, and the debug menu (see below). Off by default |
-| NVENC preset and tuning | shown in debug mode, NVIDIA graphics cards only. Preset p1 is the fastest, p7 the best quality (p4 by default). Tuning: ll is low latency (default), ull even lower, hq quality. Applies at once, the picture freezes for about a second |
+| Adaptive NVENC preset | NVIDIA graphics cards only, on by default. Starts at the best quality (p7, hq); if the graphics card can't keep up with encoding, the preset goes down step by step, and after a couple of minutes running smoothly SolarNX tries to raise it again. Each change freezes the picture for about a second. The network is handled by adaptive bitrate |
+| NVENC preset and tuning | shown in debug mode; a manual choice turns the adaptive preset off, NVIDIA graphics cards only. Preset p1 is the fastest, p7 the best quality (p4 by default). Tuning: ll is low latency (default), ull even lower, hq quality. Applies at once, the picture freezes for about a second |
 | shadPS4 | path to the emulator |
 | Drivers | reinstalls ViGEmBus |
 
@@ -130,11 +132,12 @@ Turn it on on the PC: Settings → Debug → Debug mode. While streaming, the Sw
 - the latency from the PC sending a frame to the Switch showing it (encoding on the PC isn't
   included yet), and the network round trip;
 - which controllers are connected and what the Switch sees them as (Pro Controller, Joy-Con,
-  GameCube...).
+  GameCube...);
+- the current rumble level and how many rumble commands per second come from the PC.
 
 Pressing **−**, **+**, **ZL** and **ZR** together opens the debug menu. Select and change with the
-D-pad: statistics on screen, bitrate, adaptive bitrate, codec, resolution, frames per second, NVENC
-preset and tuning, traffic priority. A change goes to the PC after a fraction of a second, is saved in
+D-pad: statistics on screen, bitrate, adaptive bitrate, codec, resolution, frames per second, adaptive
+preset, NVENC preset and tuning, traffic priority. A change goes to the PC after a fraction of a second, is saved in
 its settings, and the video restarts with it - the picture freezes for about a second. The game gets
 no input while the menu is open. B or the same combination closes it.
 

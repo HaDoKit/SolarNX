@@ -11,6 +11,7 @@
 #include "../common/logger/logger.h"
 #include "../control/control.h"
 #include "../input/input.h"
+#include "../settings/settings.h"
 #include "video.h"
 
 // The overlay's own font, made for the video renderer the first time it is needed (the menu's
@@ -26,14 +27,15 @@ static bool s_statsVisible = true; // the menu's first item - this session only
 // Once-a-second figures.
 static u64 s_windowStart = 0;
 static uint32_t s_lastLost = 0, s_lastRecovered = 0;
-static char s_lines[6][200];
+static char s_lines[7][200];
+static uint32_t s_lastRumbleMessages = 0;
 static int s_lineCount = 0;
 
 // Debug menu.
-enum { ITEM_STATS, ITEM_BITRATE, ITEM_ADAPTIVE, ITEM_CODEC, ITEM_RESOLUTION, ITEM_FPS, ITEM_PRESET, ITEM_TUNE, ITEM_PRIORITY, ITEM_COUNT };
+enum { ITEM_STATS, ITEM_BITRATE, ITEM_ADAPTIVE, ITEM_CODEC, ITEM_RESOLUTION, ITEM_FPS, ITEM_ADAPTIVE_PRESET, ITEM_PRESET, ITEM_TUNE, ITEM_PRIORITY, ITEM_COUNT };
 // The PC setting behind each item (ITEM_STATS is this side's own).
 static const uint8_t kItemSetting[ITEM_COUNT] = {0, DebugSetting_BitrateKbps, DebugSetting_AdaptiveBitrate, DebugSetting_Codec,
-    DebugSetting_Resolution, DebugSetting_Fps, DebugSetting_NvencPreset, DebugSetting_NvencTune, DebugSetting_TrafficPriority};
+    DebugSetting_Resolution, DebugSetting_Fps, DebugSetting_AdaptivePreset, DebugSetting_NvencPreset, DebugSetting_NvencTune, DebugSetting_TrafficPriority};
 static int s_selected = 0;
 static bool s_wasOpen = false;
 // A change waits this long for the next one before going to the PC: each one restarts the encoder.
@@ -174,6 +176,18 @@ static void updateStats(void)
     char pads[160];
     inputDescribeControllers(pads, sizeof(pads));
     snprintf(s_lines[s_lineCount++], sizeof(s_lines[0]), "%s%s", tr(Str_DbgControllers), pads[0] ? pads : "-");
+
+    // "Rumble: 1: 64/192   commands from the PC: 12/s" - a steady stream of commands with short
+    // jolts on the controller says the PC (the game, or something resetting it) keeps changing it.
+    uint8_t levels[8];
+    uint32_t messages = controlRumbleStats(levels);
+    uint32_t messageDelta = messages - s_lastRumbleMessages;
+    s_lastRumbleMessages = messages;
+    if (!settingsGetRumble())
+        snprintf(s_lines[s_lineCount++], sizeof(s_lines[0]), "%s%s", tr(Str_DbgRumble), tr(Str_DbgRumbleOff));
+    else
+        snprintf(s_lines[s_lineCount++], sizeof(s_lines[0]), "%s1: %u/%u  2: %u/%u%s%u%s", tr(Str_DbgRumble),
+            levels[0], levels[1], levels[2], levels[3], tr(Str_DbgCommands), (unsigned)(messageDelta / seconds + 0.5), tr(Str_DbgPerSec));
 }
 
 // --- Menu ---
@@ -190,6 +204,7 @@ static int32_t currentValue(int item, const ControlDebugInfo *info)
     case ITEM_CODEC:      return info->codecSetting;
     case ITEM_RESOLUTION: return info->resolution;
     case ITEM_FPS:        return info->fps;
+    case ITEM_ADAPTIVE_PRESET: return (info->flags & DEBUG_INFO_ADAPTIVE_PRESET) != 0;
     case ITEM_PRESET:     return info->preset;
     case ITEM_TUNE:       return info->tune;
     case ITEM_PRIORITY:   return (info->flags & DEBUG_INFO_PRIORITY) != 0;
@@ -222,6 +237,10 @@ static void change(int item, int direction, const ControlDebugInfo *info)
     case ITEM_ADAPTIVE:
     case ITEM_CODEC:
     case ITEM_PRIORITY:
+        value = !value;
+        break;
+    case ITEM_ADAPTIVE_PRESET:
+        if (!(info->flags & DEBUG_INFO_NVENC)) return;
         value = !value;
         break;
     case ITEM_RESOLUTION:
@@ -275,6 +294,7 @@ static void valueText(int item, const ControlDebugInfo *info, char *out, size_t 
     case ITEM_STATS:
     case ITEM_ADAPTIVE:
     case ITEM_PRIORITY:
+    case ITEM_ADAPTIVE_PRESET:
         snprintf(out, size, "%s", tr(v ? Str_On : Str_Off));
         break;
     case ITEM_BITRATE:
@@ -293,11 +313,12 @@ static void valueText(int item, const ControlDebugInfo *info, char *out, size_t 
         snprintf(out, size, "%d", (int)v);
         break;
     case ITEM_PRESET:
-        snprintf(out, size, "p%d%s", (int)v + 1, (info->flags & DEBUG_INFO_NVENC) ? "" : tr(Str_DbgNvencOnly));
+        snprintf(out, size, "p%d%s", (int)v + 1, !(info->flags & DEBUG_INFO_NVENC) ? tr(Str_DbgNvencOnly)
+            : (info->flags & DEBUG_INFO_ADAPTIVE_PRESET) ? tr(Str_DbgAuto2) : "");
         break;
     case ITEM_TUNE:
         snprintf(out, size, "%s%s", kControlTunes[(v % CONTROL_TUNE_COUNT + CONTROL_TUNE_COUNT) % CONTROL_TUNE_COUNT],
-            (info->flags & DEBUG_INFO_NVENC) ? "" : tr(Str_DbgNvencOnly));
+            !(info->flags & DEBUG_INFO_NVENC) ? tr(Str_DbgNvencOnly) : (info->flags & DEBUG_INFO_ADAPTIVE_PRESET) ? tr(Str_DbgAuto2) : "");
         break;
     default:
         out[0] = '\0';
@@ -312,7 +333,7 @@ static void valueText(int item, const ControlDebugInfo *info, char *out, size_t 
 static void drawMenu(SDL_Renderer *renderer, float s, const ControlDebugInfo *info)
 {
     static const StrId labels[ITEM_COUNT] = {Str_DbgShowStats, Str_DbgBitrateItem, Str_DbgAdaptive, Str_DbgCodec,
-        Str_DbgResolution, Str_DbgFps, Str_DbgPreset, Str_DbgTune, Str_DbgPriority};
+        Str_DbgResolution, Str_DbgFps, Str_DbgAdaptivePreset, Str_DbgPreset, Str_DbgTune, Str_DbgPriority};
     float x = 380 * s, y = 150 * s, lineH = 34 * s;
     box(renderer, (int)(x - 24 * s), (int)(y - 20 * s), (int)(560 * s), (int)(lineH * (ITEM_COUNT + 3) + 30 * s));
     text(renderer, x, y, 0.75f * s, kWhite, tr(Str_DbgMenuTitle));

@@ -199,6 +199,21 @@
                             <ui:ToggleSwitch x:Name="AdaptiveBitrateToggle" Grid.Column="1" HorizontalAlignment="Left" />
                         </Grid>
 
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="{DynamicResource Settings.NvencAdaptive}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                            <ui:ToggleSwitch x:Name="NvencAdaptiveToggle" Grid.Column="1" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                       Text="{DynamicResource Settings.NvencAdaptiveHint}" />
+                        </Grid>
+
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="170" />

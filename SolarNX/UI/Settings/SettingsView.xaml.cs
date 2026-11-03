@@ -104,18 +104,40 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         {
             if (_reloading || NvencPresetCombo.SelectedItem is not string preset) return;
             _config.NvencPreset = preset;
-            _config.Save();
+            SetManualNvenc();
             _orchestrator.ApplyVideoSettingsNow($"NVENC preset {preset}");
         };
         NvencTuneCombo.SelectionChanged += (_, _) =>
         {
             if (_reloading || NvencTuneCombo.SelectedItem is not string tune) return;
             _config.NvencTune = tune;
-            _config.Save();
+            SetManualNvenc();
             _orchestrator.ApplyVideoSettingsNow($"NVENC tune {tune}");
         };
 
+        NvencAdaptiveToggle.IsChecked = _config.NvencAdaptive;
+        NvencAdaptiveToggle.Checked += (_, _) => SetNvencAdaptive(true);
+        NvencAdaptiveToggle.Unchecked += (_, _) => SetNvencAdaptive(false);
+
         _orchestrator.SettingsChangedRemotely += () => Dispatcher.BeginInvoke(ReloadVideoSettings);
+    }
+
+    // A preset picked by hand: the adaptive one steps aside.
+    private void SetManualNvenc()
+    {
+        _config.NvencAdaptive = false;
+        _config.Save();
+        _reloading = true;
+        try { NvencAdaptiveToggle.IsChecked = false; }
+        finally { _reloading = false; }
+    }
+
+    private void SetNvencAdaptive(bool enabled)
+    {
+        if (_reloading) return;
+        _config.NvencAdaptive = enabled;
+        _config.Save();
+        _orchestrator.ApplyVideoSettingsNow(enabled ? "adaptive NVENC preset on" : "adaptive NVENC preset off");
     }
 
     private void SetDebugMode(bool enabled)
@@ -143,6 +165,7 @@ public partial class SettingsView : System.Windows.Controls.UserControl
             TrafficPriorityToggle.IsChecked = _config.TrafficPriority;
             NvencPresetCombo.SelectedItem = _config.NvencPreset;
             NvencTuneCombo.SelectedItem = _config.NvencTune;
+            NvencAdaptiveToggle.IsChecked = _config.NvencAdaptive;
         }
         finally
         {
