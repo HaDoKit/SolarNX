@@ -1222,8 +1222,9 @@ public sealed class AppOrchestrator : IDisposable
         if (now - _lastVideoLinkLogUtc < VideoLinkLogInterval) return;
         var firstPacket = _lastVideoLinkLogUtc == DateTime.MinValue;
         _lastVideoLinkLogUtc = now;
-        var recovered = packet.VideoRecoveredPacketCount - _loggedRecoveredPackets;
-        var lost = packet.VideoLostFrameCount - _loggedLostFrames;
+        // The counters start over when the Switch app restarts - that read as "4294967153 frames lost".
+        var recovered = packet.VideoRecoveredPacketCount >= _loggedRecoveredPackets ? packet.VideoRecoveredPacketCount - _loggedRecoveredPackets : 0;
+        var lost = packet.VideoLostFrameCount >= _loggedLostFrames ? packet.VideoLostFrameCount - _loggedLostFrames : 0;
         _loggedRecoveredPackets = packet.VideoRecoveredPacketCount;
         _loggedLostFrames = packet.VideoLostFrameCount;
         if (firstPacket || (recovered == 0 && lost == 0)) return;
