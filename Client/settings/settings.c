@@ -109,7 +109,7 @@ void settingsInit(void)
         else if (sscanf(line, "button_layout_revision=%u", &value) == 1)
             s_layoutRevision = value;
         else if (sscanf(line, "rumble=%u", &value) == 1)
-            s_rumble = value <= SettingsRumble_Strong ? (SettingsRumble)value : SettingsRumble_Strong;
+            s_rumble = value <= SettingsRumble_LargeOnly ? (SettingsRumble)value : SettingsRumble_All;
         else if (readValue(line, "connection_mode", mode, sizeof(mode)))
             s_connectionMode = strcmp(mode, "internet") == 0 ? SettingsConnection_Internet : SettingsConnection_Wifi;
         else if (readValue(line, "pc_address", s_pcAddress, sizeof(s_pcAddress))) {}
@@ -288,8 +288,8 @@ SettingsRumble settingsGetRumble(void)
 void settingsCycleRumble(void)
 {
     mutexLock(&s_mutex);
-    s_rumble = s_rumble == SettingsRumble_All ? SettingsRumble_Strong
-             : s_rumble == SettingsRumble_Strong ? SettingsRumble_Off : SettingsRumble_All;
+    s_rumble = s_rumble == SettingsRumble_All ? SettingsRumble_LargeOnly
+             : s_rumble == SettingsRumble_LargeOnly ? SettingsRumble_Off : SettingsRumble_All;
     save();
     mutexUnlock(&s_mutex);
 }
