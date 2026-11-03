@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <switch.h>
+
 #include "videowire.h"
 #include "../common/rs/rs.h"
 #include "../common/logger/logger.h"
@@ -36,6 +38,7 @@ static struct {
     int blocksDone;
     uint8_t *data;
     size_t dataCapacity;
+    uint64_t firstTick;
 } s_frame;
 
 static Block s_blocks[MAX_BLOCKS];
@@ -127,6 +130,7 @@ static bool startFrame(uint32_t number, uint32_t size, int blockCount, bool keyf
     s_frame.size = size;
     s_frame.blockCount = blockCount;
     s_frame.blocksDone = 0;
+    s_frame.firstTick = armGetSystemTick();
     return true;
 }
 
@@ -267,5 +271,6 @@ bool reassemblyPush(const uint8_t *datagram, size_t length, ReassembledFrame *ou
     out->number = s_frame.number;
     out->keyframe = s_frame.keyframe;
     out->hevc = s_frame.hevc;
+    out->firstTick = s_frame.firstTick;
     return true;
 }

@@ -38,6 +38,7 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         InitConnectionSection();
         InitVideoSection();
         InitGamepadSection();
+        InitDebugSection();
         InitShadPs4Section();
         InitDriversSection();
 
@@ -82,6 +83,71 @@ public partial class SettingsView : System.Windows.Controls.UserControl
             _ = RefreshEncoderInfoAsync();
         }
         RefreshUpdateStatus();
+    }
+
+    // Set while controls are moved to show values changed elsewhere (the Switch's debug menu) - their
+    // change handlers then must not act as if the user changed them here.
+    private bool _reloading;
+
+    private void InitDebugSection()
+    {
+        DebugModeToggle.IsChecked = _config.DebugMode;
+        NvencPanel.Visibility = _config.DebugMode ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+        DebugModeToggle.Checked += (_, _) => SetDebugMode(true);
+        DebugModeToggle.Unchecked += (_, _) => SetDebugMode(false);
+
+        foreach (var preset in EncoderSelection.NvencPresets) NvencPresetCombo.Items.Add(preset);
+        foreach (var tune in EncoderSelection.NvencTunes) NvencTuneCombo.Items.Add(tune);
+        NvencPresetCombo.SelectedItem = _config.NvencPreset;
+        NvencTuneCombo.SelectedItem = _config.NvencTune;
+        NvencPresetCombo.SelectionChanged += (_, _) =>
+        {
+            if (_reloading || NvencPresetCombo.SelectedItem is not string preset) return;
+            _config.NvencPreset = preset;
+            _config.Save();
+            _orchestrator.ApplyVideoSettingsNow($"NVENC preset {preset}");
+        };
+        NvencTuneCombo.SelectionChanged += (_, _) =>
+        {
+            if (_reloading || NvencTuneCombo.SelectedItem is not string tune) return;
+            _config.NvencTune = tune;
+            _config.Save();
+            _orchestrator.ApplyVideoSettingsNow($"NVENC tune {tune}");
+        };
+
+        _orchestrator.SettingsChangedRemotely += () => Dispatcher.BeginInvoke(ReloadVideoSettings);
+    }
+
+    private void SetDebugMode(bool enabled)
+    {
+        _config.DebugMode = enabled;
+        _config.Save();
+        NvencPanel.Visibility = enabled ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+        _orchestrator.DebugModeSettingChanged();
+    }
+
+    // Shows what the Switch's debug menu changed (Config already holds it).
+    private void ReloadVideoSettings()
+    {
+        _reloading = true;
+        try
+        {
+            var closest = Array.IndexOf(ResolutionOptions, ResolutionOptions
+                .OrderBy(r => Math.Abs(r.Width - _config.TargetWidth) + Math.Abs(r.Height - _config.TargetHeight)).First());
+            ResolutionCombo.SelectedIndex = _config.AutoResolution ? 0 : closest + 1;
+            FpsCombo.SelectedItem = FpsOptions.OrderBy(f => Math.Abs(f - _config.Fps)).First().ToString();
+            BitrateBox.Value = _config.BitrateKbps;
+            AdaptiveBitrateToggle.IsChecked = _config.AdaptiveBitrate;
+            BitrateBox.IsEnabled = !_config.AdaptiveBitrate;
+            CodecCombo.SelectedIndex = Math.Max(0, Array.IndexOf(CodecOptions, _config.Codec));
+            TrafficPriorityToggle.IsChecked = _config.TrafficPriority;
+            NvencPresetCombo.SelectedItem = _config.NvencPreset;
+            NvencTuneCombo.SelectedItem = _config.NvencTune;
+        }
+        finally
+        {
+            _reloading = false;
+        }
     }
 
     private void InitUpdatesSection()

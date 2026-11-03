@@ -38,6 +38,12 @@
     <sys:String x:Key="Update.SwitchOptional">Приложение на Switch можно обновить позже: оно продолжит работать, а новые функции появятся после его обновления.</sys:String>
     <sys:String x:Key="Update.SwitchRequired">Нужно обновить и программу на ПК, и приложение на Switch.</sys:String>
     <sys:String x:Key="Update.SwitchUnknown">Обновите программу на ПК, а приложение на Switch — если так сказано в описании выпуска.</sys:String>
+    <sys:String x:Key="Settings.Debug">Отладка</sys:String>
+    <sys:String x:Key="Settings.DebugMode">Режим отладки</sys:String>
+    <sys:String x:Key="Settings.DebugModeHint">На Switch поверх видео показывается статистика: битрейт, потери, задержка, время декодирования. Одновременное нажатие − + ZL + ZR открывает на Switch меню, где видео настраивается прямо во время игры. Нужна SolarNX 0.2.5 или новее на Switch.</sys:String>
+    <sys:String x:Key="Settings.NvencPreset">Пресет NVENC</sys:String>
+    <sys:String x:Key="Settings.NvencTune">Настройка NVENC</sys:String>
+    <sys:String x:Key="Settings.NvencHint">p1 — быстрее всего, p7 — лучшее качество; ll — малая задержка (по умолчанию), ull — ещё меньше, hq — качество. Только для видеокарт NVIDIA. Применяется сразу, картинка замирает примерно на секунду.</sys:String>
     <sys:String x:Key="Settings.Updates">Обновления</sys:String>
     <sys:String x:Key="Settings.CheckUpdates">Проверять обновления</sys:String>
     <sys:String x:Key="Settings.CheckUpdatesHint">При запуске и раз в сутки SolarNX смотрит список выпусков на GitHub. Ничего не скачивается и не устанавливается само.</sys:String>

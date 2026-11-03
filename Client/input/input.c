@@ -9,6 +9,10 @@
 #include "../video/video.h"
 #include "../audio/audio.h"
 #include "../common/appstate/appstate.h"
+#include "../common/lang/lang.h"
+#include "../control/control.h"
+
+#include <stdio.h>
 
 #define INPUT_MAX_CONTROLLERS 4
 
@@ -80,6 +84,103 @@ static RumbleStyle s_rumbleStyle[INPUT_MAX_CONTROLLERS];
 #define RUMBLE_MAX_AMPLITUDE 0.8f
 #define RUMBLE_FREQ_LOW  160.0f // Hz - the Switch's own defaults for its two bands
 #define RUMBLE_FREQ_HIGH 320.0f
+
+// Debug menu (debug mode only): the chord, the presses handed to the menu, and per player the
+// style for the overlay. The menu itself lives in video/overlay.c on the main thread.
+#define DEBUG_CHORD (HidNpadButton_Minus | HidNpadButton_Plus | HidNpadButton_ZL | HidNpadButton_ZR)
+static atomic_bool s_debugMenuOpen = false;
+static atomic_ullong s_debugMenuDown = 0;
+static u64 s_debugPrevButtons = 0;
+static bool s_debugChordLatched = false;
+// After the menu closes, whatever is still held (B, the chord) must not reach the game.
+static bool s_debugMenuWasOpen = false;
+static bool s_holdUntilReleased = false;
+static atomic_ullong s_playerStyle[INPUT_MAX_CONTROLLERS]; // padGetStyleSet, 0 = not connected
+static atomic_uint s_playerAttributes[INPUT_MAX_CONTROLLERS];
+
+// The host turns Minus + Plus into Guide/PS (its GuideButtonChord) the moment it sees both. In debug
+// mode they are held back here for a moment, and not sent at all while ZL + ZR are held, so the
+// debug chord never reaches the host as a Guide press. A quick tap still goes through, a little late.
+#define DEBUG_MINUS_PLUS_HOLD_NS 100000000ULL // 100ms
+#define DEBUG_TAP_PACKETS 3
+static u64 s_mpSinceTick[INPUT_MAX_CONTROLLERS];
+static u64 s_mpLastBits[INPUT_MAX_CONTROLLERS];
+static int s_mpTapPackets[INPUT_MAX_CONTROLLERS];
+
+static u64 filterMinusPlus(int i, u64 buttons, u64 now)
+{
+    const u64 mp = HidNpadButton_Minus | HidNpadButton_Plus;
+    u64 held = buttons & mp;
+    bool triggers = (buttons & HidNpadButton_ZL) && (buttons & HidNpadButton_ZR);
+    u64 out = buttons & ~mp;
+
+    if (s_mpTapPackets[i] > 0)
+    {
+        s_mpTapPackets[i]--;
+        out |= s_mpLastBits[i];
+    }
+    if (held == 0)
+    {
+        // Released before the hold time was up and not part of the chord: deliver it as a tap now.
+        if (s_mpSinceTick[i] != 0 && s_mpLastBits[i] != 0 && armTicksToNs(now - s_mpSinceTick[i]) < DEBUG_MINUS_PLUS_HOLD_NS)
+            s_mpTapPackets[i] = DEBUG_TAP_PACKETS;
+        s_mpSinceTick[i] = 0;
+        return out;
+    }
+    if (triggers)
+    {
+        s_mpSinceTick[i] = 0; // part of the debug chord - never a tap
+        s_mpLastBits[i] = 0;
+        return out;
+    }
+    if (s_mpSinceTick[i] == 0)
+        s_mpSinceTick[i] = now;
+    s_mpLastBits[i] = held;
+    if (armTicksToNs(now - s_mpSinceTick[i]) >= DEBUG_MINUS_PLUS_HOLD_NS)
+        out |= held;
+    return out;
+}
+
+bool inputDebugMenuOpen(void)
+{
+    return atomic_load(&s_debugMenuOpen);
+}
+
+void inputCloseDebugMenu(void)
+{
+    atomic_store(&s_debugMenuOpen, false);
+}
+
+uint64_t inputTakeDebugMenuButtons(void)
+{
+    return atomic_exchange(&s_debugMenuDown, 0);
+}
+
+void inputDescribeControllers(char *out, size_t size)
+{
+    size_t used = 0;
+    out[0] = '\0';
+    for (int i = 0; i < INPUT_MAX_CONTROLLERS && used + 1 < size; i++)
+    {
+        u64 style = atomic_load(&s_playerStyle[i]);
+        if (style == 0)
+            continue;
+        u32 attributes = atomic_load(&s_playerAttributes[i]);
+        const char *name =
+            (i == 0 && (style & HidNpadStyleTag_NpadHandheld)) ? tr(Str_PadHandheld)
+            : (style & HidNpadStyleTag_NpadFullKey) ? "Pro Controller"
+            : (style & HidNpadStyleTag_NpadGc) ? "GameCube"
+            : (style & HidNpadStyleTag_NpadJoyDual) ? ((attributes & HidNpadAttribute_IsLeftConnected) && (attributes & HidNpadAttribute_IsRightConnected)
+                ? "Joy-Con (L+R)" : (attributes & HidNpadAttribute_IsLeftConnected) ? "Joy-Con (L)" : "Joy-Con (R)")
+            : (style & HidNpadStyleTag_NpadJoyLeft) ? "Joy-Con (L)"
+            : (style & HidNpadStyleTag_NpadJoyRight) ? "Joy-Con (R)"
+            : tr(Str_PadOther);
+        int n = snprintf(out + used, size - used, "%s%d: %s", used == 0 ? "" : ", ", i + 1, name);
+        if (n < 0)
+            break;
+        used += (size_t)n < size - used ? (size_t)n : size - used - 1;
+    }
+}
 
 static void configurePads(void)
 {
@@ -331,13 +432,24 @@ void inputRead(SolarNxHidPacket *pkt)
 
     u32 connectedCount = 0;
     bool minusHeldAlone = false;
+    bool debug = controlDebugEnabled();
+    if (!debug)
+        atomic_store(&s_debugMenuOpen, false);
+    u64 now = armGetSystemTick();
+    u64 allButtons = 0;
+    bool chordHeld = false;
     for (int i = 0; i < INPUT_MAX_CONTROLLERS; i++)
     {
         padUpdate(&s_pads[i]);
         updateSixaxisSlot(i);
 
         if (!padIsConnected(&s_pads[i]))
+        {
+            atomic_store(&s_playerStyle[i], 0);
             continue;
+        }
+        atomic_store(&s_playerStyle[i], padGetStyleSet(&s_pads[i]));
+        atomic_store(&s_playerAttributes[i], (u32)padGetAttributes(&s_pads[i]));
 
         connectedCount++;
 
@@ -346,7 +458,11 @@ void inputRead(SolarNxHidPacket *pkt)
         // bit-for-bit (see SolarNX/Input/HidProtocol.cs's ControllerState.IsSet) - no remapping,
         // just mask to the low 16 bits the host actually reads (HeldKeys is a C# ushort).
         u64 buttons = padGetButtons(&s_pads[i]);
-        pkt->controllers[i].heldKeys = (uint32_t)(buttons & 0xFFFFu);
+        allButtons |= buttons;
+        if ((buttons & DEBUG_CHORD) == DEBUG_CHORD)
+            chordHeld = true;
+        u64 sent = debug ? filterMinusPlus(i, buttons, now) : buttons;
+        pkt->controllers[i].heldKeys = (uint32_t)(sent & 0xFFFFu);
         if ((buttons & HidNpadButton_Minus) && !(buttons & HidNpadButton_Plus))
             minusHeldAlone = true;
 
@@ -362,6 +478,39 @@ void inputRead(SolarNxHidPacket *pkt)
         readSixaxis(i, &pkt->controllers[i]);
     }
     pkt->controllerCount = connectedCount;
+
+    // The debug chord toggles the menu once per press (all four have to be let go to toggle again).
+    if (debug && chordHeld && !s_debugChordLatched)
+    {
+        bool open = !atomic_load(&s_debugMenuOpen);
+        atomic_store(&s_debugMenuOpen, open);
+        atomic_store(&s_debugMenuDown, 0);
+        logWrite("input", "debug menu %s", open ? "opened" : "closed");
+    }
+    s_debugChordLatched = chordHeld;
+
+    bool menuOpen = atomic_load(&s_debugMenuOpen);
+    if (s_debugMenuWasOpen && !menuOpen)
+        s_holdUntilReleased = true;
+    s_debugMenuWasOpen = menuOpen;
+    if (s_holdUntilReleased && allButtons == 0)
+        s_holdUntilReleased = false;
+
+    if (menuOpen || s_holdUntilReleased)
+    {
+        // The menu has the controller: presses go to it, the PC gets a controller at rest.
+        if (menuOpen)
+            atomic_fetch_or(&s_debugMenuDown, allButtons & ~s_debugPrevButtons & ~(u64)DEBUG_CHORD);
+        for (int i = 0; i < INPUT_MAX_CONTROLLERS; i++)
+        {
+            pkt->controllers[i].heldKeys = 0;
+            pkt->controllers[i].lJoyX = pkt->controllers[i].lJoyY = 0;
+            pkt->controllers[i].rJoyX = pkt->controllers[i].rJoyY = 0;
+        }
+        minusHeldAlone = false;
+    }
+    s_debugPrevButtons = allButtons;
+
     updateMenuHold(minusHeldAlone);
     applyRumble();
 

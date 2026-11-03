@@ -11,6 +11,13 @@ static Mutex s_mutex;
 static PcVersion s_pc;          // what the PC last said about itself
 static bool s_peerReady = false; // the PC said Hello in this session
 static uint8_t s_options = 0;    // the PC's last Options flags
+static ControlDebugInfo s_debugInfo;
+static uint32_t s_debugSeq = 0;
+static uint32_t s_rttUs = 0;
+
+const int kControlResolutions[CONTROL_RESOLUTION_COUNT][2] = {{640, 360}, {854, 480}, {960, 540}, {1280, 720}, {1920, 1080}};
+const int kControlFps[CONTROL_FPS_COUNT] = {24, 30, 45, 60};
+const char *const kControlTunes[CONTROL_TUNE_COUNT] = {"hq", "ll", "ull"};
 
 // Outgoing messages, filled from any thread and drained by the HID thread (it alone writes the
 // HID socket / sends Internet input, so frames never interleave). Small on purpose: these are rare
@@ -116,6 +123,9 @@ void controlSessionReset(void)
     controlWriteOwnVersion(hello);
     mutexLock(&s_mutex);
     s_peerReady = false;
+    s_options = 0;
+    s_debugInfo.valid = false;
+    s_rttUs = 0;
     s_queueHead = 0;
     s_queueCount = 0;
     enqueueLocked(ClientMessage_Hello, hello, sizeof(hello)); // the opener - goes out regardless
@@ -128,6 +138,43 @@ uint8_t controlOptions(void)
     uint8_t options = s_options;
     mutexUnlock(&s_mutex);
     return options;
+}
+
+bool controlDebugEnabled(void)
+{
+    mutexLock(&s_mutex);
+    bool enabled = s_peerReady && (s_options & CONTROL_OPTION_DEBUG);
+    mutexUnlock(&s_mutex);
+    return enabled;
+}
+
+bool controlGetDebugInfo(ControlDebugInfo *out)
+{
+    mutexLock(&s_mutex);
+    *out = s_debugInfo;
+    mutexUnlock(&s_mutex);
+    return out->valid;
+}
+
+void controlSendPing(void)
+{
+    uint64_t now = armGetSystemTick();
+    controlQueueClientMessage(ClientMessage_Ping, &now, sizeof(now));
+}
+
+uint32_t controlRttUs(void)
+{
+    mutexLock(&s_mutex);
+    uint32_t rtt = s_rttUs;
+    mutexUnlock(&s_mutex);
+    return rtt;
+}
+
+void controlSendSetting(uint8_t setting, int32_t value)
+{
+    uint8_t payload[8] = {setting, 0, 0, 0};
+    memcpy(payload + 4, &value, 4);
+    controlQueueClientMessage(ClientMessage_SetSetting, payload, sizeof(payload));
 }
 
 bool controlPeerReady(void)
@@ -171,6 +218,46 @@ void controlHandleHostMessage(uint8_t type, const uint8_t *payload, size_t lengt
         {
             mutexLock(&s_mutex);
             s_options = payload[0];
+            mutexUnlock(&s_mutex);
+        }
+        break;
+    case HostMessage_DebugInfo:
+        if (length >= 33 && length >= 33u + payload[32])
+        {
+            ControlDebugInfo info = {.valid = true};
+            memcpy(&info.bitrateKbps, payload, 4);
+            memcpy(&info.runningKbps, payload + 4, 4);
+            memcpy(&info.width, payload + 8, 2);
+            memcpy(&info.height, payload + 10, 2);
+            info.fps = payload[12];
+            info.codec = payload[13];
+            info.codecSetting = payload[14];
+            info.encoder = payload[15];
+            info.resolution = payload[16];
+            info.preset = payload[17];
+            info.tune = payload[18];
+            info.flags = payload[19];
+            size_t nameLength = payload[32] < sizeof(info.encoderName) - 1 ? payload[32] : sizeof(info.encoderName) - 1;
+            memcpy(info.encoderName, payload + 33, nameLength);
+            info.encoderName[nameLength] = '\0';
+            for (char *c = info.encoderName; *c; c++) // host text: drawn with "%s" only, but keep it printable
+                if ((unsigned char)*c < 0x20)
+                    *c = '?';
+            mutexLock(&s_mutex);
+            info.seq = ++s_debugSeq;
+            s_debugInfo = info;
+            mutexUnlock(&s_mutex);
+        }
+        break;
+    case HostMessage_Pong:
+        if (length >= 8)
+        {
+            uint64_t sent;
+            memcpy(&sent, payload, 8);
+            uint64_t us = armTicksToNs(armGetSystemTick() - sent) / 1000;
+            uint32_t sample = us > 2000000 ? 2000000 : (uint32_t)us;
+            mutexLock(&s_mutex);
+            s_rttUs = s_rttUs == 0 ? sample : (s_rttUs * 7 + sample) / 8;
             mutexUnlock(&s_mutex);
         }
         break;

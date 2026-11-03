@@ -22,6 +22,7 @@
 #include "../common/appstate/appstate.h"
 #include "reassembly.h"
 #include "videowire.h"
+#include "overlay.h"
 
 // Hardware H264 decode via NVTEGRA (the Tegra X1's NVDEC engine), through libavcodec's standard
 // hwaccel API - devkitPro's ffmpeg portlib is built with --enable-nvtegra (confirmed directly in
@@ -100,9 +101,26 @@ static Uint32 s_textureFormat = 0;
 static AVBufferRef *s_hwDeviceCtx = NULL;
 
 // Decode-thread -> render-thread handoff of the newest finished frame - see decodeThreadFunc.
-static Mutex s_frameMutex;             // guards s_pendingFrame/s_pendingValid
+static Mutex s_frameMutex;             // guards s_pendingFrame/s_pendingValid/s_pendingTick
 static AVFrame *s_pendingFrame = NULL; // newest decoded system-memory frame not yet shown
 static bool s_pendingValid = false;
+static u64 s_pendingTick = 0;          // its first datagram's arrival (debug overlay latency)
+
+// Debug overlay counters (overlay.h) - collected only while it is active.
+static atomic_ullong s_dbgDecodeNs = 0;
+static atomic_uint s_dbgDecodeCount = 0;
+static atomic_ullong s_dbgLatencyNs = 0;
+static atomic_uint s_dbgLatencyCount = 0;
+static atomic_uint s_dbgPresents = 0;
+
+void videoTakeDebugCounters(VideoDebugCounters *out)
+{
+    out->decodeNsSum = atomic_exchange(&s_dbgDecodeNs, 0);
+    out->decodeCount = atomic_exchange(&s_dbgDecodeCount, 0);
+    out->latencyNsSum = atomic_exchange(&s_dbgLatencyNs, 0);
+    out->latencyCount = atomic_exchange(&s_dbgLatencyCount, 0);
+    out->presents = atomic_exchange(&s_dbgPresents, 0);
+}
 
 bool videoInit(void)
 {
@@ -200,7 +218,7 @@ static bool ensureTexture(int width, int height, Uint32 sdlFormat)
 // NVTEGRA - see decodeThreadFunc). Handles the two layouts this app can actually produce: NV12
 // from the hwaccel readback, or plain YUV420P from the software decoder fallback. Main thread only
 // (SDL). Returns whether the frame was actually presented.
-static bool renderFrame(const AVFrame *swFrame)
+static bool renderFrame(const AVFrame *swFrame, u64 firstDatagramTick)
 {
     if (swFrame->format == AV_PIX_FMT_NV12 && ensureTexture(swFrame->width, swFrame->height, SDL_PIXELFORMAT_NV12))
     {
@@ -223,7 +241,18 @@ static bool renderFrame(const AVFrame *swFrame)
 
     SDL_RenderClear(s_renderer);
     SDL_RenderCopy(s_renderer, s_texture, NULL, NULL);
+    overlayDraw(s_renderer); // debug mode only
     SDL_RenderPresent(s_renderer); // blocks until vblank (PRESENTVSYNC) - fine here, see decodeThreadFunc
+    if (overlayActive())
+    {
+        // Presented = on its way to the screen at this vblank.
+        if (firstDatagramTick != 0)
+        {
+            atomic_fetch_add(&s_dbgLatencyNs, armTicksToNs(armGetSystemTick() - firstDatagramTick));
+            atomic_fetch_add(&s_dbgLatencyCount, 1);
+        }
+        atomic_fetch_add(&s_dbgPresents, 1);
+    }
     return true;
 }
 
@@ -294,6 +323,8 @@ static atomic_bool s_decodeEnded = false; // decode thread -> main: socket faile
 static void decodeFrame(AVCodecContext *codecCtx, AVPacket *packet, AVFrame *frame, AVFrame *swFrame,
     const ReassembledFrame *assembled)
 {
+    bool measure = overlayActive();
+    u64 decodeStart = measure ? armGetSystemTick() : 0;
     packet->data = (uint8_t *)assembled->data; // not reference-counted: libavcodec copies it
     packet->size = (int)assembled->size;
     packet->flags = assembled->keyframe ? AV_PKT_FLAG_KEY : 0;
@@ -335,11 +366,17 @@ static void decodeFrame(AVCodecContext *codecCtx, AVPacket *packet, AVFrame *fra
         }
 
         atomic_fetch_add(&s_framesDecoded, 1);
+        if (measure)
+        {
+            atomic_fetch_add(&s_dbgDecodeNs, armTicksToNs(armGetSystemTick() - decodeStart));
+            atomic_fetch_add(&s_dbgDecodeCount, 1);
+        }
 
         mutexLock(&s_frameMutex);
         av_frame_unref(s_pendingFrame); // an older frame the display never got to is superseded
         av_frame_move_ref(s_pendingFrame, displayable);
         s_pendingValid = true;
+        s_pendingTick = assembled->firstTick;
         mutexUnlock(&s_frameMutex);
 
         av_frame_unref(frame);
@@ -518,11 +555,13 @@ static void runStreamSession(void)
         while (SDL_PollEvent(&event)) { /* no input handling yet - see input.c */ }
 
         bool haveFrame = false;
+        u64 frameTick = 0;
         mutexLock(&s_frameMutex);
         if (s_pendingValid)
         {
             av_frame_move_ref(displayFrame, s_pendingFrame);
             s_pendingValid = false;
+            frameTick = s_pendingTick;
             haveFrame = true;
         }
         mutexUnlock(&s_frameMutex);
@@ -533,7 +572,7 @@ static void runStreamSession(void)
             continue;
         }
 
-        if (renderFrame(displayFrame) && ++framesShown % VIDEO_HEARTBEAT_EVERY_FRAMES == 0)
+        if (renderFrame(displayFrame, frameTick) && ++framesShown % VIDEO_HEARTBEAT_EVERY_FRAMES == 0)
         {
             const ReassemblyStats *stats = reassemblyStats();
             logWrite("video", "%u frames shown, %u decoded, %d kbps; since start: %u packets rebuilt from parity, %u frames lost, %u skipped waiting for a keyframe",
@@ -586,6 +625,7 @@ bool videoStart(void)
 
 void videoExit(void)
 {
+    overlayExit(); // its font belongs to this renderer
     if (s_texture != NULL) { SDL_DestroyTexture(s_texture); s_texture = NULL; }
     if (s_renderer != NULL) { SDL_DestroyRenderer(s_renderer); s_renderer = NULL; }
     if (s_window != NULL) { SDL_DestroyWindow(s_window); s_window = NULL; }
