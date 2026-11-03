@@ -34,6 +34,10 @@ static const uint8_t s_controlMarker[SOLARNX_HID_MARKER_SIZE] = {
 static uint8_t s_hostStream[2 + CONTROL_MAX_PAYLOAD + 1];
 static size_t s_hostStreamLength = 0;
 
+// The IP_TOS currently set on the HID socket - follows the PC's traffic-priority option.
+static int s_hidTos = 0;
+#define HID_TOS_PRIORITY 0xB8 // DSCP EF (46) << 2: WMM voice/video on most routers
+
 static int s_listenSock = -1;
 static int s_clientSock = -1;
 
@@ -236,6 +240,7 @@ bool networkAcceptHid(void)
         mutexUnlock(&s_sessionConfigMutex);
 
         s_hostStreamLength = 0;
+        s_hidTos = 0;
         controlSessionReset();
         s_clientSock = sock;
         return true;
@@ -277,6 +282,20 @@ bool networkSendHid(const SolarNxHidPacket *pkt)
 
 bool networkFlushControl(void)
 {
+    // The PC's traffic-priority option (Options message) decides the mark on our input packets.
+    if (!s_internet && s_clientSock >= 0)
+    {
+        int tos = (controlOptions() & CONTROL_OPTION_TRAFFIC_PRIORITY) ? HID_TOS_PRIORITY : 0;
+        if (tos != s_hidTos)
+        {
+            if (setsockopt(s_clientSock, IPPROTO_IP, IP_TOS, &tos, sizeof(tos)) == 0)
+                logWrite("network", "HID packets now marked TOS 0x%02x", tos);
+            else
+                logWrite("network", "IP_TOS 0x%02x refused (errno %d)", tos, errno);
+            s_hidTos = tos; // either way - don't retry every packet
+        }
+    }
+
     uint8_t type;
     static uint8_t payload[CONTROL_MAX_PAYLOAD];
     size_t length;

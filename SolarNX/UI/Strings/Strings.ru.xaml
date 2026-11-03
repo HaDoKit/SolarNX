@@ -77,6 +77,8 @@
     <sys:String x:Key="Settings.EncoderCpuNote"> Аппаратный кодировщик не найден — видео кодирует процессор, это заметно его нагружает.</sys:String>
     <sys:String x:Key="Settings.Gamepad">Геймпад</sys:String>
     <sys:String x:Key="Settings.SwitchLayout">Раскладка Switch (A↔B, X↔Y)</sys:String>
+    <sys:String x:Key="Settings.TrafficPriority">Приоритет трафика</sys:String>
+    <sys:String x:Key="Settings.TrafficPriorityHint">Видео, звук и управление помечаются как срочные: роутер с поддержкой WMM пропускает их в Wi-Fi вперёд остального трафика. Работает в режиме Wi-Fi. Если с включённым стало хуже — выключите.</sys:String>
     <sys:String x:Key="Settings.Rumble">Вибрация на Switch</sys:String>
     <sys:String x:Key="Settings.RumbleHint">Вибрация из игры передаётся на Joy-Con или Pro Controller. Нужна SolarNX 0.2.5 или новее на Switch.</sys:String>
     <sys:String x:Key="Settings.SwitchLayoutHint">Можно переключать и на Switch: кнопка Y в главном меню. Действует последнее изменение — на ПК или на Switch.</sys:String>

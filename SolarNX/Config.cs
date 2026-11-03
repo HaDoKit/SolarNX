@@ -88,6 +88,11 @@ public sealed class Config
     /// rumble - needs SolarNX 0.2.5+ on the Switch (protocol 1.1, Session/ControlWire.cs).</summary>
     public bool Rumble { get; set; } = true;
 
+    /// <summary>DSCP marks on video (AF41), audio and input (EF) in Wi-Fi mode, so a router with WMM
+    /// lets them ahead of other traffic - see Native/QosMarking. The Switch marks its input the same
+    /// way when told so (control message Options).</summary>
+    public bool TrafficPriority { get; set; } = true;
+
     /// <summary>Off by default: after a game exits, Steam returns to Big Picture by itself. When on,
     /// AppOrchestrator additionally sends Escape and fully closes/reopens Big Picture - an old
     /// workaround for the gamepad staying dead in Big Picture after a non-Steam-game shortcut (e.g.

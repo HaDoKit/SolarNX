@@ -284,6 +284,9 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         SwitchLayoutToggle.IsChecked = _config.SwitchButtonLayout;
         SwitchLayoutToggle.Checked += (_, _) => SetSwitchLayout(true);
         SwitchLayoutToggle.Unchecked += (_, _) => SetSwitchLayout(false);
+        TrafficPriorityToggle.IsChecked = _config.TrafficPriority;
+        TrafficPriorityToggle.Checked += (_, _) => SetTrafficPriority(true);
+        TrafficPriorityToggle.Unchecked += (_, _) => SetTrafficPriority(false);
         RumbleToggle.IsChecked = _config.Rumble;
         RumbleToggle.Checked += (_, _) => SetRumble(true);
         RumbleToggle.Unchecked += (_, _) => SetRumble(false);
@@ -293,6 +296,13 @@ public partial class SettingsView : System.Windows.Controls.UserControl
             SwitchLayoutToggle.IsChecked = _orchestrator.SwapAbxy;
             _showingSwitchLayout = false;
         });
+    }
+
+    private void SetTrafficPriority(bool enabled)
+    {
+        _config.TrafficPriority = enabled;
+        _config.Save();
+        _orchestrator.TrafficPrioritySettingChanged();
     }
 
     private void SetRumble(bool enabled)
