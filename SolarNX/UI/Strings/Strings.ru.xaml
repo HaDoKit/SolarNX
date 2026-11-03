@@ -32,6 +32,11 @@
     <sys:String x:Key="Home.StatusStreamingTarget">Статус: клиент подключён, идёт трансляция — {0}</sys:String>
     <sys:String x:Key="Home.StatusWaitingInternet">Статус: ожидание Switch через интернет (UDP {0})…</sys:String>
     <sys:String x:Key="Home.StatusWaiting">Статус: ожидание подключения клиента…</sys:String>
+    <sys:String x:Key="Home.CompatLegacy">На Switch старая версия SolarNX (0.2.4 или раньше). Работает без новых функций — вибрации и режима отладки. Обновите приложение на Switch.</sys:String>
+    <sys:String x:Key="Home.CompatSwitchOlder">На Switch SolarNX {0}. Работает без функций, которых в ней ещё нет. Обновите приложение на Switch.</sys:String>
+    <sys:String x:Key="Home.CompatSwitchNewer">На Switch SolarNX {0} — новее этой программы. Работает без её новых функций. Обновите SolarNX на ПК.</sys:String>
+    <sys:String x:Key="Home.CompatUpdateSwitch">На Switch SolarNX {0} — несовместима с этой версией. Трансляция не запустится: обновите приложение на Switch.</sys:String>
+    <sys:String x:Key="Home.CompatUpdatePc">На Switch SolarNX {0} — несовместима с этой версией. Трансляция не запустится: обновите SolarNX на ПК.</sys:String>
     <sys:String x:Key="Home.ShowScreen">Показать экран</sys:String>
     <sys:String x:Key="Home.EnterIpFirst">Сначала укажите IP клиента.</sys:String>
 

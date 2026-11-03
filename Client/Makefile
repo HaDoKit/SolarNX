@@ -10,6 +10,11 @@ TOPDIR ?= $(CURDIR)
 # Single source of truth for the version: ../VERSION (also read by SolarNX.csproj and installer.iss).
 # Set before switch_rules, which falls back to 1.0.0 when APP_VERSION is empty.
 APP_VERSION	:=	$(strip $(shell cat "$(TOPDIR)/../VERSION"))
+# Wire protocol "major.minor" (../PROTOCOL, also read by SolarNX.csproj and the release workflow) -
+# see control/control.h for what the two numbers mean.
+APP_PROTOCOL	:=	$(strip $(shell cat "$(TOPDIR)/../PROTOCOL"))
+PROTOCOL_MAJOR	:=	$(word 1,$(subst ., ,$(APP_PROTOCOL)))
+PROTOCOL_MINOR	:=	$(word 2,$(subst ., ,$(APP_PROTOCOL)))
 include $(DEVKITPRO)/libnx/switch_rules
 
 #---------------------------------------------------------------------------------
@@ -35,7 +40,7 @@ else
 	BUILD	:=	build
 endif
 
-SOURCES		:=	. audio input network video menu common/logger common/fontcache common/appstate common/lang common/rs library settings transport
+SOURCES		:=	. audio input network video menu common/logger common/fontcache common/appstate common/lang common/rs library settings transport control
 DATA		:=	data
 INCLUDES	:=	.
 # App-selection menu icons (menu.c) - see romfs/icons/.
@@ -51,6 +56,7 @@ ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 
 CFLAGS	:=	-g -Wall -ffunction-sections \
 			$(ARCH) $(DEFINES) -DSOLARNX_VERSION=\"$(APP_VERSION)\" \
+			-DSOLARNX_PROTOCOL_MAJOR=$(PROTOCOL_MAJOR) -DSOLARNX_PROTOCOL_MINOR=$(PROTOCOL_MINOR) \
 			`$(PREFIX)pkg-config --cflags sdl2 SDL2_ttf SDL2_image SDL2_gfx libavformat libavcodec libavutil libswresample libswscale opusfile`
 
 ifeq ($(DEBUG),1)

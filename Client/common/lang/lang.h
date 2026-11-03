@@ -69,6 +69,13 @@ typedef enum {
     Str_StatusServerNoPc,
     Str_StatusNoPcId,
 
+    Str_PcVersionPrefix,
+    Str_PcLegacy,
+    Str_PcOlderSuffix,
+    Str_PcNewerSuffix,
+    Str_UpdatePc,
+    Str_UpdateSwitch,
+
     Str_Count
 } StrId;
 

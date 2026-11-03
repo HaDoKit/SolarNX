@@ -65,3 +65,5 @@ void transportBeginSession(void);                     // forget the previous ses
 bool transportWaitWelcome(void);                      // block until connected (false = app exiting)
 bool transportSendInput(const SolarNxHidPacket *pkt); // false once the PC ended the session or went silent
 void transportEndSession(void);                       // tell the PC we left (Bye)
+// A control message to the PC (control/control.h), sealed. HID thread.
+bool transportSendControl(uint8_t type, const void *payload, size_t length);

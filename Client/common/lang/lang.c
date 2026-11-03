@@ -69,6 +69,13 @@ static const char *const kEnglish[Str_Count] = {
     [Str_StatusServerBadKey] = "the server refused the key",
     [Str_StatusServerNoPc] = "PC not on the server (is streaming on?)",
     [Str_StatusNoPcId] = "set the PC ID (shown on the PC)",
+
+    [Str_PcVersionPrefix] = "PC: SolarNX ",
+    [Str_PcLegacy] = "PC: an older SolarNX (0.2.4 or earlier) - no rumble or debug mode",
+    [Str_PcOlderSuffix] = " - works without the newer features",
+    [Str_PcNewerSuffix] = " - update this app for its new features",
+    [Str_UpdatePc] = "SolarNX on the PC is incompatible - update it on the PC",
+    [Str_UpdateSwitch] = "SolarNX on the PC is newer and incompatible - update this app",
 };
 
 static const char *const kRussian[Str_Count] = {
@@ -133,6 +140,13 @@ static const char *const kRussian[Str_Count] = {
     [Str_StatusServerBadKey] = "сервер не принял ключ",
     [Str_StatusServerNoPc] = "ПК нет на сервере (трансляция включена?)",
     [Str_StatusNoPcId] = "укажите ID ПК (он показан на ПК)",
+
+    [Str_PcVersionPrefix] = "ПК: SolarNX ",
+    [Str_PcLegacy] = "ПК: старая версия SolarNX (0.2.4 или раньше) — без вибрации и отладки",
+    [Str_PcOlderSuffix] = " — без новых функций",
+    [Str_PcNewerSuffix] = " — обновите приложение на Switch, чтобы получить новые функции",
+    [Str_UpdatePc] = "На ПК несовместимая версия SolarNX — обновите её на ПК",
+    [Str_UpdateSwitch] = "На ПК более новая несовместимая версия SolarNX — обновите приложение на Switch",
 };
 
 void langInit(void)

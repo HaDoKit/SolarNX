@@ -15,6 +15,7 @@
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
 #include "../common/lang/lang.h"
+#include "../control/control.h"
 
 #define MENU_OPTION_COUNT 3
 #define MENU_OPTION_LIBRARY 2 // index of the "My games" tile
@@ -253,6 +254,23 @@ static void drawButtonLayoutHint(MenuContext *context)
         snprintf(connection, sizeof(connection), "%s%s", tr(Str_MenuInternetPrefix), transportStatusText(status));
     drawScaledText(context, MENU_RESX - 24 - scaledWidth(context, 0.5f, connection), MENU_RESY - 62, 0.5f,
         status == TransportStatus_Off || status == TransportStatus_Connected ? kDim : kGold, connection);
+
+    // Above that: the PC's SolarNX, once it said (library channel / Internet Welcome) - gold when the
+    // protocols differ, with which side to update.
+    PcVersion pc;
+    if (!controlGetPcVersion(&pc))
+        return;
+    char line[200];
+    PcCompat compat = controlPcCompat();
+    if (compat == PcCompat_UpdatePc || compat == PcCompat_UpdateSwitch)
+        snprintf(line, sizeof(line), "%s", tr(compat == PcCompat_UpdatePc ? Str_UpdatePc : Str_UpdateSwitch));
+    else if (pc.legacy)
+        snprintf(line, sizeof(line), "%s", tr(Str_PcLegacy));
+    else
+        snprintf(line, sizeof(line), "%s%s%s", tr(Str_PcVersionPrefix), pc.appVersion,
+            compat == PcCompat_PcOlder ? tr(Str_PcOlderSuffix) : compat == PcCompat_PcNewer ? tr(Str_PcNewerSuffix) : "");
+    drawScaledText(context, MENU_RESX - 24 - scaledWidth(context, 0.5f, line), MENU_RESY - 90, 0.5f,
+        compat == PcCompat_Same ? kDim : kGold, line);
 }
 
 // --- Settings screen (X): Wi-Fi / experimental Internet mode, PC address, pairing, language ---
@@ -616,6 +634,12 @@ SolarNxAppTarget runAppSelectMenu(MenuContext *context, StarSystem *starSystem)
         {
             runConnectionScreen(context, starSystem, &menuPad);
             continue;
+        }
+        else if ((down & HidNpadButton_A) && controlPcIncompatible())
+        {
+            // Another major protocol: a session would show nothing. The line above the connection
+            // mode says which side to update; A does nothing until then.
+            logWrite("menu", "pick ignored - the PC's SolarNX is incompatible");
         }
         else if (down & HidNpadButton_A)
         {

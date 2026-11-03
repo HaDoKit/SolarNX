@@ -7,11 +7,13 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <poll.h>
 
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
 #include "../settings/settings.h"
 #include "../transport/transport.h"
+#include "../control/control.h"
 
 _Static_assert(sizeof(SolarNxHidPacket) == SOLARNX_HID_PAYLOAD_SIZE,
     "SolarNxHidPacket must stay exactly SOLARNX_HID_PAYLOAD_SIZE bytes - see network.h");
@@ -21,6 +23,16 @@ _Static_assert(sizeof(SolarNxSessionConfig) == SOLARNX_SESSION_CONFIG_SIZE,
 static const uint8_t s_hidMarker[SOLARNX_HID_MARKER_SIZE] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 };
+
+// Control messages to the PC (control/control.h) - same size, other bytes.
+static const uint8_t s_controlMarker[SOLARNX_HID_MARKER_SIZE] = {
+    0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE,
+};
+
+// Control messages from the PC, as they trickle in after the SessionConfig (u16 length, u8 type,
+// payload). HID thread only.
+static uint8_t s_hostStream[2 + CONTROL_MAX_PAYLOAD + 1];
+static size_t s_hostStreamLength = 0;
 
 static int s_listenSock = -1;
 static int s_clientSock = -1;
@@ -117,9 +129,9 @@ bool networkInit(void)
     return true;
 }
 
-// True if the peer already closed/reset this connection. The host never sends anything after
-// SessionConfig, so a non-blocking peek that reports EOF (0) or a hard error means it's gone, while
-// EAGAIN means "open, nothing to read" - a live session.
+// True if the peer already closed/reset this connection. A non-blocking peek that reports EOF (0)
+// or a hard error means it's gone; EAGAIN ("open, nothing to read") or data (the host's control
+// messages that follow the SessionConfig) means a live session.
 static bool connectionAlreadyClosed(int sock)
 {
     uint8_t probe;
@@ -142,7 +154,12 @@ bool networkAcceptHid(void)
     if (s_internet)
     {
         transportBeginSession();
-        return transportWaitWelcome();
+        if (!transportWaitWelcome())
+            return false;
+        // The Welcome already told us the PC's version (control.c), so there's no Hello to wait for.
+        controlSessionReset();
+        controlAssumePeerReady();
+        return true;
     }
 
     if (s_listenSock < 0)
@@ -218,6 +235,8 @@ bool networkAcceptHid(void)
         s_sessionConfigReady = true;
         mutexUnlock(&s_sessionConfigMutex);
 
+        s_hostStreamLength = 0;
+        controlSessionReset();
         s_clientSock = sock;
         return true;
     }
@@ -254,6 +273,96 @@ bool networkSendHid(const SolarNxHidPacket *pkt)
         return false;
 
     return sendAll(s_clientSock, pkt, sizeof(*pkt));
+}
+
+bool networkFlushControl(void)
+{
+    uint8_t type;
+    static uint8_t payload[CONTROL_MAX_PAYLOAD];
+    size_t length;
+    while (controlTakeClientMessage(&type, payload, &length))
+    {
+        if (s_internet)
+        {
+            transportSendControl(type, payload, length);
+            continue;
+        }
+        if (s_clientSock < 0)
+            return false;
+        uint8_t head[SOLARNX_HID_MARKER_SIZE + 3];
+        memcpy(head, s_controlMarker, SOLARNX_HID_MARKER_SIZE);
+        uint16_t frameLength = (uint16_t)(1 + length);
+        memcpy(head + SOLARNX_HID_MARKER_SIZE, &frameLength, 2);
+        head[SOLARNX_HID_MARKER_SIZE + 2] = type;
+        if (!sendAll(s_clientSock, head, sizeof(head)) || (length > 0 && !sendAll(s_clientSock, payload, length)))
+            return false;
+    }
+    return true;
+}
+
+// Hands every complete frame in s_hostStream to control.c and keeps the incomplete tail.
+static bool parseHostStream(void)
+{
+    size_t pos = 0;
+    while (s_hostStreamLength - pos >= 2)
+    {
+        uint16_t frameLength;
+        memcpy(&frameLength, s_hostStream + pos, 2);
+        if (frameLength < 1 || frameLength > CONTROL_MAX_PAYLOAD + 1)
+        {
+            logWrite("network", "bad control frame from the PC (length %u) - closing", frameLength);
+            return false; // the stream can't be resynced: no marker on this direction
+        }
+        if (s_hostStreamLength - pos < 2u + frameLength)
+            break;
+        controlHandleHostMessage(s_hostStream[pos + 2], s_hostStream + pos + 3, frameLength - 1u);
+        pos += 2u + frameLength;
+    }
+    memmove(s_hostStream, s_hostStream + pos, s_hostStreamLength - pos);
+    s_hostStreamLength -= pos;
+    return true;
+}
+
+bool networkWaitForHost(uint64_t timeoutNs)
+{
+    if (s_internet || s_clientSock < 0)
+    {
+        // Internet: transport.c's own thread receives (and hands control messages over).
+        svcSleepThread(timeoutNs);
+        return true;
+    }
+
+    uint64_t deadline = armTicksToNs(armGetSystemTick()) + timeoutNs;
+    while (1)
+    {
+        uint64_t now = armTicksToNs(armGetSystemTick());
+        if (now >= deadline)
+            return true;
+        int waitMs = (int)((deadline - now + 999999ULL) / 1000000ULL);
+
+        struct pollfd pfd = {.fd = s_clientSock, .events = POLLIN};
+        int ready = poll(&pfd, 1, waitMs);
+        if (ready <= 0)
+        {
+            // Nothing to read, or poll itself failed - just pace like the plain sleep used to.
+            if (ready < 0)
+                svcSleepThread(deadline - now);
+            return true;
+        }
+
+        ssize_t n = recv(s_clientSock, s_hostStream + s_hostStreamLength, sizeof(s_hostStream) - s_hostStreamLength, MSG_DONTWAIT);
+        if (n == 0)
+            return false; // the PC closed the connection
+        if (n < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                continue;
+            return false;
+        }
+        s_hostStreamLength += (size_t)n;
+        if (!parseHostStream())
+            return false;
+    }
 }
 
 void networkCloseHidClient(void)

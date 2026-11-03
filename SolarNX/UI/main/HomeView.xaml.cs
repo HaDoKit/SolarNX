@@ -39,6 +39,25 @@ public partial class HomeView : System.Windows.Controls.UserControl
 
         RefreshMode();
         Loc.Changed += RefreshMode;
+        _orchestrator.Compatibility.Changed += () => Dispatcher.BeginInvoke(RefreshCompatibility);
+    }
+
+    /// <summary>Says when the Switch's protocol differs from this PC's, and which side to update -
+    /// nothing while they match (or nothing was heard from the Switch yet).</summary>
+    private void RefreshCompatibility()
+    {
+        var peer = _orchestrator.Compatibility.Switch;
+        var text = SolarNX.Session.SwitchCompatibility.Classify(peer) switch
+        {
+            SolarNX.Session.Compatibility.SwitchOlder when peer!.IsLegacy => Loc.T("Home.CompatLegacy"),
+            SolarNX.Session.Compatibility.SwitchOlder => Loc.F("Home.CompatSwitchOlder", peer!.AppVersion!),
+            SolarNX.Session.Compatibility.SwitchNewer => Loc.F("Home.CompatSwitchNewer", peer!.AppVersion!),
+            SolarNX.Session.Compatibility.UpdateSwitch => Loc.F("Home.CompatUpdateSwitch", peer!.AppVersion ?? "?"),
+            SolarNX.Session.Compatibility.UpdatePc => Loc.F("Home.CompatUpdatePc", peer!.AppVersion ?? "?"),
+            _ => null,
+        };
+        CompatLabel.Text = text ?? "";
+        CompatLabel.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     /// <summary>Wi-Fi: the editable client IP. Internet (experimental): the Switch finds this PC
@@ -52,6 +71,7 @@ public partial class HomeView : System.Windows.Controls.UserControl
         IpBox.Text = internet ? (paired == 0 ? Loc.T("Home.NoPaired") : Loc.F("Home.PairedCount", paired)) : _config.ClientIp;
         IpBox.IsReadOnly = internet;
         RefreshStatus();
+        RefreshCompatibility();
     }
 
     private void SaveClientIp()

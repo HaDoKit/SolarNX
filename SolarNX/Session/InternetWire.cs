@@ -20,10 +20,12 @@ namespace SolarNX.Session;
 ///   PC → Switch  PairResult  u8 accepted; if accepted: host id[8], proof[32] (InternetCrypto.PairProof)
 ///
 /// Session (in clear only these two and Reject):
-///   Switch → PC  Hello       device id[16], switch nonce[16]
-///   PC → Switch  Welcome     pc nonce[16], host id[8], then sealed SessionConfig (counter 1) with the
-///                            header + pc nonce + host id as associated data
-///   PC → Switch  Reject      u8 reason (<see cref="RejectReason"/>)
+///   Switch → PC  Hello       device id[16], switch nonce[16], (protocol 1.1) version[28]
+///   PC → Switch  Welcome     pc nonce[16], host id[8], then sealed SessionConfig + (1.1) version[28]
+///                            (counter 1) with the header + pc nonce + host id as associated data
+///   PC → Switch  Reject      u8 reason (<see cref="RejectReason"/>); WrongVersion appends the PC's version[28]
+/// version[28] = <see cref="PeerVersion"/>'s wire form. A 0.2.4 side sends neither and ignores the
+/// extra bytes; a different major protocol gets Reject WrongVersion (<see cref="SwitchCompatibility"/>).
 ///
 /// Everything else is sealed with the session keys (header as associated data, counter, AES-CTR, tag):
 ///   Switch → PC  Input       the 224-byte HID packet (Input/HidProtocol.cs)
@@ -37,6 +39,8 @@ namespace SolarNX.Session;
 ///   Switch → PC  LibAck      u64 hash, u32 bytes received in order so far
 ///   Switch → PC  Keepalive   (empty) once a second while connected
 ///   PC → Switch  KeepaliveAck
+///   PC → Switch  Control       (1.1) u8 type + payload - <see cref="ControlWire"/>
+///   Switch → PC  ClientControl (1.1) u8 type + payload
 ///
 /// The Switch says Hello every second until it gets a Welcome, then Keepalive every second; three
 /// seconds without anything valid from the PC send it back to Hello with a fresh nonce (new keys).
@@ -75,6 +79,14 @@ internal static class InternetWire
         /// <summary>Empty, sent towards a Switch the rendezvous server introduced - opens this PC's
         /// router for the Switch's packets (hole punching). Ignored on arrival.</summary>
         Punch = 20,
+
+        /// <summary>Protocol 1.1: a control message PC → Switch, sealed - u8 type + payload
+        /// (<see cref="ControlWire.HostMessage"/>). An older Switch ignores unknown sealed types.</summary>
+        Control = 21,
+
+        /// <summary>Protocol 1.1: a control message Switch → PC, sealed - u8 type + payload
+        /// (<see cref="ControlWire.ClientMessage"/>).</summary>
+        ClientControl = 22,
     }
 
     public enum RejectReason : byte

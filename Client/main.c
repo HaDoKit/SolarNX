@@ -16,6 +16,7 @@
 #include "library/library.h"
 #include "settings/settings.h"
 #include "transport/transport.h"
+#include "control/control.h"
 
 // HID (network.c) blocks forever on its own accept/send loop, and video (video.c) blocks forever
 // pumping appMainLoop()/SDL - they can't both run on one thread, so HID gets its own. 0x4000
@@ -153,7 +154,7 @@ static void startNetwork(void) {
                 break;
             }
 
-            if (!networkSendHid(&pkt)) {
+            if (!networkSendHid(&pkt) || !networkFlushControl()) {
                 logWrite("network", "HID send failed after %lu packets - PC disconnected, waiting for reconnect", totalSent);
                 networkCloseHidClient();
                 // A library game's session is ended by the host when the game exits (or couldn't
@@ -172,7 +173,17 @@ static void startNetwork(void) {
                 sinceHeartbeat = 0;
             }
 
-            svcSleepThread(HID_SEND_INTERVAL_NS);
+            // Not a plain sleep: the PC's control messages (control/control.h) are read meanwhile, so
+            // they're handled as they arrive rather than once per interval.
+            if (!networkWaitForHost(HID_SEND_INTERVAL_NS)) {
+                logWrite("network", "the PC closed the HID connection after %lu packets", totalSent);
+                networkCloseHidClient();
+                if (inputGetAppTarget() == SolarNxAppTarget_Library) {
+                    logWrite("network", "library session ended by the host - back to the menu");
+                    appRequestMenu();
+                }
+                break;
+            }
         }
     }
 }
@@ -229,6 +240,7 @@ void main() {
     // tries to load anything from "romfs:/...".
     romfsInit();
     settingsInit(); // before initNetwork() starts the library thread, which syncs these
+    controlInit();  // before the library thread and transport, which report the PC's version
     langInit();
 
     if (!initNetwork())
