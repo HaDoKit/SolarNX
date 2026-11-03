@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include "../network/network.h"
+#include "../settings/settings.h"
 #include "../common/logger/logger.h"
 #include "../common/appstate/appstate.h"
 
@@ -66,6 +67,18 @@ uint32_t audioGetConcealedFrameCount(void)
 {
     return s_audioConcealedFrameCount;
 }
+
+// Internet mode only (Wi-Fi keeps its 0.2.4 behaviour): live playback instead of playing everything.
+// Over mobile data the audio fell further behind with every hiccup, for two reasons:
+//  - reordering: 3 arriving before 2 concealed 2, then 2 was played as well (the "large gap" path,
+//    resyncing backwards), and 4 concealed 2..3 once more - +40ms of audio per swap, for good;
+//  - bursts: after a stall the held-back datagrams arrive at once, and submitPcm waited for a free
+//    buffer for each, so the delay of the stall stayed in the queue.
+// Now a datagram behind the last one played is dropped (it was concealed already), and a frame that
+// finds every out buffer busy (~60-80ms queued) is dropped instead of waited for.
+static bool s_livePlayback = false;
+static uint32_t s_audioDroppedLate = 0;
+static uint32_t s_audioDroppedBacklog = 0;
 
 static AudioOutBuffer s_outBuffers[AUDIO_OUT_BUFFER_COUNT];
 static u8 *s_outBufferData[AUDIO_OUT_BUFFER_COUNT];
@@ -162,6 +175,12 @@ static bool submitPcm(const s16 *pcm, u32 sampleCount)
             return true;
         }
 
+        if (s_livePlayback)
+        {
+            if (s_audioDroppedBacklog++ % 50 == 0)
+                logWrite("audio", "playback queue full - dropping to stay live (%u so far)", s_audioDroppedBacklog);
+            return false;
+        }
         svcSleepThread(1000000ULL); // 1ms
     }
 
@@ -186,6 +205,21 @@ static void handleUnit(const uint8_t *unit, int len, u32 *framesDecoded, bool *h
     // of a gap or a naive repeat - AudioCaptureSender.cs's doc comment explicitly says the
     // client's RTP jitter buffer/Opus PLC is what's meant to absorb gaps, not a host-side retry.
     // A sequence-number gap here is exactly that signal.
+    if (s_livePlayback && *haveLastSeq)
+    {
+        int16_t ahead = (int16_t)(u16)(seq - *lastSeq);
+        if (ahead <= 0 && ahead > -AUDIO_MAX_PLC_FRAMES_PER_GAP)
+        {
+            // Late (concealed when its gap showed) or a duplicate: playing it now only adds delay.
+            // Not a loss after all - the host's adaptive bitrate reads concealment as link trouble.
+            if (ahead < 0 && s_audioConcealedFrameCount > 0)
+                s_audioConcealedFrameCount--;
+            if (s_audioDroppedLate++ % 50 == 0)
+                logWrite("audio", "late datagram (seq %u after %u) dropped (%u so far)", seq, *lastSeq, s_audioDroppedLate);
+            return;
+        }
+    }
+
     if (*haveLastSeq)
     {
         u16 missing = (u16)(seq - *lastSeq - 1);
@@ -271,6 +305,7 @@ static void runStreamSession(void)
     // (e.g. while video.c's decode/transfer is CPU-heavy on another thread). 64KB is ~4s of this
     // stream's audio (OpusBitrateBps=128000) - generous headroom against a transient stall without
     // the runaway-latency problem a multi-second buffer caused on the video side.
+    s_livePlayback = settingsGetConnectionMode() == SettingsConnection_Internet;
     int rcvBufSize = 65536;
     setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &rcvBufSize, sizeof(rcvBufSize));
 
