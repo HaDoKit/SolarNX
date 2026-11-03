@@ -42,7 +42,7 @@
 // SolarNX/Capture/VideoEncoder.cs) - CABAC makes that fallback somewhat more CPU-hungry than the
 // baseline profile used previously, but the NVTEGRA path is the one that normally runs.
 
-// The stream: SolarNX's own framing (videowire.h) - each H.264 frame cut into datagrams with
+// The stream: SolarNX's own framing (videowire.h) - each H.265 or H.264 frame cut into datagrams with
 // Reed-Solomon parity, rebuilt by reassembly.c and handed to libavcodec as one packet. No
 // libavformat: there is no container to probe, so the first keyframe decodes the moment it lands.
 // In Internet mode transport.c unseals the same datagrams and delivers them to this port on loopback.
@@ -117,8 +117,13 @@ bool videoInit(void)
         return false;
     }
 
+    // The screen's own resolution - 1920x1080 docked, 1280x720 handheld - so a 1080p stream (the
+    // host's automatic resolution when docked) isn't squeezed into 720p first. RESIZABLE: SDL's Switch
+    // backend then resizes the window itself when the console goes in or out of the dock (it does
+    // only for resizable windows); renderFrame stretches the picture over whatever size it is.
+    bool docked = appletGetOperationMode() == AppletOperationMode_Console;
     s_window = SDL_CreateWindow("SolarNX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        1280, 720, SDL_WINDOW_SHOWN);
+        docked ? 1920 : 1280, docked ? 1080 : 720, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (s_window == NULL)
     {
         logWrite("video", "SDL_CreateWindow failed: %s", SDL_GetError());
@@ -280,7 +285,6 @@ static atomic_bool s_decodeStop = false;
 typedef struct
 {
     int socket;
-    AVCodecContext *codecCtx;
 } DecodeJob;
 
 static atomic_uint s_framesDecoded = 0;
@@ -343,9 +347,14 @@ static void decodeFrame(AVCodecContext *codecCtx, AVPacket *packet, AVFrame *fra
     }
 }
 
+static AVCodecContext *openDecoder(enum AVCodecID codecId);
+
 static void decodeThreadFunc(void *arg)
 {
     const DecodeJob *job = (const DecodeJob *)arg;
+    // Opened for the codec of the first frame, and again whenever it changes (the PC switched
+    // between H.265 and H.264 - a restart with another encoder): the flag in every datagram says.
+    AVCodecContext *codecCtx = NULL;
     AVPacket *packet = av_packet_alloc();
     AVFrame *frame = av_frame_alloc();
     AVFrame *swFrame = av_frame_alloc(); // readback target for NVTEGRA frames only
@@ -386,10 +395,20 @@ static void decodeThreadFunc(void *arg)
                 windowBytes = 0;
             }
 
-            decodeFrame(job->codecCtx, packet, frame, swFrame, &assembled);
+            enum AVCodecID codecId = assembled.hevc ? AV_CODEC_ID_HEVC : AV_CODEC_ID_H264;
+            if (codecCtx == NULL || codecCtx->codec_id != codecId)
+            {
+                avcodec_free_context(&codecCtx);
+                codecCtx = openDecoder(codecId);
+                if (codecCtx == NULL)
+                    break; // nothing to decode with - runStreamSession sets up again
+            }
+
+            decodeFrame(codecCtx, packet, frame, swFrame, &assembled);
         }
     }
 
+    avcodec_free_context(&codecCtx);
     av_frame_free(&swFrame);
     av_frame_free(&frame);
     av_packet_free(&packet);
@@ -424,12 +443,12 @@ static int openVideoSocket(void)
     return sock;
 }
 
-static AVCodecContext *openDecoder(void)
+static AVCodecContext *openDecoder(enum AVCodecID codecId)
 {
-    const AVCodec *decoder = avcodec_find_decoder(AV_CODEC_ID_H264);
+    const AVCodec *decoder = avcodec_find_decoder(codecId);
     if (decoder == NULL)
     {
-        logWrite("video", "no H.264 decoder");
+        logWrite("video", "no decoder for codec id %d", (int)codecId);
         return NULL;
     }
 
@@ -440,6 +459,7 @@ static AVCodecContext *openDecoder(void)
         return NULL;
     }
     // Every frame goes out as soon as it is decoded - the stream has no B-frames to reorder.
+    // Decoded on NVTEGRA either way (H.264 High and H.265 Main, both 8-bit NV12).
     codecCtx->flags |= AV_CODEC_FLAG_LOW_DELAY;
 
     if (s_hwDeviceCtx != NULL)
@@ -471,21 +491,13 @@ static void runStreamSession(void)
     if (sock < 0)
         return;
 
-    AVCodecContext *codecCtx = openDecoder();
-    if (codecCtx == NULL)
-    {
-        close(sock);
-        return;
-    }
-
     reassemblyReset();
-    DecodeJob job = { sock, codecCtx };
+    DecodeJob job = { sock };
     Thread decodeThread;
     if (R_FAILED(threadCreate(&decodeThread, decodeThreadFunc, &job, NULL,
             VIDEO_DECODE_THREAD_STACK_SIZE, VIDEO_DECODE_THREAD_PRIORITY, VIDEO_DECODE_THREAD_CORE)))
     {
         logWrite("video", "failed to create decode thread");
-        avcodec_free_context(&codecCtx);
         close(sock);
         return;
     }
@@ -493,7 +505,6 @@ static void runStreamSession(void)
     {
         logWrite("video", "failed to start decode thread");
         threadClose(&decodeThread);
-        avcodec_free_context(&codecCtx);
         close(sock);
         return;
     }
@@ -543,8 +554,6 @@ static void runStreamSession(void)
     s_pendingValid = false;
     mutexUnlock(&s_frameMutex);
     av_frame_free(&displayFrame);
-
-    avcodec_free_context(&codecCtx);
 }
 
 bool videoStart(void)

@@ -4,8 +4,8 @@ using System.Text.Json.Serialization;
 
 namespace SolarNX.Capture;
 
-/// <summary>H.264 encoder used for the video stream. Auto picks the best one that actually works
-/// on this machine (see <see cref="EncoderSelection.Resolve"/>).</summary>
+/// <summary>Encoder used for the video stream. Auto picks the best one that actually works on this
+/// machine (see <see cref="EncoderSelection.Resolve"/>).</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum EncoderKind
 {
@@ -15,6 +15,16 @@ public enum EncoderKind
     Qsv,
     MediaFoundation,
     Software,
+}
+
+/// <summary>Video codec. H.265 gives a noticeably better picture at the same bitrate (or the same
+/// picture at a lower one); the Switch decodes both in hardware (NVTEGRA). An encoder that can't do
+/// H.265 here streams H.264 instead (<see cref="EncoderSelection.ResolveCodec"/>).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum VideoCodec
+{
+    Hevc,
+    H264,
 }
 
 public enum GpuVendor
@@ -28,7 +38,7 @@ public enum GpuVendor
 public sealed record GpuInfo(string Name, GpuVendor Vendor);
 
 /// <summary>
-/// Detects the GPUs and which hardware H.264 encoders of the bundled ffmpeg really work here.
+/// Detects the GPUs and which hardware H.264/H.265 encoders of the bundled ffmpeg really work here.
 ///
 /// Availability is decided by a real probe - encoding one throwaway frame with the encoder - not by
 /// the GPU list: an encoder can be missing even on its own vendor's card (too old a driver: this
@@ -41,7 +51,14 @@ internal static class EncoderSelection
 {
     private static readonly object Lock = new();
     private static IReadOnlyList<GpuInfo>? _gpus;
-    private static readonly Dictionary<EncoderKind, bool> Available = new() { [EncoderKind.Software] = true };
+    private static readonly Dictionary<(EncoderKind, VideoCodec), bool> Available = new()
+    {
+        [(EncoderKind.Software, VideoCodec.H264)] = true,
+        // libx265 can't keep up with real time at a usable quality - the CPU always streams H.264.
+        [(EncoderKind.Software, VideoCodec.Hevc)] = false,
+    };
+
+    public static string DisplayName(VideoCodec codec) => codec == VideoCodec.Hevc ? "H.265 (HEVC)" : "H.264";
 
     public static string DisplayName(EncoderKind kind) => kind switch
     {
@@ -100,19 +117,32 @@ internal static class EncoderSelection
         return result;
     }
 
-    /// <summary>Whether the encoder can actually open here (probes once, then cached). Auto is never
-    /// "available" itself - resolve it first.</summary>
-    public static bool IsAvailable(EncoderKind kind)
+    /// <summary>Whether the encoder can actually open here for H.264 (probes once, then cached).
+    /// Auto is never "available" itself - resolve it first.</summary>
+    public static bool IsAvailable(EncoderKind kind) => IsAvailable(kind, VideoCodec.H264);
+
+    /// <summary>Whether the encoder can actually open here for <paramref name="codec"/> (probes once,
+    /// then cached).</summary>
+    public static bool IsAvailable(EncoderKind kind, VideoCodec codec)
     {
         if (kind == EncoderKind.Auto) return false;
         lock (Lock)
         {
-            if (Available.TryGetValue(kind, out var known)) return known;
-            var ok = Probe(kind);
-            Available[kind] = ok;
-            Logger.Log("encoder", $"probe {DisplayName(kind)}: {(ok ? "available" : "not available")}");
+            if (Available.TryGetValue((kind, codec), out var known)) return known;
+            var ok = Probe(kind, codec);
+            Available[(kind, codec)] = ok;
+            Logger.Log("encoder", $"probe {DisplayName(kind)} {DisplayName(codec)}: {(ok ? "available" : "not available")}");
             return ok;
         }
+    }
+
+    /// <summary>The codec <paramref name="kind"/> (already resolved) streams: the preferred one if it
+    /// works with that encoder, otherwise H.264 - which every resolved encoder can do.</summary>
+    public static VideoCodec ResolveCodec(EncoderKind kind, VideoCodec preference)
+    {
+        if (preference == VideoCodec.H264 || IsAvailable(kind, preference)) return preference;
+        Logger.Log("encoder", $"{DisplayName(preference)} is not available with {DisplayName(kind)} - streaming H.264");
+        return VideoCodec.H264;
     }
 
     /// <summary>The encoder to use for <paramref name="preference"/>. A specific choice is used when it
@@ -153,9 +183,29 @@ internal static class EncoderSelection
         kind is EncoderKind.Qsv or EncoderKind.MediaFoundation ? "nv12" : "yuv420p";
 
     /// <summary>ffmpeg encoder arguments, all tuned the same way: constant bitrate (the bitrate bounds
-    /// themselves are added by VideoEncoder), High profile, no B-frames and no lookahead, so nothing
-    /// holds frames back, and a keyframe every <paramref name="keyframeInterval"/> frames.</summary>
-    public static string EncodeArgs(EncoderKind kind, int keyframeInterval) => kind switch
+    /// themselves are added by VideoEncoder), High (H.264) / Main (H.265) profile, no B-frames and no
+    /// lookahead, so nothing holds frames back, and a keyframe every <paramref name="keyframeInterval"/>
+    /// frames. Main, not Main 10: the stream is 8-bit, which is what the Switch's NV12 path shows.</summary>
+    public static string EncodeArgs(EncoderKind kind, VideoCodec codec, int keyframeInterval) => codec == VideoCodec.Hevc
+        ? HevcArgs(kind, keyframeInterval)
+        : H264Args(kind, keyframeInterval);
+
+    // Same tuning as H264Args, per encoder. AMF: header_insertion_mode idr + gops_per_idr 1 put
+    // VPS/SPS/PPS on every keyframe and make every keyframe an IDR (the Switch starts decoding at one).
+    private static string HevcArgs(EncoderKind kind, int keyframeInterval) => kind switch
+    {
+        EncoderKind.Nvenc =>
+            $"-c:v hevc_nvenc -gpu 0 -preset p4 -tune ll -rc cbr -zerolatency 1 -delay 0 -rc-lookahead 0 -bf 0 -profile:v main -g {keyframeInterval}",
+        EncoderKind.Amf =>
+            $"-c:v hevc_amf -usage ultralowlatency -quality speed -rc cbr -latency 1 -async_depth 1 -preencode 0 -header_insertion_mode idr -gops_per_idr 1 -bf 0 -profile:v main -g {keyframeInterval}",
+        EncoderKind.Qsv =>
+            $"-c:v hevc_qsv -preset veryfast -async_depth 1 -bf 0 -profile:v main -g {keyframeInterval}",
+        EncoderKind.MediaFoundation =>
+            $"-c:v hevc_mf -hw_encoding 1 -scenario display_remoting -rate_control cbr -bf 0 -g {keyframeInterval}",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "no H.265 for this encoder"),
+    };
+
+    private static string H264Args(EncoderKind kind, int keyframeInterval) => kind switch
     {
         // -delay 0 -rc-lookahead 0: NVENC still buffers a few frames in a low-latency preset
         // without them. "p4" keeps real motion-search effort while staying well within real time.
@@ -179,7 +229,7 @@ internal static class EncoderSelection
     /// <summary>Encodes one throwaway 256x256 frame with the encoder's real arguments. Not smaller:
     /// NVENC rejects 64x64 ("Frame Dimension less than the minimum supported value"), which would be
     /// a false negative.</summary>
-    private static bool Probe(EncoderKind kind)
+    private static bool Probe(EncoderKind kind, VideoCodec codec)
     {
         var ffmpegPath = Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe");
         try
@@ -188,7 +238,7 @@ internal static class EncoderSelection
             {
                 StartInfo = new ProcessStartInfo(ffmpegPath,
                     $"-hide_banner -f lavfi -i color=black:s=256x256:d=0.1 -frames:v 1 -pix_fmt {PixelFormat(kind)} " +
-                    $"{EncodeArgs(kind, 30)} -b:v 2000k -f null -")
+                    $"{EncodeArgs(kind, codec, 30)} -b:v 2000k -f null -")
                 {
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -205,13 +255,13 @@ internal static class EncoderSelection
             if (process.ExitCode != 0)
             {
                 var lastLine = stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.Trim();
-                Logger.Log("encoder", $"{DisplayName(kind)} probe failed: {lastLine}");
+                Logger.Log("encoder", $"{DisplayName(kind)} {DisplayName(codec)} probe failed: {lastLine}");
             }
             return process.ExitCode == 0;
         }
         catch (Exception ex)
         {
-            Logger.Log("encoder", $"{DisplayName(kind)} probe could not run: {ex.Message}");
+            Logger.Log("encoder", $"{DisplayName(kind)} {DisplayName(codec)} probe could not run: {ex.Message}");
             return false;
         }
     }

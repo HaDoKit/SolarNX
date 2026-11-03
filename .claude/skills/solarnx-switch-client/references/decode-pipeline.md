@@ -9,7 +9,9 @@ No libavformat for video since 0.2.3: the PC sends its own framing with FEC inst
 
 ## Per stream round (`videoInit` → `videoStart` → `videoExit`, driven by `main.c`)
 
-- `videoInit`: SDL window/renderer (`ACCELERATED | PRESENTVSYNC`, 1280×720),
+- `videoInit`: SDL window/renderer (`ACCELERATED | PRESENTVSYNC`; window 1920×1080 docked / 1280×720
+  handheld, `SDL_WINDOW_RESIZABLE` - SDL's Switch backend resizes only resizable windows on a dock
+  change, seen in its `SWITCH_PumpEvents`; `RenderCopy` stretches the texture over the window),
   `reassemblyInit` (rs tables + frame buffer), the decode→render handoff (mutex + `s_pendingFrame`), and
   `av_hwdevice_ctx_create(AV_HWDEVICE_TYPE_NVTEGRA)` — failure just means software decode.
 - `videoExit`: tears all of it down (incl. `SDL_Quit`) so the menu can create its own SDL window
@@ -24,11 +26,14 @@ No libavformat for video since 0.2.3: the PC sends its own framing with FEC inst
 1. Plain BSD UDP socket on 19000: `SO_RCVBUF` 256KB (= `udp_rx_buf_size`), `SO_RCVTIMEO` 50ms -
    the decode thread checks `s_decodeStop`/`appIsRunning()` between timeouts, so nothing blocks
    without an exit path. In Internet mode `transport.c` delivers the unsealed datagrams here on loopback.
-2. Decoder: `avcodec_find_decoder(AV_CODEC_ID_H264)`, `AV_CODEC_FLAG_LOW_DELAY`, `hw_device_ctx` +
-   `get_format` preferring `AV_PIX_FMT_NVTEGRA`. No extradata: SPS/PPS come in front of every
-   keyframe (PC: `dump_extra`).
-3. `reassemblyReset` (wait for a keyframe), spawn the **decode thread**; the main thread becomes the
+2. `reassemblyReset` (wait for a keyframe), spawn the **decode thread**; the main thread becomes the
    render loop (pumps `appMainLoop()` every 50ms — it's IPC); on exit set `s_decodeStop`, join, close.
+
+Decoder (opened by the decode thread for the codec of the first frame, reopened when the codec
+flag changes - the PC switched H.265 ↔ H.264): `avcodec_find_decoder(AV_CODEC_ID_HEVC / H264)`,
+`AV_CODEC_FLAG_LOW_DELAY`, `hw_device_ctx` + `get_format` preferring `AV_PIX_FMT_NVTEGRA`
+(the portlib has both `ff_h264_nvtegra_hwaccel` and `ff_hevc_nvtegra_hwaccel`). No extradata:
+VPS/SPS/PPS come in front of every keyframe (PC: `dump_extra`).
 
 ## Reassembly (`reassembly.c`)
 

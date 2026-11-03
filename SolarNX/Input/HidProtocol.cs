@@ -104,6 +104,11 @@ public sealed class HidPacket
     public required uint ControllerCount { get; init; }
     public required AppTarget AppTarget { get; init; }
 
+    /// <summary>Height of the Switch's own screen output: 720 handheld, 1080 docked (0 from a client
+    /// that doesn't say). With automatic resolution the stream follows it. In the upper half of what
+    /// used to be the u64 appTarget - the packet size and every other offset are unchanged.</summary>
+    public required uint DisplayHeight { get; init; }
+
     /// <summary>GameEntry.Id picked on the Switch when <see cref="AppTarget"/> is Library (0
     /// otherwise). Carried in the slot that used to be the never-read frameRate field, so the packet
     /// size and every other offset are unchanged.</summary>
@@ -129,7 +134,8 @@ public sealed class HidPacket
     /// (HeldKeys u32, LJoyX/Y i32, RJoyX/Y i32, accelX/Y/Z f32, gyroX/Y/Z f32 - 44 bytes each),
     /// touchX1,Y1 (u32), videoLostFrameCount, videoRecoveredPacketCount (u32, formerly touchX2/Y2),
     /// libraryEntryId (u32, formerly frameRate), controllerCount (u32),
-    /// appTarget (u64), then the 4 telemetry u32 fields above (16 bytes).
+    /// appTarget (u32), displayHeight (u32) - together the former u64 appTarget - then the 4 telemetry
+    /// u32 fields above (16 bytes).
     /// </summary>
     public static HidPacket Parse(ReadOnlySpan<byte> payload)
     {
@@ -178,12 +184,13 @@ public sealed class HidPacket
         var controllerCount = BinaryPrimitives.ReadUInt32LittleEndian(payload[(offset + 4)..]);
         offset += 8;
 
-        var appTargetRaw = BinaryPrimitives.ReadUInt64LittleEndian(payload[offset..]);
+        var appTargetRaw = BinaryPrimitives.ReadUInt32LittleEndian(payload[offset..]);
         // Defensive default: anything other than a known value (e.g. a mismatched/older client
         // build) falls back to Big Picture rather than an undefined enum value propagating further.
-        var appTarget = appTargetRaw is (ulong)AppTarget.BigPicture or (ulong)AppTarget.ShadPs4 or (ulong)AppTarget.Library
+        var appTarget = appTargetRaw is (uint)AppTarget.BigPicture or (uint)AppTarget.ShadPs4 or (uint)AppTarget.Library
             ? (AppTarget)appTargetRaw
             : AppTarget.BigPicture;
+        var displayHeight = BinaryPrimitives.ReadUInt32LittleEndian(payload[(offset + 4)..]);
         offset += 8;
 
         var videoReconnectCount = BinaryPrimitives.ReadUInt32LittleEndian(payload[offset..]);
@@ -198,6 +205,7 @@ public sealed class HidPacket
             TouchY1 = touchY1,
             ControllerCount = controllerCount,
             AppTarget = appTarget,
+            DisplayHeight = displayHeight,
             LibraryEntryId = libraryEntryId,
             VideoReconnectCount = videoReconnectCount,
             VideoMeasuredBitrateKbps = videoMeasuredBitrateKbps,

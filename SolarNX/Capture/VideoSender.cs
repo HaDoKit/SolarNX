@@ -10,7 +10,7 @@ namespace SolarNX.Capture;
 /// correction: a lost datagram is rebuilt on the Switch from the parity that came with its frame,
 /// instead of corrupting the picture until the next keyframe (what a lost MPEG-TS datagram did).
 ///
-/// ffmpeg sends RTP (H.264, RFC 6184) to <see cref="RtpPort"/> on loopback - RTP only because its
+/// ffmpeg sends RTP (H.264, RFC 6184, or H.265, RFC 7798) to <see cref="RtpPort"/> on loopback - RTP only because its
 /// marker bit says where each frame ends the moment the frame's last packet arrives (a raw H.264
 /// pipe would only show that when the next frame starts, a whole frame later). Each frame is
 /// rebuilt as Annex B, cut into <see cref="ShardSize"/>-byte data shards, split into blocks of at
@@ -28,8 +28,8 @@ namespace SolarNX.Capture;
 /// Wire format - every datagram is <see cref="HeaderSize"/> + <see cref="ShardSize"/> bytes,
 /// little-endian, mirrored by the Switch's Client/video/videowire.h:
 ///   0  u8  magic 0x53 ('S')         8  u32 frame number (starts random, +1 per frame)
-///   1  u8  version (1)             12  u32 frame size in bytes (Annex B, before padding)
-///   2  u8  flags (bit 0: keyframe)
+///   1  u8  version (2)             12  u32 frame size in bytes (Annex B, before padding)
+///   2  u8  flags (bit 0: keyframe, bit 1: H.265 - else H.264)
 ///   3  u8  block index
 ///   4  u8  block count
 ///   5  u8  shard index in the block (data shards first, then parity)
@@ -49,8 +49,11 @@ public sealed class VideoSender : IDisposable
     // after their own headers - an IP-fragmented datagram is lost when any fragment is.
     public const int ShardSize = 1280;
     public const byte Magic = 0x53;
-    public const byte Version = 1;
+    // 2 since the codec flag (0.2.4): a 0.2.3 Switch would decode H.265 as H.264 - this way it
+    // rejects the stream and logs why instead.
+    public const byte Version = 2;
     public const byte FlagKeyframe = 0x01;
+    public const byte FlagHevc = 0x02;
 
     private const int MaxDataShardsPerBlock = 64;
     private const double ParityRatio = 0.20;
@@ -62,6 +65,7 @@ public sealed class VideoSender : IDisposable
     private const int PaceGroupPackets = 16;
     private const byte RtpPayloadType = 96; // ffmpeg's rtp muxer default; anything else is its RTCP
 
+    private readonly bool _hevc;
     private readonly Socket _rtpSocket;
     private readonly Socket _sendSocket;
     private readonly TimeSpan _paceWindow;
@@ -85,8 +89,10 @@ public sealed class VideoSender : IDisposable
 
     /// <param name="target">The Switch's video port (Wi-Fi) or the Internet relay on loopback.</param>
     /// <param name="fps">Stream frame rate - the pacing window is a quarter of a frame.</param>
-    public VideoSender(IPEndPoint target, int fps)
+    /// <param name="codec">What ffmpeg encodes - decides the RTP payload format.</param>
+    public VideoSender(IPEndPoint target, int fps, VideoCodec codec)
     {
+        _hevc = codec == VideoCodec.Hevc;
         _paceWindow = TimeSpan.FromMilliseconds(Math.Min(4.0, 1000.0 / Math.Max(1, fps) / 4));
 
         _rtpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
@@ -102,7 +108,7 @@ public sealed class VideoSender : IDisposable
 
         _thread = new Thread(Run) { IsBackground = true, Name = "VideoSender", Priority = ThreadPriority.Highest };
         _thread.Start();
-        Logger.Log("VideoSender", $"RTP in on 127.0.0.1:{RtpPort}, frames out to {target}, pacing over {_paceWindow.TotalMilliseconds:0.#}ms");
+        Logger.Log("VideoSender", $"{EncoderSelection.DisplayName(codec)} RTP in on 127.0.0.1:{RtpPort}, frames out to {target}, pacing over {_paceWindow.TotalMilliseconds:0.#}ms");
     }
 
     /// <summary>The loopback port ffmpeg's RTP output goes to.</summary>
@@ -171,7 +177,11 @@ public sealed class VideoSender : IDisposable
         }
         var end = rtp.Length;
         if ((rtp[0] & 0x20) != 0) end -= rtp[^1];
-        if (offset < end) AppendPayload(rtp[offset..end]);
+        if (offset < end)
+        {
+            if (_hevc) AppendHevcPayload(rtp[offset..end]);
+            else AppendPayload(rtp[offset..end]);
+        }
 
         if ((rtp[1] & 0x80) != 0) FinishFrame();
     }
@@ -211,6 +221,43 @@ public sealed class VideoSender : IDisposable
         }
     }
 
+    // RFC 7798 payloads -> Annex B NAL units. The NAL header is 2 bytes, its type is bits 1-6 of the
+    // first. No DONL fields: ffmpeg's muxer sends in decoding order (sprop-max-don-diff 0).
+    private void AppendHevcPayload(ReadOnlySpan<byte> payload)
+    {
+        if (payload.Length < 2) { _frameDamaged = true; return; }
+        var type = (payload[0] >> 1) & 0x3F;
+        switch (type)
+        {
+            case < 48:
+                AppendNal(payload, startCode: true);
+                break;
+            case 48: // aggregation packet: payload header, then [u16 size][NAL] ...
+                for (var i = 2; i + 2 <= payload.Length;)
+                {
+                    var size = BinaryPrimitives.ReadUInt16BigEndian(payload[i..]);
+                    i += 2;
+                    if (size < 2 || i + size > payload.Length) { _frameDamaged = true; break; }
+                    AppendNal(payload.Slice(i, size), startCode: true);
+                    i += size;
+                }
+                break;
+            case 49: // fragmentation unit: payload header, FU header (S/E bits + the NAL's type), fragment
+                if (payload.Length < 3) { _frameDamaged = true; break; }
+                var header = payload[2];
+                if ((header & 0x80) != 0)
+                {
+                    Span<byte> nalHeader = [(byte)((payload[0] & 0x81) | ((header & 0x3F) << 1)), payload[1]];
+                    AppendNal(nalHeader, startCode: true);
+                }
+                AppendNal(payload[3..], startCode: false);
+                break;
+            default:
+                _frameDamaged = true; // PACI: ffmpeg's rtp muxer never sends it
+                break;
+        }
+    }
+
     private void AppendNal(ReadOnlySpan<byte> bytes, bool startCode)
     {
         var needed = _frameLength + bytes.Length + 4;
@@ -220,7 +267,8 @@ public sealed class VideoSender : IDisposable
             _frame.AsSpan(_frameLength, 4).Clear();
             _frame[_frameLength + 3] = 1;
             _frameLength += 4;
-            if ((bytes[0] & 0x1F) == 5) _frameKeyframe = true; // IDR slice
+            // A frame the Switch can start decoding at: H.264 IDR slice; H.265 IRAP (BLA, IDR, CRA - 16..21).
+            if (_hevc ? ((bytes[0] >> 1) & 0x3F) is >= 16 and <= 21 : (bytes[0] & 0x1F) == 5) _frameKeyframe = true;
         }
         bytes.CopyTo(_frame.AsSpan(_frameLength));
         _frameLength += bytes.Length;
@@ -287,7 +335,7 @@ public sealed class VideoSender : IDisposable
         var header = _datagram.AsSpan(0, HeaderSize);
         header[0] = Magic;
         header[1] = Version;
-        header[2] = _frameKeyframe ? FlagKeyframe : (byte)0;
+        header[2] = (byte)((_frameKeyframe ? FlagKeyframe : 0) | (_hevc ? FlagHevc : 0));
         header[4] = (byte)blockCount;
         header[7] = 0;
         BinaryPrimitives.WriteUInt32LittleEndian(header[8..], number);

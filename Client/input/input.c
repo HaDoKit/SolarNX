@@ -269,6 +269,9 @@ void inputRead(SolarNxHidPacket *pkt)
     // Chosen once via menu.c's runAppSelectMenu(), before the HID send loop ever starts - see
     // inputSetAppTarget().
     pkt->appTarget = s_appTarget;
+    // appletGetOperationMode() is the value libnx caches from the applet messages the main thread
+    // pumps - a plain read, fine from this thread.
+    pkt->displayHeight = appletGetOperationMode() == AppletOperationMode_Console ? 1080 : 720;
     pkt->libraryEntryId = s_libraryEntryId;
 
     // Link-quality telemetry for the host's AdaptiveBitrateController - see network.h's doc

@@ -17,6 +17,11 @@ public sealed class Config
     public int LibraryPort { get; set; } = 19003;
     public int TargetWidth { get; set; } = 1280;
     public int TargetHeight { get; set; } = 720;
+
+    /// <summary>Stream at the Switch's own screen resolution - 1280x720 handheld, 1920x1080 docked,
+    /// following it when the console goes in or out of the dock (AppOrchestrator restarts the
+    /// encoder). Off: always <see cref="TargetWidth"/> x <see cref="TargetHeight"/>.</summary>
+    public bool AutoResolution { get; set; } = true;
     public int Fps { get; set; } = 60;
 
     /// <summary>Confirmed live: at 8000-10000 the video stream's constant (CBR) bitrate was
@@ -45,6 +50,10 @@ public sealed class Config
     /// Foundation, then the CPU - see Capture/EncoderSelection. A specific choice that doesn't work
     /// on this machine falls back to Auto.</summary>
     public Capture.EncoderKind Encoder { get; set; } = Capture.EncoderKind.Auto;
+
+    /// <summary>H.265 by default - a better picture at the same bitrate. Falls back to H.264 when the
+    /// resolved encoder can't do H.265 here - see Capture/EncoderSelection.ResolveCodec.</summary>
+    public Capture.VideoCodec Codec { get; set; } = Capture.VideoCodec.Hevc;
 
     /// <summary>Sample rate the PCM is captured/resampled to before Opus encoding (see
     /// AudioCaptureSender). RFC 7587 mandates Opus's RTP clock rate be 48000Hz regardless of this

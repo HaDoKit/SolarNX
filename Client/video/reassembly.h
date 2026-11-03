@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Rebuilds whole H.264 frames from the PC's video datagrams (videowire.h), recovering lost ones
+// Rebuilds whole H.264/H.265 frames from the PC's video datagrams (videowire.h), recovering lost ones
 // from the Reed-Solomon parity that comes with each frame (common/rs). Video decode thread only.
 //
 // One frame is assembled at a time: the PC paces a frame's datagrams over a few milliseconds and
@@ -19,6 +19,7 @@ typedef struct {
     size_t size;
     uint32_t number;
     bool keyframe;
+    bool hevc; // H.265, else H.264
 } ReassembledFrame;
 
 typedef struct {

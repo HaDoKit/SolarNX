@@ -18,7 +18,7 @@ back.
 
 | Stream | Transport | Port | This side |
 |---|---|---|---|
-| Video | UDP, own framing + Reed-Solomon FEC, H.264 High | 19000 | plain BSD socket, `video/reassembly.c` rebuilds frames, libavcodec decodes (`video.c`) |
+| Video | UDP, own framing + Reed-Solomon FEC, H.265 Main or H.264 High | 19000 | plain BSD socket, `video/reassembly.c` rebuilds frames, libavcodec decodes (`video.c`) |
 | HID | TCP | 19001 | **listens + accepts** (`network.c`); PC dials in, sends a 28-byte `SessionConfig`, then this side sends marker + 224-byte packet at ~120Hz |
 | Audio | UDP, RTP-like + Opus | 19002 | raw BSD socket (`audio.c`) |
 | Library | TCP | 19003 | **listens** from app start (`library/library.c`); host pushes its game list + covers when it changes |

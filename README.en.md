@@ -2,7 +2,7 @@
 
 # SolarNX
 
-> **Alpha version 0.2.3-alpha.** The project is at an early stage: expect bugs, and settings and the
+> **Alpha version 0.2.4-alpha.** The project is at an early stage: expect bugs, and settings and the
 > protocol may change between versions. Stable operation has so far been confirmed on a single setup
 > only; see [Tested configuration](#tested-configuration). For what changed, see
 > [CHANGELOG.en.md](CHANGELOG.en.md).
@@ -26,7 +26,7 @@ The project has two parts:
 - **Your own game library**: regular games (`.exe`), Steam games, emulators and custom launch
   scripts, with covers in the Switch menu.
 - Up to 4 gamepads; the Switch touch screen works as touch input on the PC.
-- Hardware encoding on NVIDIA, AMD and Intel graphics cards (the encoder is picked automatically; AMD and Intel are experimental) and hardware decoding on the Switch.
+- Hardware H.265 or H.264 encoding on NVIDIA, AMD and Intel graphics cards (the encoder is picked automatically; AMD and Intel are experimental) and hardware decoding on the Switch.
 - Steam button on the Switch: **− + +**. Back to the menu: hold **− for 3 seconds**.
 
 > The PC app's interface is in Russian. The English docs quote its labels in Russian, with a
