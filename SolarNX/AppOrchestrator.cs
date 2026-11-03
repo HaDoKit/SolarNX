@@ -82,7 +82,12 @@ public sealed class AppOrchestrator : IDisposable
         Native.QosMarking.Enabled = config.TrafficPriority;
         _adaptiveBitrate = new AdaptiveBitrateController(config, ApplyAdaptiveBitrate);
         _libraryPusher = new LibraryPusher(config, _library, AdoptSwitchButtonLayout, () => _session as InternetSession, Compatibility);
+        Updates = new Update.UpdateChecker(config, Compatibility);
+        Updates.Start();
     }
+
+    /// <summary>Newer releases on GitHub - the home screen and the settings show them.</summary>
+    public Update.UpdateChecker Updates { get; }
 
     // The motor levels last sent to the Switch, per player (large, small) - only changes go out.
     private readonly byte[] _rumble = new byte[8];
@@ -1013,6 +1018,7 @@ public sealed class AppOrchestrator : IDisposable
         _touch.Dispose();
         _adaptiveBitrate.Dispose();
         _libraryPusher.Dispose();
+        Updates.Dispose();
         _pipelineGate.Dispose();
     }
 }

@@ -63,6 +63,32 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Обновления -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Settings.Updates}" Style="{StaticResource CardHeader}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="{DynamicResource Settings.CheckUpdates}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                            <ui:ToggleSwitch x:Name="CheckUpdatesToggle" Grid.Column="1" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,10" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                       Text="{DynamicResource Settings.CheckUpdatesHint}" />
+                            <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                                <ui:Button x:Name="CheckNowButton" Content="{DynamicResource Settings.CheckNow}" Appearance="Secondary" Margin="0,0,12,0" />
+                                <TextBlock x:Name="UpdateStatusText" Foreground="White" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
                 <!-- Подключение -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
