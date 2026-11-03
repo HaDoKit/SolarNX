@@ -15,7 +15,7 @@ namespace SolarNX.Capture;
 /// pipe would only show that when the next frame starts, a whole frame later). Each frame is
 /// rebuilt as Annex B, cut into <see cref="ShardSize"/>-byte data shards, split into blocks of at
 /// most <see cref="MaxDataShardsPerBlock"/>, and every block gets ~20% parity shards (at least
-/// <see cref="MinParityShards"/>).
+/// 2) - in Internet mode ~40% (at least 4), see <see cref="ParityRatioInternet"/>.
 ///
 /// The blocks' datagrams go out interleaved (shard 0 of every block, then shard 1, ...), so a
 /// burst of consecutive losses in a big frame - a keyframe is several blocks - is spread across
@@ -56,10 +56,15 @@ public sealed class VideoSender : IDisposable
     public const byte FlagHevc = 0x02;
 
     private const int MaxDataShardsPerBlock = 64;
-    private const double ParityRatio = 0.20;
+    // Wi-Fi: occasional single losses. Internet: losses come in bursts (a router or the ISP dropping
+    // several datagrams in a row), so twice the parity there. The Switch takes any count per block
+    // (it is in every datagram's header) - nothing to change on that side.
+    public const double ParityRatioWifi = 0.20;
+    public const double ParityRatioInternet = 0.40;
+    private readonly double _parityRatio;
     // A small frame of 1-5 shards would get 0-1 parity shards from the ratio alone - not enough
-    // to survive the occasional pair of losses.
-    private const int MinParityShards = 2;
+    // to survive the occasional pair of losses (Internet: twice that).
+    private readonly int _minParityShards;
     // ~60KB: an ordinary frame up to ~30Mbps at 60fps. Above that it's a keyframe (or a scene cut).
     private const int PaceAbovePackets = 48;
     private const int PaceGroupPackets = 16;
@@ -91,8 +96,12 @@ public sealed class VideoSender : IDisposable
     /// <param name="target">The Switch's video port (Wi-Fi) or the Internet relay on loopback.</param>
     /// <param name="fps">Stream frame rate - the pacing window is a quarter of a frame.</param>
     /// <param name="codec">What ffmpeg encodes - decides the RTP payload format.</param>
-    public VideoSender(IPEndPoint target, int fps, VideoCodec codec)
+    /// <param name="parityRatio">Parity shards per data shard - <see cref="ParityRatioWifi"/> or
+    /// <see cref="ParityRatioInternet"/>.</param>
+    public VideoSender(IPEndPoint target, int fps, VideoCodec codec, double parityRatio = ParityRatioWifi)
     {
+        _parityRatio = parityRatio;
+        _minParityShards = parityRatio > ParityRatioWifi ? 4 : 2;
         _hevc = codec == VideoCodec.Hevc;
         _paceWindow = TimeSpan.FromMilliseconds(Math.Min(4.0, 1000.0 / Math.Max(1, fps) / 4));
 
@@ -110,7 +119,7 @@ public sealed class VideoSender : IDisposable
 
         _thread = new Thread(Run) { IsBackground = true, Name = "VideoSender", Priority = ThreadPriority.Highest };
         _thread.Start();
-        Logger.Log("VideoSender", $"{EncoderSelection.DisplayName(codec)} RTP in on 127.0.0.1:{RtpPort}, frames out to {target}, pacing over {_paceWindow.TotalMilliseconds:0.#}ms");
+        Logger.Log("VideoSender", $"{EncoderSelection.DisplayName(codec)} RTP in on 127.0.0.1:{RtpPort}, frames out to {target}, pacing over {_paceWindow.TotalMilliseconds:0.#}ms, parity {parityRatio:P0}");
     }
 
     /// <summary>The loopback port ffmpeg's RTP output goes to.</summary>
@@ -318,7 +327,7 @@ public sealed class VideoSender : IDisposable
         for (int b = 0, first = 0; b < blockCount; b++)
         {
             blockData[b] = dataShards / blockCount + (b < dataShards % blockCount ? 1 : 0);
-            blockParity[b] = Math.Max(MinParityShards, (int)Math.Ceiling(blockData[b] * ParityRatio));
+            blockParity[b] = Math.Min(ReedSolomon.MaxParity, Math.Max(_minParityShards, (int)Math.Ceiling(blockData[b] * _parityRatio)));
             firstShard[b] = first;
             parityOffset[b] = parityTotal;
             first += blockData[b];
