@@ -32,6 +32,11 @@ public static class ControlWire
     {
         /// <summary><see cref="PeerVersion.WireSize"/> bytes: this PC's protocol and app version.</summary>
         Hello = 1,
+
+        /// <summary>8 bytes: per player 1-4, u8 large motor, u8 small motor (0-255, XInput meaning:
+        /// large = low frequency, small = high frequency). Sent when a value changes; the Switch keeps
+        /// the last levels until the next message and stops on its own when the session ends.</summary>
+        Rumble = 2,
     }
 
     public enum ClientMessage : byte

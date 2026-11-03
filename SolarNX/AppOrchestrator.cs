@@ -78,8 +78,36 @@ public sealed class AppOrchestrator : IDisposable
         _config = config;
         _gamepads.SwapAbxy = config.SwitchButtonLayout;
         _session = CreateSession();
+        _gamepads.RumbleChanged += OnGameRumble;
         _adaptiveBitrate = new AdaptiveBitrateController(config, ApplyAdaptiveBitrate);
         _libraryPusher = new LibraryPusher(config, _library, AdoptSwitchButtonLayout, () => _session as InternetSession, Compatibility);
+    }
+
+    // The motor levels last sent to the Switch, per player (large, small) - only changes go out.
+    private readonly byte[] _rumble = new byte[8];
+    private readonly object _rumbleLock = new();
+
+    private void OnGameRumble(int player, byte large, byte small)
+    {
+        if (player is < 0 or > 3) return;
+        if (!_config.Rumble) large = small = 0;
+        byte[] levels;
+        lock (_rumbleLock)
+        {
+            if (_rumble[player * 2] == large && _rumble[player * 2 + 1] == small) return;
+            _rumble[player * 2] = large;
+            _rumble[player * 2 + 1] = small;
+            levels = (byte[])_rumble.Clone();
+        }
+        _session.SendControl(ControlWire.HostMessage.Rumble, levels);
+    }
+
+    /// <summary>The settings' rumble toggle: turning it off stops whatever is vibrating now.</summary>
+    public void RumbleSettingChanged()
+    {
+        if (_config.Rumble) return;
+        lock (_rumbleLock) Array.Clear(_rumble);
+        _session.SendControl(ControlWire.HostMessage.Rumble, new byte[8]);
     }
 
     /// <summary>What the Switch said about its version (library channel, Internet Hello, session

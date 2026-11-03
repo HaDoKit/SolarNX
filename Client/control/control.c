@@ -5,6 +5,7 @@
 #include <switch.h>
 
 #include "../common/logger/logger.h"
+#include "../input/input.h"
 
 static Mutex s_mutex;
 static PcVersion s_pc;          // what the PC last said about itself
@@ -155,6 +156,11 @@ void controlHandleHostMessage(uint8_t type, const uint8_t *payload, size_t lengt
             mutexUnlock(&s_mutex);
             logWrite("control", "the PC says hello: SolarNX %s", pc.appVersion);
         }
+        break;
+    case HostMessage_Rumble:
+        if (length >= 8)
+            for (int i = 0; i < 4; i++)
+                inputSetRumble(i, payload[i * 2], payload[i * 2 + 1]);
         break;
     default: // a newer PC's message this build doesn't know - ignored by design (protocol minor)
         break;
