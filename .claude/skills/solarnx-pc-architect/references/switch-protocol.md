@@ -71,6 +71,11 @@ independent by design.
 
 ## Library channel (PC → Switch, TCP 19003) — `Library/LibraryWire.cs` ↔ `Client/library/library.c`
 
+**Version 3 (protocol 1.1):** header 56 bytes = magic, u32 3, version[28], u64 hash, u8 layout, u8[3],
+u32 revision, u32 extra length; reply 40 bytes = the v2 reply's 8, version[28], u32 extra length. On
+another major the Switch replies need = 0 and takes neither the library nor the layout. v2 below is
+still spoken to a 0.2.4 Switch.
+
 **Protocol v2 (button layout sync):** the host header is 24 bytes - magic, version 2, u64 hash, u8 button
 layout (1 = A/B X/Y by label), u8[3] zero, u32 layout revision - and the Switch replies 8 bytes - u8 need
 payload, u8 its layout, u8[2] zero, u32 its revision (after adopting the host's when newer; a tie goes to
@@ -94,6 +99,54 @@ the host (`CoverImage`: 240×360 from the user-picked 2:3 region `GameEntry.Cove
 draws. The editor previews exactly that tile (`CoverLoader.LoadAsTile`). The payload is cached on the host until `GameLibrary.Changed`. Separate channel on purpose:
 HID exists only during a session, the menu needs the list before one starts. Verified end-to-end
 against a byte-level fake client (send on hash change, skip when unchanged).
+
+## Protocol version and control messages (protocol 1.1, 0.2.5)
+
+`PROTOCOL` at the repo root holds the wire protocol as `major.minor` - separate from `VERSION`, read by
+`SolarNX.csproj` (assembly metadata -> `Session/ProtocolVersion.cs`), `Client/Makefile`
+(`-DSOLARNX_PROTOCOL_MAJOR/MINOR` -> `Client/control/control.h`) and the release workflow (`release.json`
+asset: version + protocol, read by `Update/UpdateChecker.cs`). **Bump the major** for anything an older
+peer can't live with (video framing, HID packet, SessionConfig); **bump the minor** for additions an
+older peer can ignore (a new control message, a field appended to a handshake) and gate their use on
+`ProtocolVersion.Supports(peer, feature)`. Different majors refuse to stream (`SwitchCompatibility.Blocks`
+on the PC, `controlPcIncompatible()` + the menu on the Switch); both say which side to update. 1.0 = 0.2.4,
+which announces nothing.
+
+Version exchange - the 28-byte `PeerVersion` wire form (u16 major, u16 minor, char[24] app version),
+frozen across majors so an old side can always read a newer one's version:
+- library header **v3** (56 bytes) / reply (40 bytes), see the library section; a 0.2.4 Switch drops
+  the v3 header unanswered (RST - it leaves 32 bytes unread), and `LibraryPusher` retries with v2,
+  re-trying v3 every 30s;
+- Internet: Hello + version, Welcome's sealed payload = SessionConfig + version, Reject WrongVersion +
+  the PC's version;
+- the Hello control message at the start of every HID session.
+
+Control messages (`Session/ControlWire.cs` <-> `Client/control/control.h`), sent only after the peer's
+Hello in this session:
+- Wi-Fi, PC -> Switch: after the SessionConfig on the HID TCP connection, frames `u16 length, u8 type,
+  payload` (one writer task per connection, bounded queue, drop-oldest). The Switch reads them in its
+  HID loop (`networkWaitForHost`: `poll` instead of the plain send-interval sleep).
+- Wi-Fi, Switch -> PC: `8x0xFE marker, u16 length, u8 type, payload` between HID packets
+  (`HidFrameReader` yields `HidFrame`s); a 0.2.4 host skips them as noise.
+- Internet: sealed types 21 (Control, PC -> Switch) / 22 (ClientControl), payload `u8 type + payload`.
+
+| PC -> Switch | Payload |
+|---|---|
+| 1 Hello | version[28] |
+| 2 Rumble | 4 x (u8 large, u8 small) - XInput motors; Switch drives HD rumble (160/320 Hz, amplitude x0.8) |
+| 3 Options | u8 flags (1 traffic priority -> Switch sets IP_TOS 0xB8 on its HID socket, 2 debug mode), u8[3] |
+| 4 DebugInfo | debug mode: bitrate setting/running, size, fps, codec, encoder, resolution index, NVENC preset/tune index, flags, encoder name |
+| 5 Pong | the Ping's 8 bytes |
+
+| Switch -> PC | Payload |
+|---|---|
+| 1 Hello | version[28] |
+| 2 Ping | u64 tick (debug mode, every 0.5s) |
+| 3 SetSetting | u8 DebugSetting, u8[3], i32 value - the debug menu; `AppOrchestrator.ApplyRemoteSetting` saves it and restarts the encoder |
+
+Traffic priority (`Native/QosMarking.cs`): DSCP via qWAVE (`QOSAddSocketToFlow` + `QOSSetFlow
+(OutgoingDSCPValue)` - needs admin, SolarNX runs elevated; Windows ignores IP_TOS). Video AF41 (34),
+audio + HID EF (46); loopback sockets (Internet relays) unmarked. Verified with pktmon on the NIC.
 
 ## Video
 
