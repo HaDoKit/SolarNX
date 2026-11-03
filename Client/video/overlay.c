@@ -13,6 +13,7 @@
 #include "../input/input.h"
 #include "../settings/settings.h"
 #include "video.h"
+#include "reassembly.h"
 
 // The overlay's own font, made for the video renderer the first time it is needed (the menu's
 // font belongs to the menu's renderer, which is gone while streaming). Loading it preloads the
@@ -26,7 +27,7 @@ static bool s_statsVisible = true; // the menu's first item - this session only
 
 // Once-a-second figures.
 static u64 s_windowStart = 0;
-static uint32_t s_lastLost = 0, s_lastRecovered = 0;
+static uint32_t s_lastLost = 0, s_lastRecovered = 0, s_lastLate = 0;
 static char s_lines[7][200];
 static uint32_t s_lastRumbleMessages = 0;
 static int s_lineCount = 0;
@@ -134,9 +135,11 @@ static void updateStats(void)
     VideoDebugCounters c;
     videoTakeDebugCounters(&c);
     uint32_t lost = videoGetLostFrameCount(), recovered = videoGetRecoveredPacketCount();
-    uint32_t lostDelta = lost - s_lastLost, recoveredDelta = recovered - s_lastRecovered;
+    uint32_t late = reassemblyStats()->datagramsLate;
+    uint32_t lostDelta = lost - s_lastLost, recoveredDelta = recovered - s_lastRecovered, lateDelta = late - s_lastLate;
     s_lastLost = lost;
     s_lastRecovered = recovered;
+    s_lastLate = late;
 
     ControlDebugInfo info;
     s_lineCount = 0;
@@ -153,11 +156,12 @@ static void updateStats(void)
         snprintf(s_lines[s_lineCount++], sizeof(s_lines[0]), "%s", tr(Str_DbgWaiting));
     }
 
-    // "Frames/s: 60, lost: 0/s, packets rebuilt: 3/s"
-    snprintf(s_lines[s_lineCount++], sizeof(s_lines[0]), "%s%u%s%u%s%s%u%s",
+    // "Frames/s: 60, lost: 0/s, packets rebuilt: 3/s, late: 0/s"
+    snprintf(s_lines[s_lineCount++], sizeof(s_lines[0]), "%s%u%s%u%s%s%u%s%s%u%s",
         tr(Str_DbgFrames), (unsigned)(c.presents / seconds + 0.5),
         tr(Str_DbgLost), (unsigned)(lostDelta / seconds + 0.5), tr(Str_DbgPerSec),
-        tr(Str_DbgRecovered), (unsigned)(recoveredDelta / seconds + 0.5), tr(Str_DbgPerSec));
+        tr(Str_DbgRecovered), (unsigned)(recoveredDelta / seconds + 0.5), tr(Str_DbgPerSec),
+        tr(Str_DbgLate), (unsigned)(lateDelta / seconds + 0.5), tr(Str_DbgPerSec));
 
     // "Bitrate: 12000 kbps   Decode: 4.2 ms"
     snprintf(s_lines[s_lineCount++], sizeof(s_lines[0]), "%s%u%s   %s%.1f%s",

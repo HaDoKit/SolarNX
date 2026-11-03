@@ -83,6 +83,7 @@ typedef enum {
     Str_DbgFrames,
     Str_DbgLost,
     Str_DbgRecovered,
+    Str_DbgLate,
     Str_DbgPerSec,
     Str_DbgDecode,
     Str_DbgMs,

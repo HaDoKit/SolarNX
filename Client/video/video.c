@@ -419,29 +419,36 @@ static void decodeThreadFunc(void *arg)
             }
 
             ReassembledFrame assembled;
-            if (!reassemblyPush(datagram, (size_t)length, &assembled))
-                continue;
-
-            windowBytes += assembled.size;
-            u64 now = armGetSystemTick();
-            u64 elapsedNs = armTicksToNs(now - windowStart);
-            if (elapsedNs >= VIDEO_BITRATE_WINDOW_NS)
+            bool have = reassemblyPush(datagram, (size_t)length, &assembled);
+            bool noDecoder = false;
+            // One datagram can finish two frames (a late older one with the next one already
+            // waiting) - decode them in order.
+            for (; have; have = reassemblyNext(&assembled))
             {
-                s_lastKnownBitrateKbps = (int)(windowBytes * 8ULL * 1000000ULL / elapsedNs);
-                windowStart = now;
-                windowBytes = 0;
-            }
+                windowBytes += assembled.size;
+                u64 now = armGetSystemTick();
+                u64 elapsedNs = armTicksToNs(now - windowStart);
+                if (elapsedNs >= VIDEO_BITRATE_WINDOW_NS)
+                {
+                    s_lastKnownBitrateKbps = (int)(windowBytes * 8ULL * 1000000ULL / elapsedNs);
+                    windowStart = now;
+                    windowBytes = 0;
+                }
 
-            enum AVCodecID codecId = assembled.hevc ? AV_CODEC_ID_HEVC : AV_CODEC_ID_H264;
-            if (codecCtx == NULL || codecCtx->codec_id != codecId)
-            {
-                avcodec_free_context(&codecCtx);
-                codecCtx = openDecoder(codecId);
-                if (codecCtx == NULL)
-                    break; // nothing to decode with - runStreamSession sets up again
-            }
+                enum AVCodecID codecId = assembled.hevc ? AV_CODEC_ID_HEVC : AV_CODEC_ID_H264;
+                if (codecCtx == NULL || codecCtx->codec_id != codecId)
+                {
+                    avcodec_free_context(&codecCtx);
+                    codecCtx = openDecoder(codecId);
+                    noDecoder = codecCtx == NULL;
+                    if (noDecoder)
+                        break;
+                }
 
-            decodeFrame(codecCtx, packet, frame, swFrame, &assembled);
+                decodeFrame(codecCtx, packet, frame, swFrame, &assembled);
+            }
+            if (noDecoder)
+                break; // nothing to decode with - runStreamSession sets up again
         }
     }
 
@@ -575,9 +582,9 @@ static void runStreamSession(void)
         if (renderFrame(displayFrame, frameTick) && ++framesShown % VIDEO_HEARTBEAT_EVERY_FRAMES == 0)
         {
             const ReassemblyStats *stats = reassemblyStats();
-            logWrite("video", "%u frames shown, %u decoded, %d kbps; since start: %u packets rebuilt from parity, %u frames lost, %u skipped waiting for a keyframe",
+            logWrite("video", "%u frames shown, %u decoded, %d kbps; since start: %u packets rebuilt from parity, %u frames lost, %u skipped waiting for a keyframe, %u datagrams too late",
                 framesShown, atomic_load(&s_framesDecoded), s_lastKnownBitrateKbps,
-                stats->shardsRecovered, stats->framesLost, stats->framesSkipped);
+                stats->shardsRecovered, stats->framesLost, stats->framesSkipped, stats->datagramsLate);
         }
         av_frame_unref(displayFrame);
     }
