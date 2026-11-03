@@ -146,7 +146,7 @@ public sealed class VideoEncoder : IDisposable
         // better quality at the same bitrate with no latency cost. The Switch decodes High (NVTEGRA).
         // A quality-target rate mode (the original "-rc vbr -cq:v 19") fought the hard bitrate bounds
         // below and made the encoder fall behind real time - keep rate control constant-bitrate.
-        var encodeArgs = EncoderSelection.EncodeArgs(encoder, codec, keyframeInterval);
+        var encodeArgs = EncoderSelection.EncodeArgs(encoder, codec, keyframeInterval, _config.NvencPreset, _config.NvencTune);
 
         // gfxcapture scales to the stream's target resolution itself (resize_mode=scale) - no
         // separate -vf scale step needed. hwdownload+format=bgra brings the D3D11 hardware frame

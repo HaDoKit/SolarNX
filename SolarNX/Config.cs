@@ -97,6 +97,17 @@ public sealed class Config
     /// The settings' "check now" button works either way.</summary>
     public bool CheckForUpdates { get; set; } = true;
 
+    /// <summary>Debug mode: the Switch shows stream statistics over the video and opens its debug
+    /// menu on Minus + Plus + ZL + ZR (changing the video settings below live); the NVENC preset and
+    /// tuning appear in the PC settings.</summary>
+    public bool DebugMode { get; set; } = false;
+
+    /// <summary>NVENC preset p1 (fastest) .. p7 (best quality) - see EncoderSelection.EncodeArgs.</summary>
+    public string NvencPreset { get; set; } = "p4";
+
+    /// <summary>NVENC tuning: ll (low latency, default), ull (ultra-low latency), hq (high quality).</summary>
+    public string NvencTune { get; set; } = "ll";
+
     /// <summary>Off by default: after a game exits, Steam returns to Big Picture by itself. When on,
     /// AppOrchestrator additionally sends Escape and fully closes/reopens Big Picture - an old
     /// workaround for the gamepad staying dead in Big Picture after a non-Steam-game shortcut (e.g.

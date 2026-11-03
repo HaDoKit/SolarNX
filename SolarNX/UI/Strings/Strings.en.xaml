@@ -38,6 +38,12 @@
     <sys:String x:Key="Update.SwitchOptional">The Switch app can be updated later: it keeps working, and the new features come with its update.</sys:String>
     <sys:String x:Key="Update.SwitchRequired">Both the PC program and the Switch app have to be updated.</sys:String>
     <sys:String x:Key="Update.SwitchUnknown">Update the PC program, and the Switch app if the release notes say so.</sys:String>
+    <sys:String x:Key="Settings.Debug">Debug</sys:String>
+    <sys:String x:Key="Settings.DebugMode">Debug mode</sys:String>
+    <sys:String x:Key="Settings.DebugModeHint">The Switch shows statistics over the video: bitrate, losses, latency, decode time. Pressing − + ZL + ZR together opens a menu on the Switch to tune the video while playing. Needs SolarNX 0.2.5 or newer on the Switch.</sys:String>
+    <sys:String x:Key="Settings.NvencPreset">NVENC preset</sys:String>
+    <sys:String x:Key="Settings.NvencTune">NVENC tuning</sys:String>
+    <sys:String x:Key="Settings.NvencHint">p1 is the fastest, p7 the best quality; ll is low latency (default), ull even lower, hq quality. NVIDIA graphics cards only. Applies at once, the picture freezes for about a second.</sys:String>
     <sys:String x:Key="Settings.Updates">Updates</sys:String>
     <sys:String x:Key="Settings.CheckUpdates">Check for updates</sys:String>
     <sys:String x:Key="Settings.CheckUpdatesHint">At start-up and once a day SolarNX looks at the list of releases on GitHub. Nothing is downloaded or installed by itself.</sys:String>

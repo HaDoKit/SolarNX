@@ -20,6 +20,7 @@ typedef struct {
     uint32_t number;
     bool keyframe;
     bool hevc; // H.265, else H.264
+    uint64_t firstTick; // armGetSystemTick() when its first datagram arrived - the debug overlay's latency
 } ReassembledFrame;
 
 typedef struct {

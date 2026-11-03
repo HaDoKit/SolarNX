@@ -141,6 +141,7 @@ static void startNetwork(void) {
 
         u64 totalSent = 0;
         u32 sinceHeartbeat = 0;
+        u64 lastPingTick = 0;
 
         while (1) {
             inputRead(&pkt);
@@ -167,6 +168,12 @@ static void startNetwork(void) {
                     appRequestMenu();
                 }
                 break;
+            }
+
+            // Debug mode: a ping twice a second for the overlay's round trip (control/control.h).
+            if (controlDebugEnabled() && armTicksToNs(armGetSystemTick() - lastPingTick) >= 500000000ULL) {
+                controlSendPing();
+                lastPingTick = armGetSystemTick();
             }
 
             totalSent++;

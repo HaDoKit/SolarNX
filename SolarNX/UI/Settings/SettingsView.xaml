@@ -260,6 +260,51 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Отладка -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Settings.Debug}" Style="{StaticResource CardHeader}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="{DynamicResource Settings.DebugMode}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap" />
+                            <ui:ToggleSwitch x:Name="DebugModeToggle" Grid.Column="1" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                       Text="{DynamicResource Settings.DebugModeHint}" />
+                        </Grid>
+                        <StackPanel x:Name="NvencPanel" Margin="0,14,0,0">
+                            <Grid Style="{StaticResource Row}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{DynamicResource Settings.NvencPreset}" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="NvencPresetCombo" Grid.Column="1" />
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{DynamicResource Settings.NvencTune}" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="NvencTuneCombo" Grid.Column="1" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="2,6,0,0" Foreground="#AAAAAA" FontSize="12" TextWrapping="Wrap"
+                                           Text="{DynamicResource Settings.NvencHint}" />
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
                 <!-- shadPS4 -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>

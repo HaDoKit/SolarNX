@@ -111,14 +111,141 @@ public sealed class AppOrchestrator : IDisposable
     // The Switch said Hello: from now on it takes control messages - tell it the current options.
     private void OnControlReceived(ControlWire.ClientMessage type, byte[] payload)
     {
-        if (type == ControlWire.ClientMessage.Hello) SendOptions();
+        switch (type)
+        {
+            case ControlWire.ClientMessage.Hello:
+                SendOptions();
+                SendDebugInfo();
+                break;
+            case ControlWire.ClientMessage.Ping when _config.DebugMode && payload.Length >= 8:
+                _session.SendControl(ControlWire.HostMessage.Pong, payload.AsSpan(0, 8));
+                break;
+            case ControlWire.ClientMessage.SetSetting when _config.DebugMode && payload.Length >= 8:
+                ApplyRemoteSetting((ControlWire.DebugSetting)payload[0], System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(4)));
+                break;
+        }
     }
 
     private void SendOptions()
     {
         var flags = ControlWire.OptionFlags.None;
         if (_config.TrafficPriority) flags |= ControlWire.OptionFlags.TrafficPriority;
+        if (_config.DebugMode) flags |= ControlWire.OptionFlags.DebugMode;
         _session.SendControl(ControlWire.HostMessage.Options, [(byte)flags, 0, 0, 0]);
+    }
+
+    // What the Switch's overlay and debug menu show - see ControlWire.HostMessage.DebugInfo.
+    private void SendDebugInfo()
+    {
+        if (!_config.DebugMode) return;
+        var encoder = _videoEncoder;
+        var running = encoder?.ActiveEncoder;
+        var size = encoder?.ActiveSize ?? CurrentStreamSize();
+        var name = System.Text.Encoding.UTF8.GetBytes(running is { } kind ? EncoderSelection.DisplayName(kind) : "-");
+        if (name.Length > 60) name = name[..60];
+        var info = new byte[33 + name.Length];
+        var span = info.AsSpan();
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(span, (uint)_config.BitrateKbps);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(span[4..], (uint)(encoder?.ActiveBitrateKbps ?? 0));
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(span[8..], (ushort)size.Width);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(span[10..], (ushort)size.Height);
+        info[12] = (byte)_config.Fps;
+        info[13] = (byte)(encoder?.ActiveCodec == VideoCodec.H264 ? 1 : 0);
+        info[14] = (byte)(_config.Codec == VideoCodec.H264 ? 1 : 0);
+        info[15] = (byte)(running ?? EncoderKind.Auto);
+        info[16] = (byte)(_config.AutoResolution ? 0 : Math.Max(0, Array.IndexOf(ControlWire.DebugResolutions, (_config.TargetWidth, _config.TargetHeight))) + 1);
+        info[17] = (byte)Math.Max(0, Array.IndexOf(EncoderSelection.NvencPresets, _config.NvencPreset));
+        info[18] = (byte)Math.Max(0, Array.IndexOf(EncoderSelection.NvencTunes, _config.NvencTune));
+        var flags = ControlWire.DebugInfoFlags.None;
+        if (_config.AdaptiveBitrate) flags |= ControlWire.DebugInfoFlags.AdaptiveBitrate;
+        if (_config.TrafficPriority) flags |= ControlWire.DebugInfoFlags.TrafficPriority;
+        if (running == EncoderKind.Nvenc) flags |= ControlWire.DebugInfoFlags.Nvenc;
+        info[19] = (byte)flags;
+        info[32] = (byte)name.Length;
+        name.CopyTo(info, 33);
+        _session.SendControl(ControlWire.HostMessage.DebugInfo, info);
+    }
+
+    /// <summary>A video setting changed from the Switch's debug menu (or a debug setting in the PC
+    /// settings): fired on the thread pool so the settings screen can show the new value.</summary>
+    public event Action? SettingsChangedRemotely;
+
+    private void ApplyRemoteSetting(ControlWire.DebugSetting setting, int value)
+    {
+        switch (setting)
+        {
+            case ControlWire.DebugSetting.BitrateKbps:
+                _config.BitrateKbps = Math.Clamp(value, 1000, 50000);
+                break;
+            case ControlWire.DebugSetting.AdaptiveBitrate:
+                _config.AdaptiveBitrate = value != 0;
+                break;
+            case ControlWire.DebugSetting.Codec:
+                _config.Codec = value == 1 ? VideoCodec.H264 : VideoCodec.Hevc;
+                break;
+            case ControlWire.DebugSetting.Resolution when value == 0:
+                _config.AutoResolution = true;
+                break;
+            case ControlWire.DebugSetting.Resolution when value >= 1 && value <= ControlWire.DebugResolutions.Length:
+                _config.AutoResolution = false;
+                (_config.TargetWidth, _config.TargetHeight) = ControlWire.DebugResolutions[value - 1];
+                break;
+            case ControlWire.DebugSetting.Fps when ControlWire.DebugFps.Contains(value):
+                _config.Fps = value;
+                break;
+            case ControlWire.DebugSetting.NvencPreset when value >= 0 && value < EncoderSelection.NvencPresets.Length:
+                _config.NvencPreset = EncoderSelection.NvencPresets[value];
+                break;
+            case ControlWire.DebugSetting.NvencTune when value >= 0 && value < EncoderSelection.NvencTunes.Length:
+                _config.NvencTune = EncoderSelection.NvencTunes[value];
+                break;
+            case ControlWire.DebugSetting.TrafficPriority:
+                _config.TrafficPriority = value != 0;
+                Native.QosMarking.Enabled = _config.TrafficPriority;
+                SendOptions();
+                break;
+            default:
+                Logger.Log("AppOrchestrator", $"debug menu: ignored setting {setting} = {value}");
+                return;
+        }
+        _config.Save();
+        Logger.Log("AppOrchestrator", $"debug menu on the Switch: {setting} = {value}");
+        SettingsChangedRemotely?.Invoke();
+        ApplyVideoSettingsNow($"debug menu: {setting}"); // answers with a fresh DebugInfo either way
+    }
+
+    /// <summary>Restarts the running encoder with the current settings (the debug menu, or a debug
+    /// setting in the PC settings) - otherwise video settings apply at the next session. The picture
+    /// freezes for about a second.</summary>
+    public void ApplyVideoSettingsNow(string reason)
+    {
+        _ = Task.Run(async () =>
+        {
+            await _pipelineGate.WaitAsync();
+            try
+            {
+                if (_pipelineActive)
+                {
+                    RestartVideoEncoder(reason, _config.BitrateKbps); // sends a DebugInfo itself
+                    _adaptiveBitrate.Start(_config.BitrateKbps);
+                }
+                else
+                {
+                    SendDebugInfo(); // not streaming: the menu still gets the new value
+                }
+            }
+            finally
+            {
+                _pipelineGate.Release();
+            }
+        });
+    }
+
+    /// <summary>The debug-mode toggle in the PC settings.</summary>
+    public void DebugModeSettingChanged()
+    {
+        SendOptions();
+        SendDebugInfo();
     }
 
     /// <summary>The settings' traffic-priority toggle: new sockets (the next encoder start) and the
@@ -446,6 +573,7 @@ public sealed class AppOrchestrator : IDisposable
             _videoEncoder = new VideoEncoder(_config);
             _videoEncoder.Start(streamSize: CurrentStreamSize());
             _adaptiveBitrate.Start(_config.BitrateKbps);
+            SendDebugInfo();
 
             // Captures whatever is currently playing on the first user's real default audio
             // device directly via WASAPI loopback - see AudioCaptureSender.
@@ -520,6 +648,7 @@ public sealed class AppOrchestrator : IDisposable
             _videoEncoder?.Stop();
             _videoEncoder = new VideoEncoder(_config);
             _videoEncoder.Start(bitrateKbpsOverride: carryOverBitrate, captureWindow: carryOverWindow, streamSize: CurrentStreamSize());
+            SendDebugInfo();
         }
         catch (Exception ex)
         {
