@@ -123,6 +123,18 @@ jobs:
             Compress-Archive -Path "out/server-$rid/*" -DestinationPath "SolarNX-Rendezvous-$rid.zip" -Force
           }
 
+      - name: Release manifest
+        shell: pwsh
+        run: |
+          # Read by the app's update check (SolarNX/Update/UpdateChecker.cs): with the wire protocol it
+          # can tell whether the Switch app has to be updated along with the PC.
+          $manifest = [ordered]@{
+            version  = "${{ needs.version.outputs.version }}"
+            protocol = (Get-Content PROTOCOL -Raw).Trim()
+          }
+          $manifest | ConvertTo-Json | Set-Content -Path release.json -Encoding utf8NoBOM
+          Get-Content release.json
+
       - name: Download Switch client
         uses: actions/download-artifact@v4
         with:
@@ -147,6 +159,7 @@ jobs:
             Client/SolarNX-Switch.nro
             SolarNX-Rendezvous-linux-x64.zip
             SolarNX-Rendezvous-win-x64.zip
+            release.json
 
       - name: Publish the release
         env:

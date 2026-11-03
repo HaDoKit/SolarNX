@@ -34,6 +34,7 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         BackButton.Click += (_, _) => BackRequested?.Invoke();
 
         InitLanguageSection();
+        InitUpdatesSection();
         InitConnectionSection();
         InitVideoSection();
         InitGamepadSection();
@@ -80,6 +81,31 @@ public partial class SettingsView : System.Windows.Controls.UserControl
             EncoderInfoText.Text = Loc.T("Settings.EncoderChecking");
             _ = RefreshEncoderInfoAsync();
         }
+        RefreshUpdateStatus();
+    }
+
+    private void InitUpdatesSection()
+    {
+        CheckUpdatesToggle.IsChecked = _config.CheckForUpdates;
+        CheckUpdatesToggle.Checked += (_, _) => { _config.CheckForUpdates = true; _config.Save(); };
+        CheckUpdatesToggle.Unchecked += (_, _) => { _config.CheckForUpdates = false; _config.Save(); };
+        CheckNowButton.Click += async (_, _) =>
+        {
+            CheckNowButton.IsEnabled = false;
+            try { await _orchestrator.Updates.CheckNowAsync(); }
+            finally { CheckNowButton.IsEnabled = true; }
+        };
+        _orchestrator.Updates.Changed += () => Dispatcher.BeginInvoke(RefreshUpdateStatus);
+        RefreshUpdateStatus();
+    }
+
+    private void RefreshUpdateStatus()
+    {
+        var updates = _orchestrator.Updates;
+        UpdateStatusText.Text = updates.Available is { } info ? Loc.F("Settings.UpdateAvailable", info.Version)
+            : updates.LastCheckFailed ? Loc.T("Settings.UpdateFailed")
+            : updates.LastCheckedUtc is null ? Loc.T("Settings.UpdateNever")
+            : Loc.F("Settings.UpdateLatest", AppVersion.Current);
     }
 
     private void InitConnectionSection()

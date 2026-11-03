@@ -40,6 +40,34 @@ public partial class HomeView : System.Windows.Controls.UserControl
         RefreshMode();
         Loc.Changed += RefreshMode;
         _orchestrator.Compatibility.Changed += () => Dispatcher.BeginInvoke(RefreshCompatibility);
+        _orchestrator.Updates.Changed += () => Dispatcher.BeginInvoke(RefreshUpdate);
+    }
+
+    /// <summary>"SolarNX X is available", what that means for the Switch app, and a link to the
+    /// release page - nothing while this is the newest.</summary>
+    private void RefreshUpdate()
+    {
+        UpdateLabel.Inlines.Clear();
+        if (_orchestrator.Updates.Available is not { } info)
+        {
+            UpdateLabel.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var switchNote = info.Switch switch
+        {
+            SolarNX.Update.SwitchUpdate.NotNeeded => Loc.T("Update.SwitchNotNeeded"),
+            SolarNX.Update.SwitchUpdate.Optional => Loc.T("Update.SwitchOptional"),
+            SolarNX.Update.SwitchUpdate.Required => Loc.T("Update.SwitchRequired"),
+            _ => Loc.T("Update.SwitchUnknown"),
+        };
+        UpdateLabel.Inlines.Add(new System.Windows.Documents.Run($"{Loc.F("Home.UpdateAvailable", info.Version)} {switchNote} "));
+        var link = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(Loc.T("Home.UpdateOpen")))
+        {
+            Foreground = System.Windows.Media.Brushes.White,
+        };
+        link.Click += (_, _) => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(info.PageUrl) { UseShellExecute = true });
+        UpdateLabel.Inlines.Add(link);
+        UpdateLabel.Visibility = Visibility.Visible;
     }
 
     /// <summary>Says when the Switch's protocol differs from this PC's, and which side to update -
@@ -72,6 +100,7 @@ public partial class HomeView : System.Windows.Controls.UserControl
         IpBox.IsReadOnly = internet;
         RefreshStatus();
         RefreshCompatibility();
+        RefreshUpdate();
     }
 
     private void SaveClientIp()

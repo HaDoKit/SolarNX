@@ -93,6 +93,10 @@ public sealed class Config
     /// way when told so (control message Options).</summary>
     public bool TrafficPriority { get; set; } = true;
 
+    /// <summary>Look for a newer release on GitHub at start-up and once a day (Update/UpdateChecker).
+    /// The settings' "check now" button works either way.</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
     /// <summary>Off by default: after a game exits, Steam returns to Big Picture by itself. When on,
     /// AppOrchestrator additionally sends Escape and fully closes/reopens Big Picture - an old
     /// workaround for the gamepad staying dead in Big Picture after a non-Steam-game shortcut (e.g.
