@@ -51,3 +51,4 @@ Android/.idea/
 *.iml
 Android/app/.cxx/
 Android/.kotlin/
+Core/build/

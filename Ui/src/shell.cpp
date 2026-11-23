@@ -69,7 +69,7 @@ struct SnxUi {
 
     // Settings values (not all bound - values live in setrows[i].value)
     int language = 0;       // 0 auto, 1 en, 2 ru
-    int conn_mode = 0;      // 0 wifi, 1 internet
+    int host_type = 0;      // 0 SolarNX service, 1 Sunshine
     int rumble = 0;         // 0 off, 1 large-only, 2 all
     std::string address, server, server_key, pc_id;
     bool paired = false;
@@ -86,11 +86,11 @@ struct SnxUi {
 // ---------------------------------------------------------------------------
 // Settings rows (same order as the Switch client)
 
-enum { ROW_MODE, ROW_ADDRESS, ROW_SERVER, ROW_SERVER_KEY, ROW_PC_ID, ROW_PAIR, ROW_LANGUAGE, ROW_RUMBLE };
+enum { ROW_HOSTTYPE, ROW_ADDRESS, ROW_SERVER, ROW_SERVER_KEY, ROW_PC_ID, ROW_PAIR, ROW_LANGUAGE, ROW_RUMBLE };
 static const int kRowCount = 8;
 
 static const StrId kRowLabel[] = {
-    Str_RowMode, Str_RowAddress, Str_RowServer, Str_RowServerKey,
+    Str_RowHostType, Str_RowAddress, Str_RowServer, Str_RowServerKey,
     Str_RowPcId, Str_RowPair, Str_RowLanguage, Str_RowRumble,
 };
 
@@ -112,7 +112,7 @@ static void rebuild_rows(SnxUi *ui)
     char pairing[128];
     snprintf(pairing, sizeof(pairing), "%s%s", tr(Str_PairedPrefix), ui->paired_host.c_str());
     const char *values[kRowCount] = {
-        tr(ui->conn_mode == 1 ? Str_ModeInternet : Str_ModeWifi),
+        tr(ui->host_type == 1 ? Str_HostSunshine : Str_HostSolar),
         !ui->address.empty() ? ui->address.c_str() : tr(Str_NotSet),
         !ui->server.empty() ? ui->server.c_str() : tr(Str_NoServer),
         tr(!ui->server_key.empty() ? Str_KeySet : Str_KeyNone),
@@ -247,7 +247,7 @@ static void act_pick_game(SnxUi *ui, int idx)
 }
 
 static const char *kRowKey[] = {
-    "connection_mode", "pc_address", "server", "server_key", "pc_id", "pair", "language", "rumble",
+    "host_type", "pc_address", "server", "server_key", "pc_id", "pair", "language", "rumble",
 };
 
 static void notify_row(SnxUi *ui, int row, const char *value)
@@ -262,9 +262,11 @@ static void act_row(SnxUi *ui, int row)
 {
     switch (row)
     {
-    case ROW_MODE:
-        ui->conn_mode ^= 1;
-        notify_row(ui, row, ui->conn_mode ? "internet" : "wifi");
+    case ROW_HOSTTYPE:
+        // The channel itself is never picked by hand: the core detects the route
+        // (LAN vs Internet) from the PC address. This row only selects the protocol.
+        ui->host_type ^= 1;
+        notify_row(ui, row, ui->host_type ? "sunshine" : "solar");
         break;
     case ROW_LANGUAGE:
         ui->language = (ui->language + 1) % 3;

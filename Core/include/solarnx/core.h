@@ -1,0 +1,95 @@
+// libsolarnx-core public API: a single-threaded, poll-driven session core shared by
+// every SolarNX client. The platform owns the thread, the decoders, the UI and the
+// OS integration; the core owns the protocol.
+//
+// Usage: create with a host address (changeable at runtime - no restart, no manual
+// channel pick: the path is detected from the route, see route.h), then pump
+// snx_core_poll() from your own thread. Everything comes back through callbacks.
+//
+// This file is part of SolarNX (GPL-3.0).
+#pragma once
+
+#include <stddef.h>
+#include <stdint.h>
+
+#include "input.h"
+#include "route.h"
+#include "wire.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef enum {
+    SNX_BACKEND_SOLAR = 0,    // the SolarNX PC service (built-in protocol)
+    SNX_BACKEND_SUNSHINE,    // Sunshine host via the Moonlight protocol (moonlight-common-c)
+} SnxBackend;
+
+typedef enum {
+    SNX_STATE_IDLE = 0,        // created / no host address configured
+    SNX_STATE_RESOLVING,       // detecting the route to the host
+    SNX_STATE_WAIT_HOST,       // LAN: listening, waiting for the PC to dial in
+    SNX_STATE_LIBRARY,         // a library arrived (the PC is attached)
+    SNX_STATE_SESSION,         // full streaming session established
+    SNX_STATE_PATH_UNSUPPORTED,// internet path: the encrypted transport is not wired yet
+    SNX_STATE_BACKEND_UNSUPPORTED, // backend selected but not implemented yet
+    SNX_STATE_ERROR,           // resolve failed / socket error - will retry
+} SnxState;
+
+const char *snx_state_name(SnxState state);
+
+// One game record from the host's library. Valid only inside the on_library callback
+// (the core reuses its storage on the next update).
+typedef struct {
+    uint32_t    id;
+    const char *name;        // UTF-8
+    const uint8_t *cover;   // JPEG bytes, NULL if none
+    size_t      coverSize;
+} SnxLibraryGame;
+
+typedef struct {
+    // State transitions, with a human-readable detail for the UI (may be NULL).
+    void (*on_state)(void *ctx, SnxState state, const char *detail);
+    // The host's library, arriving on the library channel. `games` is valid only
+    // during the call - copy what you need.
+    void (*on_library)(void *ctx, const SnxLibraryGame *games, size_t count);
+    // Diagnostic log, one line, no trailing newline.
+    void (*on_log)(void *ctx, int level, const char *msg);
+} SnxCallbacks;
+
+typedef struct {
+    int         backend;       // SnxBackend; SolarNX service by default
+    const char *host;          // PC address (IP or name); NULL or "" keeps the core idle
+    const char *appVersion;    // announced in handshakes; NULL = "solarnx-core"
+    // Ports; 0 falls back to the wire.h defaults.
+    int libraryPort, hidPort, videoPort, audioPort;
+} SnxConfig;
+
+typedef struct SnxCore SnxCore;
+
+SnxCore *snx_core_create(const SnxConfig *cfg, const SnxCallbacks *cb, void *ctx);
+void     snx_core_destroy(SnxCore *core);
+
+// Pumps every channel once: accepts the PC's connections, parses the library,
+// flushes queued input. Never blocks longer than timeout_ms. Thread of the
+// platform's choosing; callbacks fire from inside this call.
+void snx_core_poll(SnxCore *core, int timeout_ms);
+
+// Runtime host change (settings screen): the route is re-detected and the session
+// restarts on the next poll - no app restart, no manual channel pick. Same thread
+// as snx_core_poll (or while poll is not running): the core is deliberately
+// single-owner; other threads should stop/recreate the core instead.
+void snx_core_set_host(SnxCore *core, const char *host);
+
+// Queues the input state; the active backend serializes and ships it on its own
+// cadence (SolarNX HID at ~120 Hz once the HID channel is wired; Moonlight input
+// for Sunshine). No-op until the corresponding backend implements it.
+void snx_core_send_input(SnxCore *core, const SnxInputState *input);
+
+SnxState snx_core_state(const SnxCore *core);
+SnxBackend snx_core_backend(const SnxCore *core);
+SnxPath snx_core_path(const SnxCore *core);
+
+#ifdef __cplusplus
+}
+#endif
