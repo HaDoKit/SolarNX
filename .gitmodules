@@ -1,0 +1,12 @@
+[submodule "Ui/third_party/SDL"]
+	path = Ui/third_party/SDL
+	url = https://github.com/libsdl-org/SDL
+[submodule "Ui/third_party/RmlUi"]
+	path = Ui/third_party/RmlUi
+	url = https://github.com/mikke89/RmlUi
+[submodule "Ui/third_party/SDL_image"]
+	path = Ui/third_party/SDL_image
+	url = https://github.com/libsdl-org/SDL_image
+[submodule "Ui/third_party/freetype"]
+	path = Ui/third_party/freetype
+	url = https://github.com/freetype/freetype

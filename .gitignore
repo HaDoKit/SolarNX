@@ -40,3 +40,14 @@ title.keys
 .claude/settings.local.json
 imgui.ini
 *.log
+
+# --- Shared UI (RmlUi+SDL2) and Android client ---
+Ui/build/
+Android/.gradle/
+Android/build/
+Android/app/build/
+Android/local.properties
+Android/.idea/
+*.iml
+Android/app/.cxx/
+Android/.kotlin/

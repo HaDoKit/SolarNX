@@ -1,0 +1,35 @@
+<rml>
+<head>
+    <title>SolarNX - Settings</title>
+    <link type="text/rcss" href="ui.rcss"/>
+</head>
+<body data-model="shell">
+
+<div class="stage" id="stage">
+
+<div class="topbar">
+    <img class="logo" src="img/wordmark.png"/>
+    <div class="version">{{ver}}</div>
+    <div class="screentitle">{{t_settings}}</div>
+</div>
+
+<div class="rows">
+    <div class="row" data-for="r : setrows" data-class-sel="it_index == setsel"
+         data-event-click="row_activate(it_index)">
+        <div class="k">{{r.label}}</div>
+        <div class="v">{{r.value}}</div>
+    </div>
+</div>
+
+<div class="notes">
+    <div>{{note1}}</div>
+    <div>{{note2}}</div>
+    <div>{{note3}}</div>
+</div>
+
+<div class="hint">{{t_hint}}</div>
+<div class="btn backbtn" data-if="touch_ui" data-event-click="nav_back()">« {{t_back}}</div>
+
+</div>
+</body>
+</rml>

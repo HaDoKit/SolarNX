@@ -1,0 +1,40 @@
+<rml>
+<head>
+    <title>SolarNX - Library</title>
+    <link type="text/rcss" href="ui.rcss"/>
+</head>
+<body data-model="shell">
+
+<div class="stage" id="stage">
+
+<div class="topbar">
+    <img class="logo" src="img/wordmark.png"/>
+    <div class="version">{{ver}}</div>
+    <div class="screentitle">{{t_mygames}}</div>
+</div>
+
+<div class="libempty" data-if="games.size == 0">
+    <div>{{lib_l1}}</div>
+    <div class="l2">{{lib_l2}}</div>
+</div>
+
+<div class="gridwrap" data-if="games.size > 0">
+    <div class="grid">
+        <div class="tile" data-for="g : games" data-class-sel="it_index == libsel"
+             data-event-click="pick_game(it_index)">
+            <div class="cov" data-attr-style="ph_style">
+                <img class="cover" data-if="g.has_cover" data-attr-src="g.cover"
+                     data-attr-style="cov_style"/>
+                <div class="ph" data-if="!g.has_cover"></div>
+            </div>
+            <div class="name">{{g.name}}</div>
+        </div>
+    </div>
+</div>
+
+<div class="hint">{{t_hint}}</div>
+<div class="btn backbtn" data-if="touch_ui" data-event-click="nav_back()">« {{t_back}}</div>
+
+</div>
+</body>
+</rml>

@@ -1,0 +1,47 @@
+<rml>
+<head>
+    <title>SolarNX</title>
+    <link type="text/rcss" href="ui.rcss"/>
+</head>
+<body data-model="shell">
+
+<div class="stage" id="stage">
+
+<div class="topbar">
+    <img class="logo" src="img/wordmark.png"/>
+    <div class="version">{{ver}}</div>
+</div>
+
+<div class="cards">
+    <div class="card" data-class-sel="menusel == 0" data-event-click="pick_menu(0)">
+        <div class="icon"><img src="img/steam.png"/></div>
+        <div class="label">Steam</div>
+    </div>
+    <div class="card" data-class-sel="menusel == 1" data-event-click="pick_menu(1)">
+        <div class="icon"><img src="img/shadps4.png"/></div>
+        <div class="label">shadPS4</div>
+    </div>
+    <div class="card" data-class-sel="menusel == 2" data-event-click="pick_menu(2)">
+        <div class="icon">
+            <img data-if="libtile_cover != ''" data-attr-src="libtile_cover"/>
+            <div class="libph" data-if="libtile_cover == ''">
+                <div></div><div></div><div></div><div></div>
+            </div>
+        </div>
+        <div class="label">{{t_mygames}}</div>
+    </div>
+</div>
+
+<div class="status">
+    <div data-if="s_pc != ''" class="gold">{{s_pc}}</div>
+    <div>{{s_conn}}</div>
+    <div>{{s_layout}}</div>
+</div>
+
+<div class="ip">{{s_ip}}</div>
+
+<div class="btn setbtn" data-if="touch_ui" data-event-click="open_settings()">{{t_settings}}</div>
+
+</div>
+</body>
+</rml>

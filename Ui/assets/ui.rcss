@@ -1,0 +1,315 @@
+/* SolarNX shell — shared styles. The dp ratio is set from the real screen height, so the canvas
+   is always 720dp tall and N dp wide (e.g. 1280dp on 16:9, ~1595dp on a 21:9 phone). Elements
+   anchor to the real edges via right:/% and centered flex so the UI fills the whole scene. */
+
+* {
+    font-family: Roboto;
+    box-sizing: border-box;
+}
+
+div {
+    display: block;
+}
+
+body {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    color: #ffffff;
+    font-size: 26dp;
+    margin: 0;
+}
+
+/* Full-window canvas; children anchor to its edges or centre. */
+.stage {
+    position: absolute;
+    left: 0; top: 0;
+    right: 0; bottom: 0;
+}
+
+/* --- top bar (all screens) --- */
+
+.topbar {
+    position: absolute;
+    left: 0; top: 0; right: 0;
+    height: 70dp;
+    background: #96969619;
+}
+.topbar img.logo {
+    position: absolute;
+    left: 10dp;
+    top: 0;
+    height: 70dp;
+}
+.version {
+    position: absolute;
+    left: 24dp;
+    top: 684dp;
+    font-size: 13dp;
+    color: #9696a0cc;
+}
+.screentitle {
+    position: absolute;
+    right: 24dp;
+    top: 12dp;
+    width: 376dp;
+    text-align: right;
+    font-size: 40dp;
+    font-weight: bold;
+}
+
+/* --- menu cards --- */
+
+.cards {
+    position: absolute;
+    left: 0; top: 0; right: 0;
+    height: 720dp;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.card {
+    width: 320dp;
+    height: 420dp;
+    margin: 0 25dp;
+    border-radius: 20dp;
+    border: 3dp #ffffffcc;
+    background: #00000082;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.card.sel {
+    border-color: #ffc83c;
+}
+.card:hover, .card:active {
+    border-color: #ffffff;
+    background: #14151cb0;
+}
+.card.sel:hover, .card.sel:active {
+    border-color: #ffc83c;
+}
+.card .icon {
+    height: 330dp;
+    width: 300dp;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.card .icon img {
+    max-width: 300dp;
+    max-height: 330dp;
+}
+.card .label {
+    height: 70dp;
+    padding-top: 16dp;
+    color: #d2d2d2;
+    text-align: center;
+    width: 300dp;
+}
+.card.sel .label {
+    color: #ffffff;
+}
+/* "My games" tile placeholder: 2x2 mini tiles, like the Switch client's drawLibraryIcon */
+.libph {
+    display: flex;
+    flex-wrap: wrap;
+    width: 140dp;
+}
+.libph div {
+    width: 62dp;
+    height: 62dp;
+    border-radius: 12dp;
+    background: #ffffff3c;
+    margin: 8dp;
+}
+
+/* --- status lines (menu bottom-right) --- */
+
+.status {
+    position: absolute;
+    right: 24dp;
+    top: 618dp;
+    width: 600dp;
+    text-align: right;
+    font-size: 15dp;
+    color: #aaaaaa;
+    line-height: 1.7;
+}
+.status .gold {
+    color: #ffc83c;
+}
+.ip {
+    position: absolute;
+    left: 0; top: 674dp; right: 0;
+    text-align: center;
+}
+
+/* --- library grid --- */
+
+.gridwrap {
+    position: absolute;
+    left: 0; top: 90dp; right: 0;
+    height: 590dp;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+.grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 0 60dp;
+}
+.tile {
+    /* width follows the bound cover size - attributes on the data-for element itself
+       are not data-bound in RmlUi, so the tile shrink-wraps its cover */
+    margin: 0 10dp 24dp;
+    border: 4dp transparent;
+    border-radius: 14dp;
+}
+.tile.sel {
+    border-color: #ffc83c;
+}
+.tile:hover, .tile:active {
+    border-color: #ffffff99;
+}
+.tile.sel:hover, .tile.sel:active {
+    border-color: #ffc83c;
+}
+/* Fixed cover slot so every tile in the grid has the same width/height;
+   the image is contain-fitted and centred inside it (any source aspect). */
+.tile .cov {
+    width: 160dp;
+    height: 240dp;
+    line-height: 240dp; /* vertical-centres the inline img */
+    text-align: center;
+    font-size: 0;
+}
+.tile img.cover {
+    vertical-align: middle;
+    max-width: 160dp;
+    max-height: 240dp;
+    border-radius: 10dp;
+}
+.tile .ph {
+    width: 100%;
+    height: 100%;
+    line-height: normal;
+    border-radius: 10dp;
+    background: #282836;
+}
+.tile .name {
+    font-size: 15dp;
+    color: #aaaaaa;
+    text-align: center;
+    margin-top: 6dp;
+    max-width: 300dp;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.tile.sel .name {
+    color: #ffffff;
+}
+.libempty {
+    position: absolute;
+    left: 0; top: 300dp; right: 0;
+    text-align: center;
+}
+.libempty .l2 {
+    font-size: 16dp;
+    color: #aaaaaa;
+    margin-top: 16dp;
+}
+
+/* thin scrollbar, touch-drag still scrolls regardless */
+scrollbarvertical {
+    width: 6dp;
+}
+scrollbarvertical slidertrack {
+    background: #ffffff10;
+}
+scrollbarvertical sliderbar {
+    background: #ffffff40;
+    border-radius: 3dp;
+}
+scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc {
+    display: none;
+}
+
+/* --- settings --- */
+
+.rows {
+    position: absolute;
+    left: 12.5%; top: 84dp;
+    width: 75%;
+}
+.row {
+    display: flex;
+    height: 46dp;
+    border-radius: 14dp;
+    background: #14151ce0;
+    margin-bottom: 6dp;
+    padding-left: 24dp;
+    padding-right: 24dp;
+    align-items: center;
+    border: 3dp transparent;
+}
+.row.sel {
+    border-color: #ffc83c;
+}
+.row:hover, .row:active {
+    background: #23242ecc;
+}
+.row.sel:hover, .row.sel:active {
+    border-color: #ffc83c;
+}
+.row .k {
+    color: #aaaaaa;
+    font-size: 17dp;
+    flex: 1;
+}
+.row .v {
+    font-size: 17dp;
+    text-align: right;
+}
+.notes {
+    position: absolute;
+    left: 12.5%; top: 520dp;
+    width: 75%;
+    font-size: 14dp;
+    color: #aaaaaa;
+    line-height: 1.9;
+}
+
+/* --- bottom hint (all screens) --- */
+
+.hint {
+    position: absolute;
+    left: 0; top: 692dp; right: 0;
+    text-align: center;
+    font-size: 16dp;
+    color: #aaaaaa;
+}
+
+/* --- touch buttons (shown when the last input was a finger/mouse) --- */
+
+.btn {
+    position: absolute;
+    padding: 8dp 22dp;
+    border-radius: 24dp;
+    background: #14151ce0;
+    border: 2dp #96969680;
+    color: #d2d2d2;
+    font-size: 18dp;
+}
+.btn:hover, .btn:active {
+    border-color: #ffc83c;
+    color: #ffc83c;
+}
+.backbtn {
+    left: 24dp;
+    top: 620dp;
+}
+.setbtn {
+    right: 24dp;
+    top: 14dp;
+}
