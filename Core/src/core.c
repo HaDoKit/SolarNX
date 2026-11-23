@@ -70,6 +70,7 @@ SnxCore *snx_core_create(const SnxConfig *cfg, const SnxCallbacks *cb, void *ctx
     core->ops = core->backend == SNX_BACKEND_SUNSHINE ? &snx_backend_sunshine : &snx_backend_solar;
     core->libListenFd = -1;
     core->state = SNX_STATE_IDLE;
+    pthread_mutex_init(&core->inputMutex, NULL);
 
     if (cfg->host != NULL && *cfg->host != '\0')
     {
@@ -85,6 +86,7 @@ void snx_core_destroy(SnxCore *core)
         return;
     if (core->backendUp && core->ops != NULL)
         core->ops->stop(core);
+    pthread_mutex_destroy(&core->inputMutex);
     free(core->host);
     free(core);
 }
@@ -170,10 +172,16 @@ void snx_core_send_input(SnxCore *core, const SnxInputState *input)
 {
     if (core == NULL || input == NULL)
         return;
+    pthread_mutex_lock(&core->inputMutex);
     core->input = *input;
-    core->inputQueued = true;
-    // The SolarNX HID channel ships it at ~120 Hz once wired (next milestone); the
-    // Sunshine backend will translate to Moonlight's LiSend* calls.
+    pthread_mutex_unlock(&core->inputMutex);
+}
+
+void snx__input_snapshot(SnxCore *core, SnxInputState *out)
+{
+    pthread_mutex_lock(&core->inputMutex);
+    *out = core->input;
+    pthread_mutex_unlock(&core->inputMutex);
 }
 
 SnxState snx_core_state(const SnxCore *core) { return core != NULL ? core->state : SNX_STATE_IDLE; }

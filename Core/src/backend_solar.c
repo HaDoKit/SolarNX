@@ -1,20 +1,46 @@
 // SolarNX backend: the built-in PC service protocol, LAN path.
 //
-// Current scope: the library channel (TCP 19003) - the PC dials in and pushes its
-// game library. The HID channel (19001), video (UDP 19000) and audio (UDP 19002)
-// land on the same accept/poll skeleton in the next milestones; the Internet path
-// (encrypted UDP transport, Client/transport) after that.
+// Channels (all live in one poll loop):
+//   - library TCP 19003: the PC dials in and pushes its game library;
+//   - HID TCP 19001: the PC dials in, sends the 28-byte SessionConfig, then the
+//     core streams the platform's input state at ~120 Hz (8x0xFF marker + the
+//     224-byte packet) and reads the PC's control messages in between.
+// The PC closing the HID connection just goes back to accept - same as the
+// Switch client's reconnect behavior.
+// Video (UDP 19000) and audio (UDP 19002) land on this skeleton next.
 // This file is part of SolarNX (GPL-3.0).
 
 #include "internal.h"
 
+#include <errno.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 typedef struct {
     int libListenFd;
+    int hidListenFd;
+    int hidFd;              // -1 while waiting for the PC to dial in
+    uint64_t lastHidSendMs; // pacing for the ~120 Hz input cadence
+    // Partial control message from the PC: u16 length + u8 type + payload.
+    uint8_t ctlBuf[2 + 1 + 1024];
+    size_t ctlFill;
 } SolarBackend;
+
+// ~120 Hz: a press waits for the next send, so the interval adds its own length
+// to the input lag. 232 bytes at 120 Hz is ~28 KB/s - nothing for Wi-Fi.
+#define HID_SEND_INTERVAL_MS 8
+
+static uint64_t nowMs(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000u + (uint64_t)(ts.tv_nsec / 1000000u);
+}
 
 static bool fdRead(void *io, void *buf, size_t len)
 {
@@ -35,12 +61,19 @@ static bool solarStart(SnxCore *core, SnxPath path)
     if (b == NULL)
         return false;
     b->libListenFd = -1;
+    b->hidListenFd = -1;
+    b->hidFd = -1;
     core->backendData = b;
 
-    int port = core->cfg.libraryPort > 0 ? core->cfg.libraryPort : SNX_PORT_LIBRARY;
-    b->libListenFd = snx__tcp_listen(port);
-    if (b->libListenFd < 0)
+    b->libListenFd = snx__tcp_listen(core->cfg.libraryPort > 0 ? core->cfg.libraryPort
+                                                               : SNX_PORT_LIBRARY);
+    int hidPort = core->cfg.hidPort > 0 ? core->cfg.hidPort : SNX_PORT_HID;
+    b->hidListenFd = snx__tcp_listen(hidPort);
+    if (b->libListenFd < 0 || b->hidListenFd < 0)
     {
+        snx__log(core, 2, "listen failed: library=%d hid=%d", b->libListenFd, b->hidListenFd);
+        if (b->libListenFd >= 0) close(b->libListenFd);
+        if (b->hidListenFd >= 0) close(b->hidListenFd);
         free(b);
         core->backendData = NULL;
         return false;
@@ -56,6 +89,10 @@ static void solarStop(SnxCore *core)
         return;
     if (b->libListenFd >= 0)
         close(b->libListenFd);
+    if (b->hidListenFd >= 0)
+        close(b->hidListenFd);
+    if (b->hidFd >= 0)
+        close(b->hidFd);
     free(b);
     core->backendData = NULL;
     core->libListenFd = -1;
@@ -79,15 +116,11 @@ static void deliverLibrary(SnxCore *core, const SnxLibEntryRaw *entries, size_t 
     free(games);
 }
 
-static void solarPoll(SnxCore *core, int timeoutMs)
+static void handleLibraryConnection(SnxCore *core, SolarBackend *b)
 {
-    SolarBackend *b = (SolarBackend *)core->backendData;
-    if (b == NULL || b->libListenFd < 0)
-        return;
-
-    int fd = snx__accept_ms(b->libListenFd, timeoutMs);
+    int fd = snx__accept_ms(b->libListenFd, 0);
     if (fd < 0)
-        return; // -1 timeout (nothing to do), -2 transient accept error: keep listening
+        return; // -1 nothing waiting, -2 transient accept error: keep listening
 
     // A host that stalls mid-transfer must not park the core forever. The handshake
     // bursts are tiny, so a short bound is plenty.
@@ -117,6 +150,174 @@ static void solarPoll(SnxCore *core, int timeoutMs)
         snx__set_state(core, SNX_STATE_LIBRARY, detail);
     }
     close(fd);
+}
+
+// The PC's control stream after the SessionConfig: u16 length + u8 type + payload,
+// back to back. Returns false when the connection is gone.
+static bool pumpControlMessages(SnxCore *core, SolarBackend *b)
+{
+    for (;;)
+    {
+        if (b->ctlFill >= 3)
+        {
+            uint16_t len;
+            memcpy(&len, b->ctlBuf, 2);
+            if (len > 1024)
+                return false; // nonsense length: treat the connection as broken
+            if (b->ctlFill >= (size_t)3 + len)
+            {
+                if (core->cb.on_control != NULL)
+                    core->cb.on_control(core->cbCtx, b->ctlBuf[2], b->ctlBuf + 3, len);
+                memmove(b->ctlBuf, b->ctlBuf + 3 + len, b->ctlFill - (size_t)3 - len);
+                b->ctlFill -= (size_t)3 + len;
+                continue;
+            }
+        }
+
+        // Top up from the socket: non-blocking-ish read with the poll budget.
+        size_t want = sizeof(b->ctlBuf) - b->ctlFill;
+        if (want == 0)
+            return false;
+        ssize_t n = recv(b->hidFd, b->ctlBuf + b->ctlFill, want, MSG_DONTWAIT);
+        if (n > 0)
+        {
+            b->ctlFill += (size_t)n;
+            continue;
+        }
+        if (n == 0)
+            return false;
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            return true; // nothing more for now
+        return false;
+    }
+}
+
+static void acceptHid(SnxCore *core, SolarBackend *b)
+{
+    int fd = snx__accept_ms(b->hidListenFd, 0);
+    if (fd < 0)
+        return;
+
+    // The host sends the 28-byte SessionConfig immediately after connecting.
+    snx__io_timeout(fd, 5);
+    SnxSessionConfig cfg;
+    if (!snx__read_all(fd, &cfg, sizeof(cfg)))
+    {
+        close(fd);
+        return;
+    }
+    b->hidFd = fd;
+    b->ctlFill = 0;
+    b->lastHidSendMs = 0; // send the first packet on the next poll tick
+
+    if (core->cb.on_session != NULL)
+        core->cb.on_session(core->cbCtx, &cfg);
+
+    char detail[96];
+    snprintf(detail, sizeof(detail), "%ux%u@%u fps, %u kbps video", cfg.videoWidth,
+             cfg.videoHeight, cfg.videoFps, cfg.videoBitrateKbps);
+    snx__set_state(core, SNX_STATE_SESSION, detail);
+}
+
+static void dropHid(SnxCore *core, SolarBackend *b)
+{
+    close(b->hidFd);
+    b->hidFd = -1;
+    b->ctlFill = 0;
+    snx__set_state(core, SNX_STATE_WAIT_HOST, "host disconnected - waiting");
+}
+
+static void sendHidFrame(SnxCore *core, SolarBackend *b)
+{
+    SnxInputState in;
+    snx__input_snapshot(core, &in);
+
+    SnxHidPacket pkt;
+    snx_input_to_hid(&in, &pkt);
+    // Telemetry counters are free-running and the host reads deltas, so leaving
+    // them at zero is protocol-legal; wire the real stats with the video channel.
+
+    uint8_t marker[SNX_HID_MARKER_SIZE];
+    memset(marker, SNX_HID_MARKER_BYTE, sizeof(marker));
+    if (!snx__write_all(b->hidFd, marker, sizeof(marker)) ||
+        !snx__write_all(b->hidFd, &pkt, sizeof(pkt)))
+    {
+        dropHid(core, b);
+        return;
+    }
+}
+
+static void solarPoll(SnxCore *core, int timeoutMs)
+{
+    SolarBackend *b = (SolarBackend *)core->backendData;
+    if (b == NULL)
+        return;
+
+    // Wait on whichever sockets are live, then service what became ready.
+    struct pollfd pfds[2];
+    int n = 0;
+    int libIx = -1, hidIx = -1;
+    if (b->libListenFd >= 0)
+    {
+        libIx = n;
+        pfds[n].fd = b->libListenFd;
+        pfds[n].events = POLLIN;
+        n++;
+    }
+    bool hidConnected = b->hidFd >= 0;
+    if (!hidConnected && b->hidListenFd >= 0)
+    {
+        hidIx = n;
+        pfds[n].fd = b->hidListenFd;
+        pfds[n].events = POLLIN;
+        n++;
+    }
+
+    int waitMs = timeoutMs;
+    if (hidConnected)
+    {
+        // The input cadence must survive even when nothing else happens.
+        uint64_t elapsed = nowMs() - b->lastHidSendMs;
+        if (elapsed >= HID_SEND_INTERVAL_MS)
+            waitMs = 0;
+        else
+        {
+            int until = HID_SEND_INTERVAL_MS - (int)elapsed;
+            waitMs = timeoutMs < until ? timeoutMs : until;
+        }
+    }
+    if (n > 0)
+    {
+        int ready = poll(pfds, (nfds_t)n, waitMs);
+        (void)ready; // readiness is re-checked per socket below anyway
+    }
+    else if (waitMs > 0)
+    {
+        struct timespec ts = {.tv_sec = waitMs / 1000, .tv_nsec = (long)(waitMs % 1000) * 1000000};
+        nanosleep(&ts, NULL);
+    }
+
+    handleLibraryConnection(core, b);
+
+    if (!hidConnected && hidIx >= 0 && (pfds[hidIx].revents & POLLIN))
+        acceptHid(core, b);
+
+    if (b->hidFd >= 0)
+    {
+        if (!pumpControlMessages(core, b))
+        {
+            dropHid(core, b);
+        }
+        else
+        {
+            uint64_t now = nowMs();
+            if (now - b->lastHidSendMs >= HID_SEND_INTERVAL_MS)
+            {
+                b->lastHidSendMs = now;
+                sendHidFrame(core, b);
+            }
+        }
+    }
 }
 
 const SnxBackendOps snx_backend_solar = {

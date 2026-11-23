@@ -53,6 +53,12 @@ typedef struct {
     // The host's library, arriving on the library channel. `games` is valid only
     // during the call - copy what you need.
     void (*on_library)(void *ctx, const SnxLibraryGame *games, size_t count);
+    // The PC connected on the HID channel and sent its session config: the encoder
+    // parameters the streams will run at. NULL `config` never happens.
+    void (*on_session)(void *ctx, const SnxSessionConfig *config);
+    // A control message from the PC (type + payload), e.g. rumble and debug
+    // requests. Payload is valid only during the call.
+    void (*on_control)(void *ctx, uint8_t type, const void *payload, size_t len);
     // Diagnostic log, one line, no trailing newline.
     void (*on_log)(void *ctx, int level, const char *msg);
 } SnxCallbacks;
@@ -82,8 +88,8 @@ void snx_core_poll(SnxCore *core, int timeout_ms);
 void snx_core_set_host(SnxCore *core, const char *host);
 
 // Queues the input state; the active backend serializes and ships it on its own
-// cadence (SolarNX HID at ~120 Hz once the HID channel is wired; Moonlight input
-// for Sunshine). No-op until the corresponding backend implements it.
+// cadence (SolarNX HID at ~120 Hz, Moonlight input for Sunshine). Thread-safe:
+// call from the platform's input/UI thread while the core polls on its own.
 void snx_core_send_input(SnxCore *core, const SnxInputState *input);
 
 SnxState snx_core_state(const SnxCore *core);

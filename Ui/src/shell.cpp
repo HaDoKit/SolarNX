@@ -751,6 +751,17 @@ void snxui_show(SnxUi *ui, int screen)
     show_screen(ui, screen);
 }
 
+// Restores persisted values (platform storage) into the settings screen.
+void snxui_set_host(SnxUi *ui, const char *address, int host_type)
+{
+    if (address != NULL)
+        ui->address = address;
+    if (host_type >= 0)
+        ui->host_type = host_type ? 1 : 0;
+    rebuild_rows(ui);
+    ui->model.DirtyVariable("setrows");
+}
+
 int snxui_screen(const SnxUi *ui)
 {
     return ui->screen;

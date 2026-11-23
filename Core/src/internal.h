@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <pthread.h>
 
 #include "solarnx/core.h"
 #include "solarnx/input.h"
@@ -28,9 +29,10 @@ struct SnxCore {
     // Last library hash (the "already have it" short-circuit).
     uint64_t     libHash;
     bool         libHashValid;
-    // Input pending shipment by whichever backend implements it.
+    // Input pending shipment. Guarded by inputMutex: the platform pushes from its
+    // own thread, the core thread snapshots it on its send cadence.
     SnxInputState input;
-    bool          inputQueued;
+    pthread_mutex_t inputMutex;
     // Resolve retry pacing.
     uint64_t     lastAttemptMs;
 };
@@ -51,6 +53,8 @@ extern const SnxBackendOps snx_backend_sunshine;
 // --- helpers ---
 void snx__log(SnxCore *core, int level, const char *fmt, ...);
 void snx__set_state(SnxCore *core, SnxState state, const char *detail);
+// Thread-safe snapshot of the platform's latest input state.
+void snx__input_snapshot(SnxCore *core, SnxInputState *out);
 
 // Route classification (testable core of route.c).
 typedef struct SnxRouteIface {

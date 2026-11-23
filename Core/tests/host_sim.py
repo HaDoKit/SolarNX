@@ -7,6 +7,7 @@ import sys
 import time
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 19003
+HOST = "127.0.0.1"
 
 s = socket.create_connection(("127.0.0.1", PORT), timeout=5)
 s.settimeout(5)
@@ -37,5 +38,34 @@ for gid, name, cover in games:
     payload += struct.pack("<IH", gid, len(name.encode())) + name.encode()
     payload += struct.pack("<I", len(cover)) + cover
 s.sendall(payload)
+# --- HID channel: connect, send the 28-byte SessionConfig, read input frames ---
+hid = socket.create_connection((HOST, 19001), timeout=5)
+hid.settimeout(5)
+# u32: videoBitrate, width, height, fps, audioBitrate, sampleRate, channels
+hid.sendall(struct.pack("<7I", 15000, 1920, 1080, 60, 128, 48000, 2))
+
+frames = 0
+t0 = time.time()
+while time.time() - t0 < 1.0:
+    head = hid.recv(8)
+    if len(head) != 8 or head != b"\xff" * 8:
+        print("BAD MARKER:", head.hex())
+        sys.exit(1)
+    pkt = b""
+    while len(pkt) < 224:
+        chunk = hid.recv(224 - len(pkt))
+        if not chunk:
+            sys.exit(1)
+        pkt += chunk
+    if frames == 0:
+        buttons, lx = struct.unpack_from("<Ii", pkt, 0)
+        count, app_target, height = struct.unpack_from("<III", pkt, 196)
+        print(f"frame0: buttons={buttons:#x} lx={lx} pads={count} target={app_target} h={height}")
+        assert buttons & 1, "A not held"
+        assert lx == -1234
+        assert count == 1 and app_target == 0 and height == 1080
+    frames += 1
+print(f"HID: {frames} frames in 1s (~{frames} Hz), marker+224B framing OK")
+hid.close()
 print("pushed", len(games), "games,", len(payload), "bytes")
 s.close()

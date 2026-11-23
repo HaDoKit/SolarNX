@@ -42,6 +42,136 @@ static std::atomic<bool> g_core_run{false};
 static std::string g_host_address; // last applied host
 static int g_host_backend = SNX_BACKEND_SOLAR;
 
+// --- input collection (main thread): SDL gamepads + touch -> SnxInputState ---
+static SnxInputState g_input_state = {};
+static SDL_FingerID g_touch_finger = -1; // primary touch being tracked
+struct PadSlot
+{
+    SDL_JoystickID id;
+    SDL_GameController *ctrl;
+};
+static PadSlot g_pads[4];
+
+// SDL controller button -> SolarNX wire bit (A=0..Down=15, see wire.h). -1 = unmapped.
+static int wireButtonBit(int b)
+{
+    switch (b)
+    {
+    case SDL_CONTROLLER_BUTTON_A: return 0;
+    case SDL_CONTROLLER_BUTTON_B: return 1;
+    case SDL_CONTROLLER_BUTTON_X: return 2;
+    case SDL_CONTROLLER_BUTTON_Y: return 3;
+    case SDL_CONTROLLER_BUTTON_LEFTSTICK: return 4;
+    case SDL_CONTROLLER_BUTTON_RIGHTSTICK: return 5;
+    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: return 6;
+    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return 7;
+    case SDL_CONTROLLER_BUTTON_START: return 10;  // Plus
+    case SDL_CONTROLLER_BUTTON_BACK: return 11;   // Minus
+    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return 12;
+    case SDL_CONTROLLER_BUTTON_DPAD_UP: return 13;
+    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return 14;
+    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return 15;
+    default: return -1; // ZL/ZR come from the trigger axes below
+    }
+}
+
+static int padSlotOf(SDL_JoystickID id)
+{
+    for (int i = 0; i < 4; i++)
+        if (g_pads[i].ctrl != NULL && g_pads[i].id == id)
+            return i;
+    return -1;
+}
+
+static int clampAxis(Sint16 v) { return v < -32767 ? -32767 : v; }
+
+static void handleInputEvent(const SDL_Event &ev, int windowW, int windowH)
+{
+    switch (ev.type)
+    {
+    case SDL_CONTROLLERDEVICEADDED: {
+        int slot = -1;
+        for (int i = 0; i < 4; i++)
+            if (g_pads[i].ctrl == NULL) { slot = i; break; }
+        if (slot < 0)
+            break; // the protocol carries four pads; extras are ignored
+        SDL_GameController *c = SDL_GameControllerOpen(ev.cdevice.which);
+        if (c == NULL)
+            break;
+        g_pads[slot].ctrl = c;
+        g_pads[slot].id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(c));
+        g_input_state.pads[slot] = {};
+        break;
+    }
+    case SDL_CONTROLLERDEVICEREMOVED: {
+        int slot = padSlotOf(ev.cdevice.which);
+        if (slot < 0)
+            break;
+        SDL_GameControllerClose(g_pads[slot].ctrl);
+        g_pads[slot].ctrl = NULL;
+        g_input_state.pads[slot] = {};
+        break;
+    }
+    case SDL_CONTROLLERBUTTONDOWN:
+    case SDL_CONTROLLERBUTTONUP: {
+        int slot = padSlotOf(ev.cbutton.which);
+        int bit = wireButtonBit(ev.cbutton.button);
+        if (slot < 0 || bit < 0)
+            break;
+        if (ev.type == SDL_CONTROLLERBUTTONDOWN)
+            g_input_state.pads[slot].buttons |= (1u << bit);
+        else
+            g_input_state.pads[slot].buttons &= ~(1u << bit);
+        break;
+    }
+    case SDL_CONTROLLERAXISMOTION: {
+        int slot = padSlotOf(ev.caxis.which);
+        if (slot < 0)
+            break;
+        SnxInputPad *p = &g_input_state.pads[slot];
+        switch (ev.caxis.axis)
+        {
+        case SDL_CONTROLLER_AXIS_LEFTX: p->lx = clampAxis(ev.caxis.value); break;
+        case SDL_CONTROLLER_AXIS_LEFTY: p->ly = clampAxis(ev.caxis.value); break;
+        case SDL_CONTROLLER_AXIS_RIGHTX: p->rx = clampAxis(ev.caxis.value); break;
+        case SDL_CONTROLLER_AXIS_RIGHTY: p->ry = clampAxis(ev.caxis.value); break;
+        case SDL_CONTROLLER_AXIS_TRIGGERLEFT: // analog trigger -> the wire's digital ZL bit
+            if (ev.caxis.value > 8192) p->buttons |= (1u << 8);
+            else p->buttons &= ~(1u << 8);
+            break;
+        case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
+            if (ev.caxis.value > 8192) p->buttons |= (1u << 9);
+            else p->buttons &= ~(1u << 9);
+            break;
+        default: break;
+        }
+        break;
+    }
+    case SDL_FINGERDOWN:
+    case SDL_FINGERMOTION:
+    case SDL_FINGERUP: {
+        // One primary touch point, window pixels; released = (0,0), like the Switch.
+        if (ev.type == SDL_FINGERDOWN && g_touch_finger == -1)
+            g_touch_finger = ev.tfinger.fingerId;
+        if (ev.tfinger.fingerId == g_touch_finger)
+        {
+            if (ev.type == SDL_FINGERUP)
+            {
+                g_input_state.touchX1 = g_input_state.touchY1 = 0;
+                g_touch_finger = -1;
+            }
+            else
+            {
+                g_input_state.touchX1 = (uint32_t)(ev.tfinger.x * windowW);
+                g_input_state.touchY1 = (uint32_t)(ev.tfinger.y * windowH);
+            }
+        }
+        break;
+    }
+    default: break;
+    }
+}
+
 static void on_pick(void *, int target, uint32_t id)
 {
     LOGI("pick: target=%d library_id=%u", target, id);
@@ -52,6 +182,9 @@ static void on_quit(void *)
     running = false;
 }
 
+static void save_settings();
+static void load_settings();
+
 static void on_setting(void *, const char *key, const char *value)
 {
     LOGI("setting: %s=%s", key, value);
@@ -59,8 +192,62 @@ static void on_setting(void *, const char *key, const char *value)
         g_host_address = value != NULL ? value : "";
     else if (strcmp(key, "host_type") == 0 && value != NULL)
         g_host_backend = strcmp(value, "sunshine") == 0 ? SNX_BACKEND_SUNSHINE : SNX_BACKEND_SOLAR;
+    save_settings();
     // The core thread owns the SnxCore: apply the change by restarting it from the
     // main loop (snx_core_set_host is same-thread-only by contract).
+}
+
+// --- settings persistence (simple key=value file in the app's data dir) ---
+
+static std::string settings_path()
+{
+    const char *pref = SDL_GetPrefPath("SolarNX", "");
+    if (pref == NULL)
+        return "";
+    return std::string(pref) + "settings.txt";
+}
+
+static void save_settings()
+{
+    std::string path = settings_path();
+    if (path.empty())
+        return;
+    SDL_RWops *rw = SDL_RWFromFile(path.c_str(), "w");
+    if (rw == NULL)
+        return;
+    char buf[512];
+    int n = snprintf(buf, sizeof(buf), "host=%s\nbackend=%s\n",
+                     g_host_address.c_str(),
+                     g_host_backend == SNX_BACKEND_SUNSHINE ? "sunshine" : "solar");
+    SDL_RWwrite(rw, buf, 1, (size_t)n);
+    SDL_RWclose(rw);
+}
+
+static void load_settings()
+{
+    std::string path = settings_path();
+    if (path.empty())
+        return;
+    SDL_RWops *rw = SDL_RWFromFile(path.c_str(), "r");
+    if (rw == NULL)
+        return;
+    char buf[1024];
+    size_t n = (size_t)SDL_RWread(rw, buf, 1, sizeof(buf) - 1);
+    SDL_RWclose(rw);
+    buf[n] = '\0';
+    for (char *line = strtok(buf, "\n"); line != NULL; line = strtok(NULL, "\n"))
+    {
+        char *eq = strchr(line, '=');
+        if (eq == NULL)
+            continue;
+        *eq = '\0';
+        if (strcmp(line, "host") == 0)
+            g_host_address = eq + 1;
+        else if (strcmp(line, "backend") == 0)
+            g_host_backend = strcmp(eq + 1, "sunshine") == 0 ? SNX_BACKEND_SUNSHINE
+                                                             : SNX_BACKEND_SOLAR;
+    }
+    LOGI("settings loaded: host=%s backend=%d", g_host_address.c_str(), g_host_backend);
 }
 
 // --- core callbacks (core thread; everything is copied and posted to the main thread) ---
@@ -251,6 +438,8 @@ extern "C" int SDL_main(int argc, char *argv[])
     // The real session core: route detection (LAN/internet from the PC address, no
     // manual channel pick) + the library channel. The grid stays empty until the
     // host pushes its library.
+    load_settings();
+    snxui_set_host(ui, g_host_address.c_str(), g_host_backend);
     std::string cur_host;
     int cur_backend = -1;
     bool core_started = false;
@@ -268,6 +457,8 @@ extern "C" int SDL_main(int argc, char *argv[])
     sync_core();
 
     Uint64 last = SDL_GetTicks64();
+    int windowW = 0, windowH = 0;
+    SDL_GetWindowSize(window, &windowW, &windowH);
     while (running)
     {
         // Host address / backend changed in settings: re-cycle the core.
@@ -277,7 +468,19 @@ extern "C" int SDL_main(int argc, char *argv[])
         SDL_Event ev;
         while (SDL_PollEvent(&ev))
         {
-            if (ev.type == SDL_QUIT || ev.type == SDL_APP_TERMINATING)
+            // Raw input for the stream (gamepads + touch) - collected before the shell
+            // sees the same events, they serve UI navigation too.
+            handleInputEvent(ev, windowW, windowH);
+            // Android BACK on the menu screen must not kill the app (the shell maps
+            // it to B, which exits - correct for a console, wrong for Android).
+            // Swallow it there; on sub-screens it still navigates back.
+            if ((ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP) &&
+                ev.key.keysym.sym == SDLK_AC_BACK &&
+                snxui_screen(ui) == SNX_SCREEN_MENU)
+            {
+                // keep running; ignore
+            }
+            else if (ev.type == SDL_QUIT || ev.type == SDL_APP_TERMINATING)
                 running = false;
             else if (ev.type == g_text_result_ev)
             {
@@ -304,6 +507,18 @@ extern "C" int SDL_main(int argc, char *argv[])
         float dt = (float)(now - last) / 1000.0f;
         if (dt > 1.0f) dt = 1.0f;
         last = now;
+
+        // Hand the current input state to the core; the backend serializes and
+        // ships it on its own cadence (~120 Hz while the HID channel is up).
+        g_input_state.padCount = 0;
+        for (int i = 0; i < 4; i++)
+            if (g_pads[i].ctrl != NULL)
+                g_input_state.padCount++;
+        g_input_state.appTarget = SNX_APP_BIG_PICTURE;
+        g_input_state.displayHeight = (uint32_t)windowH;
+        if (g_core != NULL)
+            snx_core_send_input(g_core, &g_input_state);
+
         snxui_update(ui, dt);
         snxui_render(ui);
     }
