@@ -1,6 +1,8 @@
 package org.solarnx.client;
 
 import android.app.AlertDialog;
+import android.os.Build;
+import android.os.Bundle;
 import android.view.Gravity;
 import android.view.Window;
 import android.view.WindowManager;
@@ -8,6 +10,8 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.text.InputType;
 import android.widget.EditText;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 
 import org.libsdl.app.SDLActivity;
 
@@ -15,9 +19,29 @@ import org.libsdl.app.SDLActivity;
 // addition is a standard Android text-edit dialog requested by the UI shell (the shell's
 // built-in SDL text input loses touch focus after the soft keyboard is dismissed and a
 // floating keyboard covers the field being edited).
-public class SnxActivity extends SDLActivity {
+public class SnxActivity extends SDLActivity implements OnBackInvokedCallback {
 
     private native void nativeTextResult(String rowKey, String text);
+    private native void nativeBackEvent();
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // API 33+ gesture/predictive back would otherwise finish the activity (the shell
+        // never sees it as a key event). Route it to SDL instead; below 33 the classic
+        // KEYCODE_BACK path already reaches the shell through dispatchKeyEvent.
+        if (Build.VERSION.SDK_INT >= 33) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    OnBackInvokedDispatcher.PRIORITY_DEFAULT, this);
+        }
+    }
+
+    @Override
+    public void onBackInvoked() {
+        // Becomes an SDL SDLK_AC_BACK key press; the app decides (menu: ignore,
+        // sub-screens: navigate back) instead of the system destroying the activity.
+        nativeBackEvent();
+    }
 
     // Called from the SDL thread via JNI when a settings row needs text input.
     public void showTextDialog(final String rowKey, String label, String current, String hint) {

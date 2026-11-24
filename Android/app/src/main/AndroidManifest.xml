@@ -16,6 +16,7 @@
     <application
         android:label="SolarNX"
         android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
         android:hardwareAccelerated="true">
 
         <activity

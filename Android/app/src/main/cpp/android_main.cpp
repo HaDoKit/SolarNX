@@ -389,6 +389,20 @@ Java_org_solarnx_client_SnxActivity_nativeTextResult(JNIEnv *env, jobject, jstri
         delete r;
 }
 
+// Called on the UI thread from SnxActivity's OnBackInvokedCallback (API 33+ predictive
+// back): re-injects the gesture as the classic SDLK_AC_BACK key pair so the shell's
+// normal handling decides (menu: ignore, sub-screens: navigate back).
+extern "C" JNIEXPORT void JNICALL
+Java_org_solarnx_client_SnxActivity_nativeBackEvent(JNIEnv *, jobject)
+{
+    SDL_Event ev = {};
+    ev.type = SDL_KEYDOWN;
+    ev.key.keysym.sym = SDLK_AC_BACK;
+    SDL_PushEvent(&ev);
+    ev.type = SDL_KEYUP;
+    SDL_PushEvent(&ev);
+}
+
 extern "C" int SDL_main(int argc, char *argv[])
 {
     running = true; // the process may be reused after the previous SDL_main quit
