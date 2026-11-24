@@ -34,6 +34,23 @@ extern "C" {
 #define SNX_HID_MARKER_BYTE     0xFF // 8x, before every HID payload
 #define SNX_CONTROL_MARKER_BYTE 0xFE // 8x, before every control frame
 
+// --- video framing (mirrors SolarNX/Capture/VideoSender.cs) ---
+// Every datagram is header + one 1280-byte shard. A frame's N = ceil(size/1280)
+// data shards (the last zero-padded) split into `blockCount` Reed-Solomon blocks
+// as evenly as possible; each block carries its parity shards after its data.
+//   0  u8  magic 0x53 ('S')         8  u32 frame number (starts random, +1)
+//   1  u8  version (2)             12  u32 frame size in bytes (Annex B)
+//   2  u8  flags (bit0 keyframe, bit1 H.265 - else H.264)
+//   3  u8  block index              5  u8  shard index in the block (data, then parity)
+//   4  u8  block count              6  u8  parity shards in this block
+#define SNX_VIDEO_HEADER_SIZE   16
+#define SNX_VIDEO_SHARD_SIZE    1280
+#define SNX_VIDEO_DATAGRAM_SIZE (SNX_VIDEO_HEADER_SIZE + SNX_VIDEO_SHARD_SIZE)
+#define SNX_VIDEO_MAGIC   0x53
+#define SNX_VIDEO_VERSION 2 // 2 since the codec flag (0.2.4)
+#define SNX_VIDEO_FLAG_KEYFRAME 0x01
+#define SNX_VIDEO_FLAG_HEVC     0x02
+
 // --- shared version block (every handshake: library header/reply, Hello control) ---
 typedef struct {
     uint16_t major;

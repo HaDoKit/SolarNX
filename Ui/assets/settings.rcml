@@ -27,6 +27,8 @@
     <div>{{note3}}</div>
 </div>
 
+<div class="debug" data-if="debug_text != ''">{{debug_text}}</div>
+
 <div class="hint">{{t_hint}}</div>
 <div class="btn backbtn" data-if="touch_ui" data-event-click="nav_back()">« {{t_back}}</div>
 

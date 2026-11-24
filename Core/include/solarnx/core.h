@@ -59,6 +59,11 @@ typedef struct {
     // A control message from the PC (type + payload), e.g. rumble and debug
     // requests. Payload is valid only during the call.
     void (*on_control)(void *ctx, uint8_t type, const void *payload, size_t len);
+    // A reassembled video frame: Annex B bytes (H.264 or H.265 - see `hevc`),
+    // zero-padded past the end for decoder overreads. `data` is valid only
+    // during the call (the reassembly reuses its buffers).
+    void (*on_video_frame)(void *ctx, const uint8_t *data, size_t size, uint32_t number,
+                           bool keyframe, bool hevc);
     // Diagnostic log, one line, no trailing newline.
     void (*on_log)(void *ctx, int level, const char *msg);
 } SnxCallbacks;
@@ -95,6 +100,24 @@ void snx_core_send_input(SnxCore *core, const SnxInputState *input);
 SnxState snx_core_state(const SnxCore *core);
 SnxBackend snx_core_backend(const SnxCore *core);
 SnxPath snx_core_path(const SnxCore *core);
+
+// Live telemetry for the debug overlay: everything the core knows about the
+// session right now. Safe to poll from another thread (plain reads).
+typedef struct {
+    SnxState state;
+    SnxPath path;
+    SnxBackend backend;
+    const char *host;        // the configured address (owned by the core)
+    uint32_t libraryGames;   // entries in the last received library
+    uint32_t hidFramesSent;  // ~120 Hz while the HID channel is up
+    uint32_t videoFrames;    // reassembled frames handed out
+    uint32_t videoFramesLost;
+    uint32_t videoFramesSkipped; // dropped while waiting for a keyframe
+    uint32_t videoShardsRecovered; // rebuilt from Reed-Solomon parity
+    uint32_t videoDatagramsRejected;
+} SnxStats;
+
+SnxStats snx_core_stats(const SnxCore *core);
 
 #ifdef __cplusplus
 }

@@ -125,6 +125,22 @@ body {
 
 /* --- status lines (menu bottom-right) --- */
 
+/* Core telemetry overlay (snxui_set_debug): top-left, multi-line, semi-opaque. */
+.debug {
+    position: absolute;
+    left: 24dp;
+    top: 90dp;
+    max-width: 520dp;
+    font-size: 13dp;
+    line-height: 1.4;
+    color: #9fd0ff;
+    background: #000000c8;
+    border-radius: 8dp;
+    padding: 8dp 12dp;
+    white-space: pre;
+    z-index: 10;
+}
+
 .status {
     position: absolute;
     right: 24dp;

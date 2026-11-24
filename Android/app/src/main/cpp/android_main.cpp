@@ -296,6 +296,20 @@ static void core_on_log(void *, int level, const char *msg)
     LOGI("core: %s", msg != NULL ? msg : "");
 }
 
+static void core_on_video_frame(void *, const uint8_t *data, size_t size, uint32_t number,
+                                bool keyframe, bool hevc)
+{
+    // MediaCodec lands in the next milestone; for now count the stream through the
+    // debug overlay (the payload is a valid Annex B frame from the reassembly).
+    static uint32_t s_lastLogged = 0;
+    if (number != s_lastLogged && (number % 30) == 0) // every ~second at 30 fps
+    {
+        s_lastLogged = number;
+        LOGI("video frame %u: %zu bytes, %s%s", number, size, keyframe ? "key " : "",
+             hevc ? "H.265" : "H.264");
+    }
+}
+
 static void core_thread_func()
 {
     while (g_core_run.load())
@@ -327,6 +341,7 @@ static void start_core()
     cb.on_state = core_on_state;
     cb.on_library = core_on_library;
     cb.on_log = core_on_log;
+    cb.on_video_frame = core_on_video_frame;
     g_core = snx_core_create(&cfg, &cb, NULL);
     if (g_core == NULL)
         return;
@@ -471,6 +486,7 @@ extern "C" int SDL_main(int argc, char *argv[])
     sync_core();
 
     Uint64 last = SDL_GetTicks64();
+    Uint64 lastDebug = 0;
     int windowW = 0, windowH = 0;
     SDL_GetWindowSize(window, &windowW, &windowH);
     while (running)
@@ -521,6 +537,31 @@ extern "C" int SDL_main(int argc, char *argv[])
         float dt = (float)(now - last) / 1000.0f;
         if (dt > 1.0f) dt = 1.0f;
         last = now;
+
+        // Debug block: the core's live telemetry, refreshed twice a second.
+        if (now - lastDebug > 500)
+        {
+            lastDebug = now;
+            SnxStats st = snx_core_stats(g_core);
+            char dbg[512];
+            static uint32_t prevHid, prevVideo;
+            snprintf(dbg, sizeof(dbg),
+                     "SolarNX core\n"
+                     "host: %s\n"
+                     "path: %s (%s)\n"
+                     "state: %s\n"
+                     "library: %u games\n"
+                     "hid: %u frames (+%u)\n"
+                     "video: %u frames, %u lost, %u rec",
+                     st.host, snx_path_name(st.path), st.backend == SNX_BACKEND_SUNSHINE
+                                                          ? "sunshine" : "solar",
+                     snx_state_name(st.state), st.libraryGames, st.hidFramesSent,
+                     st.hidFramesSent - prevHid, st.videoFrames, st.videoFramesLost,
+                     st.videoShardsRecovered);
+            prevHid = st.hidFramesSent;
+            prevVideo = st.videoFrames;
+            snxui_set_debug(ui, dbg);
+        }
 
         // Hand the current input state to the core; the backend serializes and
         // ships it on its own cadence (~120 Hz while the HID channel is up).

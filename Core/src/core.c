@@ -190,3 +190,23 @@ SnxBackend snx_core_backend(const SnxCore *core)
     return core != NULL ? core->backend : SNX_BACKEND_SOLAR;
 }
 SnxPath snx_core_path(const SnxCore *core) { return core != NULL ? core->path : SNX_PATH_UNKNOWN; }
+
+SnxStats snx_core_stats(const SnxCore *core)
+{
+    SnxStats s = {};
+    if (core == NULL)
+        return s;
+    s.state = core->state;
+    s.path = core->path;
+    s.backend = core->backend;
+    s.host = core->host != NULL ? core->host : "";
+    s.libraryGames = core->statLibGames;
+    s.hidFramesSent = core->statHidFrames;
+    // The backend refreshes this snapshot from its video instance after each poll.
+    s.videoFrames = core->statVideo.framesHanded;
+    s.videoFramesLost = core->statVideo.framesLost;
+    s.videoFramesSkipped = core->statVideo.framesSkipped;
+    s.videoShardsRecovered = core->statVideo.shardsRecovered;
+    s.videoDatagramsRejected = core->statVideo.datagramsRejected;
+    return s;
+}

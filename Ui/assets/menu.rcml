@@ -32,6 +32,8 @@
     </div>
 </div>
 
+<div class="debug" data-if="debug_text != ''">{{debug_text}}</div>
+
 <div class="status">
     <div data-if="s_pc != ''" class="gold">{{s_pc}}</div>
     <div>{{s_conn}}</div>

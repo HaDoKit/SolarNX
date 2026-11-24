@@ -89,6 +89,10 @@ int snxui_screen(const SnxUi *ui);
 // the PC address and the host backend (0 SolarNX service, 1 Sunshine).
 void snxui_set_host(SnxUi *ui, const char *address, int host_type);
 
+// Multi-line core telemetry overlay (NULL or "" hides it). The platform feeds it
+// from snx_core_stats() while developing - the debug block.
+void snxui_set_debug(SnxUi *ui, const char *text);
+
 // Result of a platform text editor started by on_text_request. NULL `text` = cancelled.
 void snxui_text_result(SnxUi *ui, const char *row_key, const char *text);
 

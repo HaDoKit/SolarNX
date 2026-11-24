@@ -11,6 +11,35 @@
 #include "solarnx/route.h"
 #include "solarnx/wire.h"
 
+// video.c - the frame reassembly on top of the wire framing (see wire.h).
+typedef struct SnxVideo SnxVideo;
+
+typedef struct {
+    const uint8_t *data; // Annex B + SNX_VIDEO padding zeros; valid until the next push
+    size_t size;
+    uint32_t number;
+    bool keyframe;
+    bool hevc;   // H.265, else H.264
+    uint64_t firstMs; // when its first datagram arrived (the debug overlay's latency)
+} SnxVideoFrame;
+
+typedef struct {
+    uint32_t framesHanded;      // complete frames handed to the decoder
+    uint32_t framesLost;        // could not be rebuilt, or never arrived at all
+    uint32_t framesSkipped;     // complete, but dropped while waiting for a keyframe
+    uint32_t shardsRecovered;   // data shards rebuilt from parity
+    uint32_t datagramsRejected; // not our format, or inconsistent
+    uint32_t datagramsLate;     // for a frame already given up on
+} SnxVideoStats;
+
+SnxVideo *snx_video_create(void);
+void snx_video_destroy(SnxVideo *v);
+void snx_video_reset(SnxVideo *v, bool reorderWindow); // true: two-frame window (Internet)
+void snx_video_request_keyframe(SnxVideo *v);          // decoder rejected a frame
+bool snx_video_push(SnxVideo *v, const uint8_t *datagram, size_t length, SnxVideoFrame *out);
+bool snx_video_next(SnxVideo *v, SnxVideoFrame *out);
+const SnxVideoStats *snx_video_stats(const SnxVideo *v);
+
 struct SnxCore {
     SnxConfig   cfg;
     SnxCallbacks cb;
@@ -33,6 +62,10 @@ struct SnxCore {
     // own thread, the core thread snapshots it on its send cadence.
     SnxInputState input;
     pthread_mutex_t inputMutex;
+    // Telemetry (plain reads from other threads are fine - the debug overlay polls).
+    uint32_t statLibGames;
+    uint32_t statHidFrames;
+    SnxVideoStats statVideo;
     // Resolve retry pacing.
     uint64_t     lastAttemptMs;
 };
@@ -70,6 +103,10 @@ int  snx__accept_ms(int listenFd, int timeout_ms); // accepted fd, -1 on timeout
 void snx__io_timeout(int fd, int seconds); // SO_RCVTIMEO/SO_SNDTIMEO
 bool snx__read_all(int fd, void *buf, size_t len);
 bool snx__write_all(int fd, const void *buf, size_t len);
+// UDP receiver bound to INADDR_ANY:port with a 256KB kernel buffer (keyframe bursts
+// at LAN speed - the Switch client's sizing, see its network.c) and a drain helper.
+int  snx__udp_listen(int port);
+int  snx__udp_recv(int fd, void *buf, size_t len); // n, 0 on nothing, -1 on error
 
 // library.c - the library channel protocol, on I/O callbacks (unit-testable).
 typedef bool (*SnxIoRead)(void *io, void *buf, size_t len);

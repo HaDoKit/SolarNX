@@ -118,6 +118,10 @@ int main(int argc, char **argv)
     }
 
     snxui_set_status(ui, "IP Address: 192.168.1.42", NULL, NULL, "PC: SolarNX 0.2.5-alpha");
+    // The debug overlay preview - the Android host feeds it from snx_core_stats().
+    snxui_set_debug(ui, "SolarNX core\nhost: 192.168.1.42\npath: LAN (solar)\nstate: waiting for host\n"
+                        "library: 10 games\nhid: 1204 frames (+120)\n"
+                        "video: 352 frames, 2 lost, 11 rec");
     if (start_screen >= 0)
         snxui_show(ui, start_screen);
 

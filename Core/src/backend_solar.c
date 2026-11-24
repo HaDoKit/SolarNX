@@ -29,6 +29,9 @@ typedef struct {
     // Partial control message from the PC: u16 length + u8 type + payload.
     uint8_t ctlBuf[2 + 1 + 1024];
     size_t ctlFill;
+    // Video channel: UDP receiver + the frame reassembly.
+    int videoFd;
+    SnxVideo *video;
 } SolarBackend;
 
 // ~120 Hz: a press waits for the next send, so the interval adds its own length
@@ -63,17 +66,24 @@ static bool solarStart(SnxCore *core, SnxPath path)
     b->libListenFd = -1;
     b->hidListenFd = -1;
     b->hidFd = -1;
+    b->videoFd = -1;
     core->backendData = b;
 
     b->libListenFd = snx__tcp_listen(core->cfg.libraryPort > 0 ? core->cfg.libraryPort
                                                                : SNX_PORT_LIBRARY);
     int hidPort = core->cfg.hidPort > 0 ? core->cfg.hidPort : SNX_PORT_HID;
     b->hidListenFd = snx__tcp_listen(hidPort);
-    if (b->libListenFd < 0 || b->hidListenFd < 0)
+    int videoPort = core->cfg.videoPort > 0 ? core->cfg.videoPort : SNX_PORT_VIDEO;
+    b->videoFd = snx__udp_listen(videoPort);
+    b->video = snx_video_create();
+    if (b->libListenFd < 0 || b->hidListenFd < 0 || b->videoFd < 0 || b->video == NULL)
     {
-        snx__log(core, 2, "listen failed: library=%d hid=%d", b->libListenFd, b->hidListenFd);
+        snx__log(core, 2, "listen failed: library=%d hid=%d video=%d", b->libListenFd,
+                 b->hidListenFd, b->videoFd);
         if (b->libListenFd >= 0) close(b->libListenFd);
         if (b->hidListenFd >= 0) close(b->hidListenFd);
+        if (b->videoFd >= 0) close(b->videoFd);
+        snx_video_destroy(b->video);
         free(b);
         core->backendData = NULL;
         return false;
@@ -93,6 +103,9 @@ static void solarStop(SnxCore *core)
         close(b->hidListenFd);
     if (b->hidFd >= 0)
         close(b->hidFd);
+    if (b->videoFd >= 0)
+        close(b->videoFd);
+    snx_video_destroy(b->video);
     free(b);
     core->backendData = NULL;
     core->libListenFd = -1;
@@ -100,6 +113,7 @@ static void solarStop(SnxCore *core)
 
 static void deliverLibrary(SnxCore *core, const SnxLibEntryRaw *entries, size_t count)
 {
+    core->statLibGames = (uint32_t)count;
     if (core->cb.on_library == NULL)
         return;
     SnxLibraryGame *games = (SnxLibraryGame *)calloc(count > 0 ? count : 1, sizeof(*games));
@@ -245,6 +259,32 @@ static void sendHidFrame(SnxCore *core, SolarBackend *b)
         dropHid(core, b);
         return;
     }
+    core->statHidFrames++;
+}
+
+// Drains the video UDP socket through the reassembly, handing frames to the
+// platform. Bounded per poll so one burst can't starve the other channels.
+static void pumpVideo(SnxCore *core, SolarBackend *b)
+{
+    uint8_t buf[SNX_VIDEO_DATAGRAM_SIZE];
+    SnxVideoFrame frame;
+    for (int i = 0; i < 128; i++)
+    {
+        int n = snx__udp_recv(b->videoFd, buf, sizeof(buf));
+        if (n <= 0)
+            break;
+        if (snx_video_push(b->video, buf, (size_t)n, &frame) && core->cb.on_video_frame != NULL)
+            core->cb.on_video_frame(core->cbCtx, frame.data, frame.size, frame.number,
+                                    frame.keyframe, frame.hevc);
+        // snx_video_next covers the two-frames-per-push case.
+        while (snx_video_next(b->video, &frame))
+        {
+            if (core->cb.on_video_frame != NULL)
+                core->cb.on_video_frame(core->cbCtx, frame.data, frame.size, frame.number,
+                                        frame.keyframe, frame.hevc);
+        }
+    }
+    core->statVideo = *snx_video_stats(b->video); // telemetry snapshot for snx_core_stats
 }
 
 static void solarPoll(SnxCore *core, int timeoutMs)
@@ -298,6 +338,11 @@ static void solarPoll(SnxCore *core, int timeoutMs)
     }
 
     handleLibraryConnection(core, b);
+
+    // Video arrives whenever the PC sends: drain it every cycle, even before the
+    // HID session is up (the host may start the stream first).
+    if (b->videoFd >= 0)
+        pumpVideo(core, b);
 
     if (!hidConnected && hidIx >= 0 && (pfds[hidIx].revents & POLLIN))
         acceptHid(core, b);

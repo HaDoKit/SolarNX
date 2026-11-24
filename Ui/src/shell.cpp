@@ -63,6 +63,7 @@ struct SnxUi {
 
     // Bound strings (re-rendered on language change / status update)
     Rml::String t_mygames, t_settings, t_hint, s_ip, s_layout, s_conn, s_pc, lib_l1, lib_l2, ver;
+    Rml::String debug_text; // multi-line core telemetry overlay; empty = hidden
     Rml::String libtile_cover, note1, note2, note3, t_back;
     Rml::String cov_style; // adaptive cover limits ("max-width/max-height" - keeps image aspect)
     Rml::String ph_style;  // fixed box for the no-cover placeholder
@@ -511,6 +512,7 @@ SnxUi *snxui_create(SDL_Window *window, SDL_Renderer *renderer, const char *asse
         c.Bind("s_layout", &ui->s_layout);
         c.Bind("s_conn", &ui->s_conn);
         c.Bind("s_pc", &ui->s_pc);
+        c.Bind("debug_text", &ui->debug_text);
         c.Bind("lib_l1", &ui->lib_l1);
         c.Bind("lib_l2", &ui->lib_l2);
         c.Bind("libtile_cover", &ui->libtile_cover);
@@ -760,6 +762,14 @@ void snxui_set_host(SnxUi *ui, const char *address, int host_type)
         ui->host_type = host_type ? 1 : 0;
     rebuild_rows(ui);
     ui->model.DirtyVariable("setrows");
+}
+
+// Multi-line core telemetry, shown as an overlay while non-empty (NULL hides it).
+// The platform refreshes it from snx_core_stats() every few hundred milliseconds.
+void snxui_set_debug(SnxUi *ui, const char *text)
+{
+    ui->debug_text = text != NULL ? text : "";
+    ui->model.DirtyVariable("debug_text");
 }
 
 int snxui_screen(const SnxUi *ui)

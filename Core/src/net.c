@@ -89,3 +89,37 @@ bool snx__write_all(int fd, const void *buf, size_t len)
     }
     return true;
 }
+
+int snx__udp_listen(int port)
+{
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0)
+        return -1;
+
+    // 256KB: a worst-case keyframe burst at wired-LAN speed (the host sends one
+    // every ~0.5s, 60-150KB pushed out in one blast) must fit before the poll loop
+    // drains it - the Switch client's sizing, see its network.c.
+    int rcvbuf = 256 * 1024;
+    setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons((uint16_t)port);
+
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0)
+    {
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+int snx__udp_recv(int fd, void *buf, size_t len)
+{
+    ssize_t n = recv(fd, buf, len, MSG_DONTWAIT);
+    if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+        return 0;
+    return n < 0 ? -1 : (int)n;
+}
