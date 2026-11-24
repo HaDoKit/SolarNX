@@ -208,5 +208,8 @@ SnxStats snx_core_stats(const SnxCore *core)
     s.videoFramesSkipped = core->statVideo.framesSkipped;
     s.videoShardsRecovered = core->statVideo.shardsRecovered;
     s.videoDatagramsRejected = core->statVideo.datagramsRejected;
+    s.audioPackets = core->statAudio.packetsDelivered;
+    s.audioConcealed = core->statAudio.framesConcealed;
+    s.audioLateDropped = core->statAudio.lateDropped;
     return s;
 }

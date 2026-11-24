@@ -32,6 +32,9 @@ typedef struct {
     // Video channel: UDP receiver + the frame reassembly.
     int videoFd;
     SnxVideo *video;
+    // Audio channel: UDP receiver + the RTP-ish sequencing.
+    int audioFd;
+    SnxAudio *audio;
 } SolarBackend;
 
 // ~120 Hz: a press waits for the next send, so the interval adds its own length
@@ -76,14 +79,20 @@ static bool solarStart(SnxCore *core, SnxPath path)
     int videoPort = core->cfg.videoPort > 0 ? core->cfg.videoPort : SNX_PORT_VIDEO;
     b->videoFd = snx__udp_listen(videoPort);
     b->video = snx_video_create();
-    if (b->libListenFd < 0 || b->hidListenFd < 0 || b->videoFd < 0 || b->video == NULL)
+    int audioPort = core->cfg.audioPort > 0 ? core->cfg.audioPort : SNX_PORT_AUDIO;
+    b->audioFd = snx__udp_listen(audioPort);
+    b->audio = snx_audio_create();
+    if (b->libListenFd < 0 || b->hidListenFd < 0 || b->videoFd < 0 || b->video == NULL ||
+        b->audioFd < 0 || b->audio == NULL)
     {
-        snx__log(core, 2, "listen failed: library=%d hid=%d video=%d", b->libListenFd,
-                 b->hidListenFd, b->videoFd);
+        snx__log(core, 2, "listen failed: library=%d hid=%d video=%d audio=%d", b->libListenFd,
+                 b->hidListenFd, b->videoFd, b->audioFd);
         if (b->libListenFd >= 0) close(b->libListenFd);
         if (b->hidListenFd >= 0) close(b->hidListenFd);
         if (b->videoFd >= 0) close(b->videoFd);
+        if (b->audioFd >= 0) close(b->audioFd);
         snx_video_destroy(b->video);
+        snx_audio_destroy(b->audio);
         free(b);
         core->backendData = NULL;
         return false;
@@ -105,7 +114,10 @@ static void solarStop(SnxCore *core)
         close(b->hidFd);
     if (b->videoFd >= 0)
         close(b->videoFd);
+    if (b->audioFd >= 0)
+        close(b->audioFd);
     snx_video_destroy(b->video);
+    snx_audio_destroy(b->audio);
     free(b);
     core->backendData = NULL;
     core->libListenFd = -1;
@@ -287,6 +299,24 @@ static void pumpVideo(SnxCore *core, SolarBackend *b)
     core->statVideo = *snx_video_stats(b->video); // telemetry snapshot for snx_core_stats
 }
 
+// Drains the audio UDP socket through the sequencer, handing Opus packets (and
+// their gap sizes) to the platform - the platform's decoder does the PLC.
+static void pumpAudio(SnxCore *core, SolarBackend *b)
+{
+    uint8_t buf[SNX_AUDIO_DATAGRAM_MAX];
+    SnxAudioPacket pkt;
+    for (int i = 0; i < 64; i++)
+    {
+        int n = snx__udp_recv(b->audioFd, buf, sizeof(buf));
+        if (n <= 0)
+            break;
+        if (snx_audio_push(b->audio, buf, (size_t)n, &pkt) && core->cb.on_audio_packet != NULL)
+            core->cb.on_audio_packet(core->cbCtx, pkt.opus, pkt.len, pkt.seq, pkt.timestamp,
+                                     pkt.missingBefore);
+    }
+    core->statAudio = *snx_audio_stats(b->audio); // telemetry snapshot
+}
+
 static void solarPoll(SnxCore *core, int timeoutMs)
 {
     SolarBackend *b = (SolarBackend *)core->backendData;
@@ -343,6 +373,8 @@ static void solarPoll(SnxCore *core, int timeoutMs)
     // HID session is up (the host may start the stream first).
     if (b->videoFd >= 0)
         pumpVideo(core, b);
+    if (b->audioFd >= 0)
+        pumpAudio(core, b);
 
     if (!hidConnected && hidIx >= 0 && (pfds[hidIx].revents & POLLIN))
         acceptHid(core, b);

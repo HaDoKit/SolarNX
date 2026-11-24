@@ -310,6 +310,18 @@ static void core_on_video_frame(void *, const uint8_t *data, size_t size, uint32
     }
 }
 
+static void core_on_audio_packet(void *, const uint8_t *data, size_t len, uint16_t seq,
+                                 uint32_t timestamp, uint16_t missingBefore)
+{
+    // Oboe + libopus land in the next milestone; count through the debug overlay.
+    static uint32_t s_lastLogged = 0;
+    if (seq != s_lastLogged && (seq % 250) == 0) // every ~5s at 50 units/s
+    {
+        s_lastLogged = seq;
+        LOGI("audio seq %u: %zu bytes, %u missing before", seq, len, missingBefore);
+    }
+}
+
 static void core_thread_func()
 {
     while (g_core_run.load())
@@ -342,6 +354,7 @@ static void start_core()
     cb.on_library = core_on_library;
     cb.on_log = core_on_log;
     cb.on_video_frame = core_on_video_frame;
+    cb.on_audio_packet = core_on_audio_packet;
     g_core = snx_core_create(&cfg, &cb, NULL);
     if (g_core == NULL)
         return;
@@ -544,7 +557,7 @@ extern "C" int SDL_main(int argc, char *argv[])
             lastDebug = now;
             SnxStats st = snx_core_stats(g_core);
             char dbg[512];
-            static uint32_t prevHid, prevVideo;
+            static uint32_t prevHid;
             snprintf(dbg, sizeof(dbg),
                      "SolarNX core\n"
                      "host: %s\n"
@@ -552,14 +565,15 @@ extern "C" int SDL_main(int argc, char *argv[])
                      "state: %s\n"
                      "library: %u games\n"
                      "hid: %u frames (+%u)\n"
-                     "video: %u frames, %u lost, %u rec",
+                     "video: %u frames, %u lost, %u rec\n"
+                     "audio: %u pkts, %u concealed, %u late",
                      st.host, snx_path_name(st.path), st.backend == SNX_BACKEND_SUNSHINE
                                                           ? "sunshine" : "solar",
                      snx_state_name(st.state), st.libraryGames, st.hidFramesSent,
                      st.hidFramesSent - prevHid, st.videoFrames, st.videoFramesLost,
-                     st.videoShardsRecovered);
+                     st.videoShardsRecovered, st.audioPackets, st.audioConcealed,
+                     st.audioLateDropped);
             prevHid = st.hidFramesSent;
-            prevVideo = st.videoFrames;
             snxui_set_debug(ui, dbg);
         }
 

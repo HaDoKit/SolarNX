@@ -51,6 +51,22 @@ extern "C" {
 #define SNX_VIDEO_FLAG_KEYFRAME 0x01
 #define SNX_VIDEO_FLAG_HEVC     0x02
 
+// --- audio framing (mirrors SolarNX/Audio/RtpPacketizer.cs) ---
+// One UDP datagram = one RTP-ish unit: a 12-byte header (V=2,P=0,X=0,CC=0; PT;
+// u16 BE seq; u32 BE timestamp; u32 BE SSRC), then a 2-byte big-endian length
+// prefix (a deliberate RTP deviation for coalesced reads), then the raw Opus
+// frame. The stream parameters the platform's decoder must be created with:
+#define SNX_AUDIO_RTP_HEADER_SIZE   12
+#define SNX_AUDIO_LENGTH_PREFIX_SIZE 2
+#define SNX_AUDIO_UNIT_HEADER_SIZE  (SNX_AUDIO_RTP_HEADER_SIZE + SNX_AUDIO_LENGTH_PREFIX_SIZE)
+#define SNX_AUDIO_SEQ_OFFSET        2
+#define SNX_AUDIO_SAMPLE_RATE       48000
+#define SNX_AUDIO_CHANNELS          2
+#define SNX_AUDIO_FRAME_DURATION_MS 20
+#define SNX_AUDIO_SAMPLES_PER_FRAME 960
+// One 20ms stereo Opus frame at the host's ~128kbps target is a few hundred bytes.
+#define SNX_AUDIO_DATAGRAM_MAX     2048
+
 // --- shared version block (every handshake: library header/reply, Hello control) ---
 typedef struct {
     uint16_t major;

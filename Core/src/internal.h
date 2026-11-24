@@ -40,6 +40,32 @@ bool snx_video_push(SnxVideo *v, const uint8_t *datagram, size_t length, SnxVide
 bool snx_video_next(SnxVideo *v, SnxVideoFrame *out);
 const SnxVideoStats *snx_video_stats(const SnxVideo *v);
 
+// audio.c - the RTP-ish unit sequencing on top of the wire framing (see wire.h).
+typedef struct SnxAudio SnxAudio;
+
+typedef struct {
+    const uint8_t *opus; // raw Opus frame; valid only during the callback
+    size_t len;
+    uint16_t seq;
+    uint32_t timestamp;
+    uint16_t missingBefore; // frames missing since the previous packet: conceal them
+} SnxAudioPacket;
+
+typedef struct {
+    uint32_t packetsDelivered;
+    uint32_t framesConcealed; // gaps the decoder is asked to fill (PLC)
+    uint32_t lateDropped;     // arrived behind the last delivered one
+    uint32_t duplicates;
+    uint32_t resyncs;         // gaps too large to conceal - decoder should flush
+    uint32_t datagramsRejected;
+} SnxAudioStats;
+
+SnxAudio *snx_audio_create(void);
+void snx_audio_destroy(SnxAudio *a);
+void snx_audio_reset(SnxAudio *a);
+bool snx_audio_push(SnxAudio *a, const uint8_t *datagram, size_t len, SnxAudioPacket *out);
+const SnxAudioStats *snx_audio_stats(const SnxAudio *a);
+
 struct SnxCore {
     SnxConfig   cfg;
     SnxCallbacks cb;
@@ -66,6 +92,7 @@ struct SnxCore {
     uint32_t statLibGames;
     uint32_t statHidFrames;
     SnxVideoStats statVideo;
+    SnxAudioStats statAudio;
     // Resolve retry pacing.
     uint64_t     lastAttemptMs;
 };

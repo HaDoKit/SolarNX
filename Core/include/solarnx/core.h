@@ -64,6 +64,12 @@ typedef struct {
     // during the call (the reassembly reuses its buffers).
     void (*on_video_frame)(void *ctx, const uint8_t *data, size_t size, uint32_t number,
                            bool keyframe, bool hevc);
+    // One Opus frame from the audio channel, in order, with `missingBefore`
+    // frames lost since the previous one: conceal them first (the platform owns
+    // the Opus decoder - opus_decode(NULL) does the PLC). `data` is valid only
+    // during the call.
+    void (*on_audio_packet)(void *ctx, const uint8_t *data, size_t len, uint16_t seq,
+                            uint32_t timestamp, uint16_t missingBefore);
     // Diagnostic log, one line, no trailing newline.
     void (*on_log)(void *ctx, int level, const char *msg);
 } SnxCallbacks;
@@ -115,6 +121,9 @@ typedef struct {
     uint32_t videoFramesSkipped; // dropped while waiting for a keyframe
     uint32_t videoShardsRecovered; // rebuilt from Reed-Solomon parity
     uint32_t videoDatagramsRejected;
+    uint32_t audioPackets;    // Opus frames delivered in order
+    uint32_t audioConcealed; // gap frames the decoder was asked to synthesize (PLC)
+    uint32_t audioLateDropped;
 } SnxStats;
 
 SnxStats snx_core_stats(const SnxCore *core);

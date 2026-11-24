@@ -20,3 +20,8 @@ add_executable(video_send ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../Core/tests/
 target_include_directories(video_send PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../Core/include
                                               ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../Core/src)
 target_link_libraries(video_send solarnx-core)
+
+# Same for the audio host tool.
+add_executable(audio_send ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../Core/tests/audio_send.c)
+target_include_directories(audio_send PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../Core/include)
+target_link_libraries(audio_send solarnx-core)

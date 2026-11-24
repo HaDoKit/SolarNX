@@ -13,6 +13,7 @@ add_library(solarnx-core STATIC
     src/library.c
     src/net.c
     src/video.c
+    src/audio.c
     src/rs.c
     src/backend_solar.c
     src/backend_sunshine.c
@@ -28,13 +29,16 @@ if(SNX_CORE_BUILD_TESTS)
         tests/test_route.c
         tests/test_library.c
         tests/test_video.c
+        tests/test_audio.c
     )
     target_include_directories(snx-core-tests PRIVATE include src tests)
     target_link_libraries(snx-core-tests solarnx-core)
     add_test(NAME core COMMAND snx-core-tests)
 
-    # A synthetic video host for device tests - see its usage message.
+    # Synthetic hosts for device tests - see their usage messages.
     add_executable(video_send tests/video_send.c)
-    target_include_directories(video_send PRIVATE include src)
+    target_include_directories(video_send PRIVATE src)
     target_link_libraries(video_send solarnx-core)
+    add_executable(audio_send tests/audio_send.c)
+    target_link_libraries(audio_send solarnx-core)
 endif()

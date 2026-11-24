@@ -7,6 +7,7 @@
 int test_wire(void);
 int test_route(void);
 int test_video(void);
+int test_audio(void);
 int test_library(void);
 
 static int failures = 0;
@@ -26,6 +27,7 @@ int main(void)
     test_wire();
     test_route();
     test_video();
+    test_audio();
     test_library();
     if (failures > 0)
     {
