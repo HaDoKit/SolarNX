@@ -178,9 +178,25 @@ static void handleInputEvent(const SDL_Event &ev, int windowW, int windowH)
     }
 }
 
+// What the player picked in the menu: shipped in every HID packet so the host
+// launches/focuses it (target SNX_TARGET_* == SnxAppTarget 0/1/2).
+static int g_app_target = SNX_TARGET_BIGPICTURE;
+static uint32_t g_library_id = 0;
+static SnxUi *g_ui = NULL;
+static uint64_t g_minus_down_ms = 0; // hold-Minus-to-exit timer (wire bit 11)
+
 static void on_pick(void *, int target, uint32_t id)
 {
     LOGI("pick: target=%d library_id=%u", target, id);
+    g_app_target = target;
+    g_library_id = target == SNX_TARGET_LIBRARY ? id : 0;
+    // Mid-session re-pick: go back to the video plane - the host switches the
+    // running target on the next HID packets.
+    if (g_ui != NULL && g_core_state == SNX_STATE_SESSION && snx_video_decoder_active())
+    {
+        g_stream_entered = true;
+        snxui_show(g_ui, SNX_SCREEN_STREAM);
+    }
 }
 
 static void on_quit(void *)
@@ -308,6 +324,19 @@ static void core_on_log(void *, int level, const char *msg)
     LOGI("core: %s", msg != NULL ? msg : "");
 }
 
+static void core_on_session(void *, const SnxSessionConfig *cfg)
+{
+    LOGI("session: %ux%u@%u video %u kbps, audio %u kbps %u Hz x%u",
+         cfg->videoWidth, cfg->videoHeight, cfg->videoFps, cfg->videoBitrateKbps,
+         cfg->audioBitrateKbps, cfg->audioSampleRate, cfg->audioChannels);
+}
+
+static void core_on_control(void *, uint8_t type, const void *payload, size_t len)
+{
+    // 1 Hello (version block), 2 Rumble, 3 Options, 4 DebugInfo, 5 Pong.
+    LOGI("control: type=%u len=%zu", type, len);
+}
+
 static void core_on_video_frame(void *, const uint8_t *data, size_t size, uint32_t number,
                                 bool keyframe, bool hevc)
 {
@@ -354,6 +383,8 @@ static void start_core()
     cb.on_state = core_on_state;
     cb.on_library = core_on_library;
     cb.on_log = core_on_log;
+    cb.on_session = core_on_session;
+    cb.on_control = core_on_control;
     cb.on_video_frame = core_on_video_frame;
     cb.on_audio_packet = core_on_audio_packet;
     g_core = snx_core_create(&cfg, &cb, NULL);
@@ -480,6 +511,7 @@ extern "C" int SDL_main(int argc, char *argv[])
         LOGI("snxui_create failed");
         return 1;
     }
+    g_ui = ui;
     // The decoded video plane draws beneath the documents on the stream screen.
     snxui_set_underlay(ui, snx_video_decoder_draw, &g_video_tex);
 
@@ -600,11 +632,32 @@ extern "C" int SDL_main(int argc, char *argv[])
 
         // Hand the current input state to the core; the backend serializes and
         // ships it on its own cadence (~120 Hz while the HID channel is up).
+        // Hold Minus (wire bit 11, pad 0) for 3s = the Switch's exit gesture:
+        // the client drops the HID connection, the host closes the game.
+        uint64_t nowMs = SDL_GetTicks64();
+        if (g_input_state.pads[0].buttons & (1u << 11))
+        {
+            if (g_minus_down_ms == 0)
+                g_minus_down_ms = nowMs;
+            else if (nowMs - g_minus_down_ms >= 3000)
+            {
+                g_minus_down_ms = nowMs; // held longer: re-arm, not a per-frame fire
+                if (g_core != NULL)
+                {
+                    LOGI("minus held 3s - dropping the session");
+                    snx_core_disconnect(g_core);
+                }
+            }
+        }
+        else
+            g_minus_down_ms = 0;
+
         g_input_state.padCount = 0;
         for (int i = 0; i < 4; i++)
             if (g_pads[i].ctrl != NULL)
                 g_input_state.padCount++;
-        g_input_state.appTarget = SNX_APP_BIG_PICTURE;
+        g_input_state.appTarget = g_app_target; // SNX_TARGET_* order == SnxAppTarget
+        g_input_state.libraryEntryId = g_library_id;
         g_input_state.displayHeight = (uint32_t)windowH;
         if (g_core != NULL)
             snx_core_send_input(g_core, &g_input_state);

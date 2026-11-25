@@ -177,6 +177,12 @@ void snx_core_send_input(SnxCore *core, const SnxInputState *input)
     pthread_mutex_unlock(&core->inputMutex);
 }
 
+void snx_core_disconnect(SnxCore *core)
+{
+    if (core != NULL)
+        core->dropSession = true;
+}
+
 void snx__input_snapshot(SnxCore *core, SnxInputState *out)
 {
     pthread_mutex_lock(&core->inputMutex);

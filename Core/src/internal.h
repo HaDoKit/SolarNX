@@ -88,6 +88,7 @@ struct SnxCore {
     // own thread, the core thread snapshots it on its send cadence.
     SnxInputState input;
     pthread_mutex_t inputMutex;
+    bool         dropSession; // snx_core_disconnect: the backend closes hidFd next poll
     // Telemetry (plain reads from other threads are fine - the debug overlay polls).
     uint32_t statLibGames;
     uint32_t statHidFrames;
@@ -164,3 +165,5 @@ SnxLibEntryRaw *snx__library_session(SnxIoRead rd, SnxIoWrite wr, void *io,
                                      bool haveHash, uint64_t lastHash,
                                      SnxLibraryInfo *info, size_t *count);
 void snx__library_free(SnxLibEntryRaw *entries, size_t count);
+// Fills the shared 28-byte version block (u16 major, u16 minor, char[24] app).
+void snx__write_own_version(uint8_t *out, const char *appVersion);

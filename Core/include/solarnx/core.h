@@ -103,6 +103,11 @@ void snx_core_set_host(SnxCore *core, const char *host);
 // call from the platform's input/UI thread while the core polls on its own.
 void snx_core_send_input(SnxCore *core, const SnxInputState *input);
 
+// Drops the live session: the backend closes the HID connection on its next
+// poll. The host sees a normal disconnect, tears the running game down, and
+// dials back in - the "hold Minus to exit" path of the Switch client.
+void snx_core_disconnect(SnxCore *core);
+
 SnxState snx_core_state(const SnxCore *core);
 SnxBackend snx_core_backend(const SnxCore *core);
 SnxPath snx_core_path(const SnxCore *core);

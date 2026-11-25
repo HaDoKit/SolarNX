@@ -35,6 +35,7 @@ typedef struct {
     // Audio channel: UDP receiver + the RTP-ish sequencing.
     int audioFd;
     SnxAudio *audio;
+    uint32_t sessionBitrateKbps; // from the host's SessionConfig - echoed back in telemetry
 } SolarBackend;
 
 // ~120 Hz: a press waits for the next send, so the interval adds its own length
@@ -178,8 +179,8 @@ static void handleLibraryConnection(SnxCore *core, SolarBackend *b)
     close(fd);
 }
 
-// The PC's control stream after the SessionConfig: u16 length + u8 type + payload,
-// back to back. Returns false when the connection is gone.
+// The PC's control stream after the SessionConfig: u16 length (type + payload) +
+// u8 type + payload, back to back. Returns false when the connection is gone.
 static bool pumpControlMessages(SnxCore *core, SolarBackend *b)
 {
     for (;;)
@@ -188,14 +189,15 @@ static bool pumpControlMessages(SnxCore *core, SolarBackend *b)
         {
             uint16_t len;
             memcpy(&len, b->ctlBuf, 2);
-            if (len > 1024)
+            if (len < 1 || len > 1 + 1024)
                 return false; // nonsense length: treat the connection as broken
-            if (b->ctlFill >= (size_t)3 + len)
+            if (b->ctlFill >= (size_t)2 + len)
             {
                 if (core->cb.on_control != NULL)
-                    core->cb.on_control(core->cbCtx, b->ctlBuf[2], b->ctlBuf + 3, len);
-                memmove(b->ctlBuf, b->ctlBuf + 3 + len, b->ctlFill - (size_t)3 - len);
-                b->ctlFill -= (size_t)3 + len;
+                    core->cb.on_control(core->cbCtx, b->ctlBuf[2], b->ctlBuf + 3,
+                                        (size_t)len - 1);
+                memmove(b->ctlBuf, b->ctlBuf + 2 + len, b->ctlFill - (size_t)2 - len);
+                b->ctlFill -= (size_t)2 + len;
                 continue;
             }
         }
@@ -234,7 +236,24 @@ static void acceptHid(SnxCore *core, SolarBackend *b)
     }
     b->hidFd = fd;
     b->ctlFill = 0;
+    b->sessionBitrateKbps = cfg.videoBitrateKbps;
     b->lastHidSendMs = 0; // send the first packet on the next poll tick
+
+    // Protocol 1.1: the client announces itself first - one control frame
+    // (8x0xFE marker, u16 length = type+payload, u8 Hello, version block)
+    // ahead of the HID stream; the PC gates its control messages on it.
+    uint8_t hello[8 + 2 + 1 + SNX_VERSION_WIRE_SIZE];
+    memset(hello, 0xFE, 8);
+    uint16_t helloLen = 1 + SNX_VERSION_WIRE_SIZE;
+    memcpy(hello + 8, &helloLen, 2);
+    hello[10] = 1;
+    snx__write_own_version(hello + 11, core->cfg.appVersion);
+    if (!snx__write_all(fd, hello, sizeof(hello)))
+    {
+        close(fd);
+        b->hidFd = -1;
+        return;
+    }
 
     if (core->cb.on_session != NULL)
         core->cb.on_session(core->cbCtx, &cfg);
@@ -260,8 +279,12 @@ static void sendHidFrame(SnxCore *core, SolarBackend *b)
 
     SnxHidPacket pkt;
     snx_input_to_hid(&in, &pkt);
-    // Telemetry counters are free-running and the host reads deltas, so leaving
-    // them at zero is protocol-legal; wire the real stats with the video channel.
+    // Telemetry: free-running counters; the host reads deltas and feeds
+    // videoLostFrameCount into the adaptive bitrate controller.
+    pkt.videoLostFrameCount = core->statVideo.framesLost;
+    pkt.videoRecoveredPacketCount = core->statVideo.shardsRecovered;
+    pkt.audioConcealedFrameCount = core->statAudio.framesConcealed;
+    pkt.videoMeasuredBitrateKbps = b->sessionBitrateKbps; // echo, like the Switch
 
     uint8_t marker[SNX_HID_MARKER_SIZE];
     memset(marker, SNX_HID_MARKER_BYTE, sizeof(marker));
@@ -365,6 +388,18 @@ static void solarPoll(SnxCore *core, int timeoutMs)
     {
         struct timespec ts = {.tv_sec = waitMs / 1000, .tv_nsec = (long)(waitMs % 1000) * 1000000};
         nanosleep(&ts, NULL);
+    }
+
+    // A platform-requested disconnect (the Switch's "hold Minus to exit"
+    // gesture): the host closes the game and redials - a normal session end.
+    if (core->dropSession)
+    {
+        core->dropSession = false;
+        if (b->hidFd >= 0)
+        {
+            dropHid(core, b);
+            return;
+        }
     }
 
     handleLibraryConnection(core, b);

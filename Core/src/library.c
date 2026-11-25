@@ -23,7 +23,7 @@ static void readPeerVersion(const uint8_t *wire, SnxPeerVersion *out)
         strcpy(out->app, "?");
 }
 
-static void writeOwnVersion(uint8_t *out, const char *appVersion)
+void snx__write_own_version(uint8_t *out, const char *appVersion)
 {
     memset(out, 0, SNX_VERSION_WIRE_SIZE);
     uint16_t major = SNX_PROTOCOL_MAJOR, minor = SNX_PROTOCOL_MINOR;
@@ -145,7 +145,7 @@ SnxLibEntryRaw *snx__library_session(SnxIoRead rd, SnxIoWrite wr, void *io,
         (uint8_t)(need ? 1 : 0), (uint8_t)(info->buttonLayout ? 1 : 0), 0, 0};
     memcpy(reply + 4, &info->layoutRevision, 4);
     if (!legacy)
-        writeOwnVersion(reply + 8, ownAppVersion);
+        snx__write_own_version(reply + 8, ownAppVersion);
     size_t replySize = legacy ? 8 : sizeof(reply);
     if (!wr(io, reply, replySize) || !need)
         return NULL;

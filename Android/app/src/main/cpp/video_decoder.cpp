@@ -79,8 +79,45 @@ void codec_destroy()
     }
 }
 
+// Debug overrides read once from /data/local/tmp/snxdec.cfg:
+// "name=<codec-name>" forces a specific decoder, "nocsd=1" disables csd.
+struct DecCfg { std::string name; bool nocsd = false; };
+const DecCfg &dec_cfg()
+{
+    static DecCfg c;
+    static bool loaded = false;
+    if (!loaded)
+    {
+        loaded = true;
+        if (FILE *f = fopen("/data/local/tmp/snxdec.cfg", "r"))
+        {
+            char line[256];
+            while (fgets(line, sizeof(line), f))
+            {
+                if (strncmp(line, "name=", 5) == 0)
+                {
+                    c.name = line + 5;
+                    while (!c.name.empty() &&
+                           (c.name.back() == '\n' || c.name.back() == '\r'))
+                        c.name.pop_back();
+                }
+                else if (strncmp(line, "nocsd=1", 7) == 0)
+                    c.nocsd = true;
+            }
+            fclose(f);
+            if (!c.name.empty() || c.nocsd)
+                LOGI("decoder cfg: name=%s nocsd=%d",
+                     c.name.c_str(), (int)c.nocsd);
+        }
+    }
+    return c;
+}
+
 // Walks Annex-B start codes in an access unit and collects the codec-config
-// NALs: H.264 SPS -> csd0, PPS -> csd1; HEVC VPS/SPS/PPS concatenated -> csd0.
+// NALs: H.264 SPS -> csd0, PPS -> csd1 (raw NAL payloads); HEVC VPS/SPS/PPS
+// concatenated -> csd0, kept in bitstream form WITH start codes (the C2 HEVC
+// stack parses csd-0 as an Annex-B chunk - bare NAL payloads silently stall
+// both the Qualcomm and the software decoders).
 // Passing these via the MediaFormat is what Qualcomm/MTK decoders need before
 // they produce output (inline headers alone stall many chipsets).
 bool extract_csd(const uint8_t *data, size_t len, bool hevc,
@@ -115,7 +152,7 @@ bool extract_csd(const uint8_t *data, size_t len, bool hevc,
                 csd1.assign(data + nal, data + end);
         }
         else if (type == 32 || type == 33 || type == 34)
-            csd0.insert(csd0.end(), data + nal, data + end);
+            csd0.insert(csd0.end(), data + i, data + end);
         i = end;
     }
     return !csd0.empty();
@@ -126,7 +163,10 @@ bool codec_create(bool hevc, const std::vector<uint8_t> &csd0,
 {
     codec_destroy();
     const char *mime = hevc ? "video/hevc" : "video/avc";
-    s_codec = AMediaCodec_createDecoderByType(mime);
+    // Debug override: force a specific codec (e.g. c2.android.hevc.decoder).
+    const DecCfg &cfg = dec_cfg();
+    s_codec = !cfg.name.empty() ? AMediaCodec_createCodecByName(cfg.name.c_str())
+                              : AMediaCodec_createDecoderByType(mime);
     if (s_codec == NULL)
     {
         LOGW("no decoder for %s", mime);
@@ -141,10 +181,14 @@ bool codec_create(bool hevc, const std::vector<uint8_t> &csd0,
                           OMX_COLOR_FormatYUV420Flexible);
     AMediaFormat_setInt32(f, "low-latency", 1); // Qualcomm: shrink output delay
     AMediaFormat_setInt32(f, "priority", 0);    // realtime (key constant is API 28+)
-    if (!csd0.empty())
-        AMediaFormat_setBuffer(f, "csd-0", csd0.data(), csd0.size());
-    if (!csd1.empty())
-        AMediaFormat_setBuffer(f, "csd-1", csd1.data(), csd1.size());
+    // Debug override: skip csd entirely (rely on in-band config).
+    if (!cfg.nocsd)
+    {
+        if (!csd0.empty())
+            AMediaFormat_setBuffer(f, "csd-0", csd0.data(), csd0.size());
+        if (!csd1.empty())
+            AMediaFormat_setBuffer(f, "csd-1", csd1.data(), csd1.size());
+    }
     media_status_t st = AMediaCodec_configure(s_codec, f, NULL, NULL, 0);
     AMediaFormat_delete(f);
     if (st != AMEDIA_OK || AMediaCodec_start(s_codec) != AMEDIA_OK)
@@ -348,8 +392,17 @@ void snx_video_decoder_feed(const uint8_t *data, size_t len, bool keyframe, bool
         {
             memcpy(buf, data, len);
             s_ptsUs += 33333;
-            AMediaCodec_queueInputBuffer(s_codec, (size_t)in, 0, len,
-                                         (int64_t)s_ptsUs, 0);
+            media_status_t q = AMediaCodec_queueInputBuffer(
+                s_codec, (size_t)in, 0, len, (int64_t)s_ptsUs, 0);
+            if (q != AMEDIA_OK)
+            {
+                // Codec died (bad bitstream, driver error): drop it so the
+                // next keyframe recreates a fresh session.
+                LOGW("queueInputBuffer failed: %d - recreating codec", q);
+                codec_destroy();
+                s_layout = OutLayout{};
+                return;
+            }
         }
         else
         {
