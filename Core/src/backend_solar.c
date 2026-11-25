@@ -13,6 +13,7 @@
 #include "internal.h"
 
 #include <errno.h>
+#include <netinet/in.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -193,9 +194,18 @@ static bool pumpControlMessages(SnxCore *core, SolarBackend *b)
                 return false; // nonsense length: treat the connection as broken
             if (b->ctlFill >= (size_t)2 + len)
             {
+                uint8_t type = b->ctlBuf[2];
+                const uint8_t *payload = b->ctlBuf + 3;
+                size_t payloadLen = (size_t)len - 1;
+                // Options (u8 flags + u8[3] zero): TrafficPriority asks us to
+                // mark our own HID packets with DSCP EF.
+                if (type == 3 && payloadLen >= 1)
+                {
+                    int tos = (payload[0] & 0x01) ? 0xB8 : 0; // EF << 2
+                    setsockopt(b->hidFd, IPPROTO_IP, IP_TOS, &tos, sizeof(tos));
+                }
                 if (core->cb.on_control != NULL)
-                    core->cb.on_control(core->cbCtx, b->ctlBuf[2], b->ctlBuf + 3,
-                                        (size_t)len - 1);
+                    core->cb.on_control(core->cbCtx, type, payload, payloadLen);
                 memmove(b->ctlBuf, b->ctlBuf + 2 + len, b->ctlFill - (size_t)2 - len);
                 b->ctlFill -= (size_t)2 + len;
                 continue;
