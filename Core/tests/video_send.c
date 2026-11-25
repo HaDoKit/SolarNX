@@ -53,7 +53,8 @@ static bool au_is_keyframe(const uint8_t *au, size_t len, bool hevc)
         {
             uint8_t nal = au[i + 3];
             int type = hevc ? (nal >> 1) & 0x3F : nal & 0x1F;
-            if ((!hevc && type == 5) || (hevc && (type == 19 || type == 20)))
+            // Host parity: H.265 keyframe = any IRAP (BLA, IDR, CRA: 16..21).
+            if ((!hevc && type == 5) || (hevc && (type >= 16 && type <= 21)))
                 return true;
             if ((!hevc && type == 1) || (hevc && type == 1))
                 return false; // a non-IDR slice first - delta frame
