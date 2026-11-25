@@ -1,0 +1,19 @@
+<rml>
+<head>
+    <title>SolarNX stream</title>
+    <link type="text/rcss" href="ui.rcss"/>
+</head>
+<body data-model="shell">
+
+<!-- Stream mode: the platform draws the decoded video beneath this document,
+     so the body itself paints nothing - just the overlays. -->
+
+<div class="debug" data-if="debug_text != ''">{{debug_text}}</div>
+
+<div class="status">
+    <div data-if="s_pc != ''" class="gold">{{s_pc}}</div>
+    <div>{{s_conn}}</div>
+</div>
+
+</body>
+</rml>

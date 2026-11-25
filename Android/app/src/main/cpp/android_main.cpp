@@ -15,6 +15,8 @@
 
 #include "snxui.h"
 #include "solarnx/core.h"
+#include "audio_player.h"
+#include "video_decoder.h"
 
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "SolarNX", __VA_ARGS__)
 
@@ -33,7 +35,7 @@ struct LibUpdate
     std::vector<std::string> names;
     std::vector<std::vector<uint8_t>> covers;
 };
-struct StateUpdate { std::string line; };
+struct StateUpdate { std::string line; int state; };
 
 // --- the core and its thread ---
 static SnxCore *g_core = NULL;
@@ -41,6 +43,10 @@ static std::thread g_core_thread;
 static std::atomic<bool> g_core_run{false};
 static std::string g_host_address; // last applied host
 static int g_host_backend = SNX_BACKEND_SOLAR;
+
+static SDL_Texture *g_video_tex = NULL; // decoded video plane (stream screen)
+static int g_core_state = SNX_STATE_IDLE;
+static bool g_stream_entered = false;   // auto-entered the stream screen this session
 
 // --- input collection (main thread): SDL gamepads + touch -> SnxInputState ---
 static SnxInputState g_input_state = {};
@@ -255,9 +261,15 @@ static void load_settings()
 static void core_on_state(void *, SnxState state, const char *detail)
 {
     LOGI("core state: %s (%s)", snx_state_name(state), detail != NULL ? detail : "");
+    if (state == SNX_STATE_SESSION)
+    {
+        snx_audio_player_reset(); // a fresh stream - drop stale media
+        snx_video_decoder_reset();
+    }
     if (g_state_ev == 0)
         return;
     auto *u = new StateUpdate;
+    u->state = state;
     u->line = detail != NULL && *detail != '\0'
                   ? std::string(snx_state_name(state)) + ": " + detail
                   : snx_state_name(state);
@@ -299,27 +311,14 @@ static void core_on_log(void *, int level, const char *msg)
 static void core_on_video_frame(void *, const uint8_t *data, size_t size, uint32_t number,
                                 bool keyframe, bool hevc)
 {
-    // MediaCodec lands in the next milestone; for now count the stream through the
-    // debug overlay (the payload is a valid Annex B frame from the reassembly).
-    static uint32_t s_lastLogged = 0;
-    if (number != s_lastLogged && (number % 30) == 0) // every ~second at 30 fps
-    {
-        s_lastLogged = number;
-        LOGI("video frame %u: %zu bytes, %s%s", number, size, keyframe ? "key " : "",
-             hevc ? "H.265" : "H.264");
-    }
+    // Annex-B access unit from the RS reassembly - straight into MediaCodec.
+    snx_video_decoder_feed(data, size, keyframe, hevc);
 }
 
 static void core_on_audio_packet(void *, const uint8_t *data, size_t len, uint16_t seq,
                                  uint32_t timestamp, uint16_t missingBefore)
 {
-    // Oboe + libopus land in the next milestone; count through the debug overlay.
-    static uint32_t s_lastLogged = 0;
-    if (seq != s_lastLogged && (seq % 250) == 0) // every ~5s at 50 units/s
-    {
-        s_lastLogged = seq;
-        LOGI("audio seq %u: %zu bytes, %u missing before", seq, len, missingBefore);
-    }
+    snx_audio_player_push(data, len, missingBefore);
 }
 
 static void core_thread_func()
@@ -333,8 +332,10 @@ static void stop_core()
     if (g_core_thread.joinable())
     {
         g_core_run.store(false);
-        g_core_thread.join();
+        g_core_thread.join(); // no more callbacks after this point
     }
+    snx_audio_player_stop();
+    snx_video_decoder_stop();
     if (g_core != NULL)
     {
         snx_core_destroy(g_core);
@@ -358,6 +359,8 @@ static void start_core()
     g_core = snx_core_create(&cfg, &cb, NULL);
     if (g_core == NULL)
         return;
+    snx_audio_player_start();
+    snx_video_decoder_start();
     g_core_run.store(true);
     g_core_thread = std::thread(core_thread_func);
 }
@@ -439,8 +442,9 @@ extern "C" int SDL_main(int argc, char *argv[])
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0"); // RmlUi handles touch natively
     SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER |
-                 SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC | SDL_INIT_SENSOR) != 0)
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO |
+                 SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC |
+                 SDL_INIT_SENSOR) != 0)
     {
         LOGI("SDL_Init failed: %s", SDL_GetError());
         return 1;
@@ -476,6 +480,8 @@ extern "C" int SDL_main(int argc, char *argv[])
         LOGI("snxui_create failed");
         return 1;
     }
+    // The decoded video plane draws beneath the documents on the stream screen.
+    snxui_set_underlay(ui, snx_video_decoder_draw, &g_video_tex);
 
     // The real session core: route detection (LAN/internet from the PC address, no
     // manual channel pick) + the library channel. The grid stays empty until the
@@ -540,12 +546,27 @@ extern "C" int SDL_main(int argc, char *argv[])
             else if (ev.type == g_state_ev)
             {
                 auto *u = (StateUpdate *)ev.user.data1;
+                g_core_state = u->state;
+                if (u->state != SNX_STATE_SESSION)
+                {
+                    g_stream_entered = false;
+                    if (snxui_screen(ui) == SNX_SCREEN_STREAM)
+                        snxui_show(ui, SNX_SCREEN_MENU);
+                }
                 snxui_set_status(ui, u->line.c_str(), NULL, NULL, NULL);
                 delete u;
             }
             else
                 snxui_process_event(ui, &ev);
         }
+        // First decoded frame of a session: jump to the stream screen once.
+        if (g_core_state == SNX_STATE_SESSION && !g_stream_entered &&
+            snx_video_decoder_active())
+        {
+            snxui_show(ui, SNX_SCREEN_STREAM);
+            g_stream_entered = true;
+        }
+
         Uint64 now = SDL_GetTicks64();
         float dt = (float)(now - last) / 1000.0f;
         if (dt > 1.0f) dt = 1.0f;

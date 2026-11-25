@@ -9,9 +9,16 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../../Ui ${CMAKE_BINARY_DI
 set(SNX_CORE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../../Core ${CMAKE_BINARY_DIR}/solarnx-core)
 
+# libopus for the audio channel (the core ships Opus payloads; the platform decodes).
+set(OPUS_BUILD_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
+set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/opus ${CMAKE_BINARY_DIR}/opus)
+
 # SDLActivity loads libSDL2.so + libmain.so; everything else is linked into main statically.
-add_library(main SHARED android_main.cpp)
-target_link_libraries(main PRIVATE solarnx-ui solarnx-core SDL2::SDL2 android log)
+add_library(main SHARED android_main.cpp audio_player.cpp video_decoder.cpp)
+target_link_libraries(main PRIVATE solarnx-ui solarnx-core Opus::opus SDL2::SDL2
+                                   mediandk android log)
 
 # Device-test tool: a synthetic SolarNX video host (see Core/tests/video_send.c).
 # Built into the native build dir - push to /data/local/tmp and run from adb shell

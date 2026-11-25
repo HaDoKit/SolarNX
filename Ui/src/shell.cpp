@@ -43,6 +43,7 @@ struct SnxUi {
     Rml::ElementDocument *doc_menu = nullptr;
     Rml::ElementDocument *doc_lib = nullptr;
     Rml::ElementDocument *doc_set = nullptr;
+    Rml::ElementDocument *doc_stream = nullptr;
     Rml::DataModelHandle model;
 
     Starfield stars = {};
@@ -82,6 +83,10 @@ struct SnxUi {
     std::string edit_buf;
 
     bool quit = false;
+
+    // Platform underlay (video plane) drawn beneath the documents.
+    void (*underlay)(void *opaque, SDL_Renderer *) = nullptr;
+    void *underlay_opaque = nullptr;
 };
 
 // ---------------------------------------------------------------------------
@@ -184,8 +189,9 @@ static void set_touch_ui(SnxUi *ui, bool on)
 static void show_screen(SnxUi *ui, int screen)
 {
     ui->screen = screen;
-    Rml::ElementDocument *docs[] = {ui->doc_menu, ui->doc_lib, ui->doc_set};
-    for (int i = 0; i < 3; i++)
+    Rml::ElementDocument *docs[] = {ui->doc_menu, ui->doc_lib, ui->doc_set,
+                                   ui->doc_stream};
+    for (int i = 0; i < 4; i++)
     {
         if (docs[i] == nullptr)
             continue;
@@ -425,6 +431,11 @@ static void nav_apply(SnxUi *ui, NavAction a)
         else if (a == NAV_OK) act_row(ui, ui->set_sel);
         ui->model.DirtyVariable("setsel");
     }
+    else if (ui->screen == SNX_SCREEN_STREAM)
+    {
+        if (a == NAV_BACK)
+            show_screen(ui, SNX_SCREEN_MENU);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -554,6 +565,7 @@ SnxUi *snxui_create(SDL_Window *window, SDL_Renderer *renderer, const char *asse
     ui->doc_menu = ui->ctx->LoadDocument("menu.rcml");
     ui->doc_lib = ui->ctx->LoadDocument("library.rcml");
     ui->doc_set = ui->ctx->LoadDocument("settings.rcml");
+    ui->doc_stream = ui->ctx->LoadDocument("stream.rcml");
     if (!ui->doc_menu || !ui->doc_lib || !ui->doc_set)
         SDL_Log("snxui: a document failed to load (menu=%p lib=%p set=%p)",
                 (void *)ui->doc_menu, (void *)ui->doc_lib, (void *)ui->doc_set);
@@ -693,6 +705,8 @@ void snxui_render(SnxUi *ui)
     // animated background must be drawn after it, before the RmlUi documents.
     ui->rdr->BeginFrame();
     starfield_draw(&ui->stars, ui->renderer);
+    if (ui->underlay != nullptr)
+        ui->underlay(ui->underlay_opaque, ui->renderer);
 
     ui->ctx->Update();
     ui->ctx->Render();
@@ -775,6 +789,13 @@ void snxui_set_debug(SnxUi *ui, const char *text)
 int snxui_screen(const SnxUi *ui)
 {
     return ui->screen;
+}
+
+void snxui_set_underlay(SnxUi *ui, void (*draw)(void *opaque, SDL_Renderer *),
+                        void *opaque)
+{
+    ui->underlay = draw;
+    ui->underlay_opaque = opaque;
 }
 
 void snxui_text_result(SnxUi *ui, const char *row_key, const char *text)

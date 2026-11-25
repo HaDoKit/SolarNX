@@ -10,3 +10,6 @@
 [submodule "Ui/third_party/freetype"]
 	path = Ui/third_party/freetype
 	url = https://github.com/freetype/freetype
+[submodule "Android/third_party/opus"]
+	path = Android/third_party/opus
+	url = https://github.com/xiph/opus.git

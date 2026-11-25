@@ -31,6 +31,7 @@ enum {
     SNX_SCREEN_MENU = 0,
     SNX_SCREEN_LIBRARY = 1,
     SNX_SCREEN_SETTINGS = 2,
+    SNX_SCREEN_STREAM = 3, // transparent doc over the decoded video (see snxui_set_underlay)
 };
 
 // One entry of the host's game library. `cover` is the encoded image bytes (JPEG/PNG) exactly as
@@ -92,6 +93,11 @@ void snxui_set_host(SnxUi *ui, const char *address, int host_type);
 // Multi-line core telemetry overlay (NULL or "" hides it). The platform feeds it
 // from snx_core_stats() while developing - the debug block.
 void snxui_set_debug(SnxUi *ui, const char *text);
+
+// A draw hook invoked every frame between the animated background and the RmlUi
+// documents. The platform uses it to blit the decoded video on SNX_SCREEN_STREAM.
+void snxui_set_underlay(SnxUi *ui, void (*draw)(void *opaque, struct SDL_Renderer *),
+                        void *opaque);
 
 // Result of a platform text editor started by on_text_request. NULL `text` = cancelled.
 void snxui_text_result(SnxUi *ui, const char *row_key, const char *text);
